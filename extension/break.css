@@ -193,3 +193,63 @@ footer {
     opacity: 0;
   }
 }
+.prefs {
+  margin-top: 4px;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+button.link {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: var(--muted);
+}
+button.link b {
+  color: var(--text);
+  font-weight: 600;
+}
+.look-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 8px;
+}
+.look-opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 3px 4px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+.look-opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.look-opt canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  border-radius: 5px;
+  display: block;
+}
+.look-opt:has(input:checked) {
+  border-color: var(--accent);
+}
+.look-opt:has(input:focus-visible) {
+  outline: 2px solid var(--line);
+  outline-offset: 2px;
+}

@@ -11,8 +11,11 @@ const CONNECTIONS = [
   [25, 27], [27, 29], [29, 31], [27, 31], [24, 26], [26, 28], [28, 30], [30, 32], [28, 32],
 ];
 
-export function createPoseClient({ serverUrl, video, canvas, privacy, onFrame, onStatus }) {
+export function createPoseClient({ serverUrl, video, canvas, privacy, style = "blur", avatars = null, onFrame, onStatus }) {
   const st = {
+    privacy,
+    style,
+    avatar: null,
     ws: null,
     stream: null,
     running: false,
@@ -32,6 +35,8 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, onFrame, o
   const sendJson = (obj) => {
     if (st.ws?.readyState === WebSocket.OPEN) st.ws.send(JSON.stringify(obj));
   };
+  const character = () => (st.privacy && avatars && Object.hasOwn(avatars.CHARACTERS, st.style) ? st.style : null);
+  const wantsMask = () => st.privacy && !character();
 
   function connect() {
     onStatus("connecting");
@@ -48,7 +53,7 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, onFrame, o
       st.inflightSince = 0;
       onStatus("open");
       if (st.exercise) sendJson({ type: "config", exercise: st.exercise });
-      sendJson({ type: "privacy", enabled: privacy });
+      sendJson({ type: "privacy", enabled: wantsMask() });
       pump();
     });
     ws.addEventListener("message", (ev) => {
@@ -193,7 +198,17 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, onFrame, o
     }
     const ctx = canvas.getContext("2d");
     const { width: w, height: h } = canvas;
-    if (privacy) {
+    const msg = st.latest;
+    const fresh = msg?.landmarks && performance.now() - st.latestAt < 1000;
+    const key = character();
+    if (key) {
+      if (st.avatar?.key !== key) st.avatar = avatars.create(key);
+      avatars.drawBackdrop(ctx, w, h);
+      st.avatar.draw(ctx, fresh ? msg.landmarks : null, w, h, { issues: fresh && msg.feedback.length > 0 });
+      requestAnimationFrame(render);
+      return;
+    }
+    if (st.privacy) {
       drawPrivate(ctx, w, h);
     } else {
       ctx.save();
@@ -202,8 +217,7 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, onFrame, o
       ctx.drawImage(video, 0, 0, w, h);
       ctx.restore();
     }
-    const msg = st.latest;
-    if (msg?.landmarks && performance.now() - st.latestAt < 1000) {
+    if (fresh) {
       drawSkeleton(ctx, msg.landmarks, w, h, msg.feedback.length > 0);
     }
     requestAnimationFrame(render);
@@ -247,13 +261,25 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, onFrame, o
     ws?.close();
   }
 
+  function setLook(next) {
+    st.privacy = next.privacy;
+    st.style = next.style;
+    st.maskSeq++;
+    st.mask = null;
+    sendJson({ type: "privacy", enabled: wantsMask() });
+  }
+
+  function celebrate(clean) {
+    if (character()) st.avatar?.celebrate(clean);
+  }
+
   function setExercise(key) {
     st.exercise = key;
     st.latest = null;
     sendJson({ type: "config", exercise: key });
   }
 
-  return { start, stop, setExercise };
+  return { start, stop, setExercise, setLook, celebrate };
 }
 
 export function fetchCatalog(serverUrl, timeoutMs = 3000) {

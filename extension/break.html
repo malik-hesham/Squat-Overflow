@@ -53,6 +53,11 @@
           <button id="demo" hidden>▶ Watch demo</button>
           <a id="swap" href="#">Show me a different exercise</a>
         </div>
+        <div class="row prefs">
+          <label class="toggle"><input type="checkbox" id="voice" /> Voice cues</label>
+          <button id="lookBtn" class="link" aria-expanded="false" aria-controls="lookGrid">Camera look: <b id="lookName">Blur</b> ▾</button>
+        </div>
+        <div id="lookGrid" class="look-grid" role="radiogroup" aria-label="Camera look" hidden></div>
       </div>
     </main>
 
@@ -75,6 +80,7 @@
       <button id="skip">Skip</button>
     </footer>
 
+    <script src="avatar.js"></script>
     <script type="module" src="break.js"></script>
   </body>
 </html>

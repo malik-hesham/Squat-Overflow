@@ -1,4 +1,4 @@
-import { getSettings, getSchedule, getCatalog } from "./lib/store.js";
+import { getSettings, saveSettings, getSchedule, getCatalog } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
@@ -15,11 +15,13 @@ const els = Object.fromEntries(
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
     "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
-    "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip",
+    "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "lookBtn", "lookName",
+    "lookGrid",
   ].map((id) => [id, $(id)]),
 );
 
 const state = {
+  settings: null,
   catalog: [],
   moves: [],
   progress: [],
@@ -31,6 +33,96 @@ const state = {
 };
 
 const send = (msg) => chrome.runtime.sendMessage(msg);
+
+function speak(text) {
+  if (!state.settings?.voice || !text || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.1;
+  speechSynthesis.speak(u);
+}
+
+function announce(i) {
+  const move = state.moves[i];
+  if (move) speak(`${i ? "Next, " : ""}${move.label}. ${move.target} reps.`);
+}
+
+// "camera" (no privacy), "blur", or an Avatar.CHARACTERS key.
+function lookKey() {
+  const { privacy, privacyStyle } = state.settings;
+  if (!privacy) return "camera";
+  return Object.hasOwn(Avatar.CHARACTERS, privacyStyle) ? privacyStyle : "blur";
+}
+
+function lookOptions() {
+  return [["camera", "Camera"], ["blur", "Blur"], ...Object.entries(Avatar.CHARACTERS).map(([k, c]) => [k, c.label])];
+}
+
+function drawCameraThumb(canvas) {
+  const g = canvas.getContext("2d");
+  const { width: w, height: h } = canvas;
+  const bg = g.createLinearGradient(0, 0, w, h);
+  bg.addColorStop(0, "#3a4650");
+  bg.addColorStop(1, "#1d2328");
+  g.fillStyle = bg;
+  g.fillRect(0, 0, w, h);
+  g.font = `${Math.round(w / 2.4)}px system-ui`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText("📷", w / 2, h / 2);
+}
+
+function renderLooks() {
+  els.lookGrid.replaceChildren(
+    ...lookOptions().map(([key, label]) => {
+      const opt = document.createElement("label");
+      opt.className = "look-opt";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "look";
+      input.value = key;
+      const thumb = document.createElement("canvas");
+      thumb.width = 90;
+      thumb.height = 120;
+      thumb.setAttribute("aria-hidden", "true");
+      if (key === "camera") drawCameraThumb(thumb);
+      else Avatar.drawThumb(thumb, key);
+      const name = document.createElement("span");
+      name.textContent = label;
+      opt.append(input, thumb, name);
+      return opt;
+    }),
+  );
+  syncLook();
+}
+
+function syncLook() {
+  const key = lookKey();
+  for (const input of els.lookGrid.querySelectorAll("input")) input.checked = input.value === key;
+  els.lookName.textContent = lookOptions().find(([k]) => k === key)[1];
+}
+
+async function onLookChange(ev) {
+  if (ev.target.name !== "look") return;
+  const key = ev.target.value;
+  const patch = key === "camera" ? { privacy: false } : { privacy: true, privacyStyle: key };
+  Object.assign(state.settings, patch);
+  syncLook();
+  state.client?.setLook({ privacy: state.settings.privacy, style: state.settings.privacyStyle });
+  await saveSettings(patch);
+}
+
+function toggleLooks() {
+  els.lookGrid.hidden = !els.lookGrid.hidden;
+  els.lookBtn.setAttribute("aria-expanded", String(!els.lookGrid.hidden));
+}
+
+async function onVoiceChange() {
+  state.settings.voice = els.voice.checked;
+  if (!els.voice.checked && "speechSynthesis" in window) speechSynthesis.cancel();
+  else announce(state.i);
+  await saveSettings({ voice: els.voice.checked });
+}
 
 async function closeWindow() {
   const win = await chrome.windows.getCurrent();
@@ -99,19 +191,23 @@ function onFrame(msg) {
   if (state.positioning && !msg.feedback.some((f) => f.code === "not_visible")) endPositioning();
   const move = state.moves[state.i];
   const p = state.progress[state.i];
+  p.reps = Math.min(msg.summary.reps, move.target);
   if (msg.rep_event) {
-    const score = msg.rep_event.score;
+    const { score, partial } = msg.rep_event;
     p.scores.push(score);
     els.lastScore.textContent = `Form ${score}`;
     els.lastScore.hidden = false;
     const issue = msg.rep_event.issue_text?.[0];
     showCue(issue ?? (score >= 85 ? "Great form!" : ""), !issue);
+    if (!partial) state.client?.celebrate(!issue);
+    speak(partial ? "Go deeper" : (issue ?? String(p.reps)));
   }
-  p.reps = Math.min(msg.summary.reps, move.target);
   renderProgress();
   if (p.reps >= move.target) {
-    if (state.i + 1 < state.moves.length) showMove(state.i + 1);
-    else finish();
+    if (state.i + 1 < state.moves.length) {
+      showMove(state.i + 1);
+      announce(state.i);
+    } else finish();
   }
 }
 
@@ -119,6 +215,7 @@ function onStatus(status) {
   if (status !== "offline" && status !== "camera-denied") return;
   if (state.finished) return;
   endPositioning();
+  els.lookBtn.hidden = els.lookGrid.hidden = true;
   els.fallback.hidden = false;
   els.fallbackTitle.textContent = status === "offline" ? "Coach offline" : "Camera unavailable";
   els.fallbackText.textContent =
@@ -202,6 +299,7 @@ async function finish() {
   endPositioning();
   state.client?.stop();
   els.done.disabled = els.snooze.disabled = els.skip.disabled = true;
+  speak("Break done. Back to work!");
   const res = await send({ type: "break-action", action: "done", result: currentResult(), lastKey: state.moves.at(-1)?.key ?? null });
   if (res?.ok) showSummary(res);
   else closeWindow();
@@ -228,6 +326,7 @@ function swap(ev) {
   state.moves[state.i] = m;
   state.progress[state.i] = { reps: 0, scores: [] };
   showMove(state.i);
+  announce(state.i);
 }
 
 async function startRoutine() {
@@ -242,20 +341,24 @@ async function startRoutine() {
     return;
   }
   showMove(0);
-  const settings = await getSettings();
+  const { settings } = state;
   state.client = createPoseClient({
     serverUrl: settings.serverUrl,
     video: els.video,
     canvas: els.canvas,
     privacy: settings.privacy,
+    style: settings.privacyStyle,
+    avatars: Avatar,
     onFrame,
     onStatus,
   });
   if (await state.client.start()) showMove(state.i);
+  announce(state.i);
 }
 
 async function init() {
   const [settings, schedule] = await Promise.all([getSettings(), getSchedule()]);
+  state.settings = settings;
   let catalog = await fetchCatalog(settings.serverUrl);
   if (!catalog.length) catalog = await getCatalog();
   state.catalog = catalog;
@@ -274,6 +377,11 @@ async function init() {
   els.back.addEventListener("click", closeWindow);
   els.demo.addEventListener("click", openDemo);
   els.swap.addEventListener("click", swap);
+  els.voice.checked = settings.voice;
+  els.voice.addEventListener("change", onVoiceChange);
+  els.lookBtn.addEventListener("click", toggleLooks);
+  els.lookGrid.addEventListener("change", onLookChange);
+  renderLooks();
 
   const manual = location.hash.startsWith("#manual");
   if (!canSnooze(schedule)) {
