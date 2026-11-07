@@ -124,6 +124,7 @@ $("breakNow").addEventListener("click", async () => {
   window.close();
 });
 $("pause").addEventListener("click", () => chrome.runtime.sendMessage({ type: paused ? "resume" : "pause" }));
+$("practice").addEventListener("click", () => chrome.tabs.create({ url: "trainer.html" }));
 $("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("finishSetup").addEventListener("click", () => chrome.runtime.openOptionsPage());
 
