@@ -151,7 +151,13 @@ const EN = {
   calConnected: "Connected to Google Calendar",
   calNote: "Breaks wait until your meetings end. Only busy and free times are read, never event titles or details.",
   calFailed: "Couldn't connect to Google Calendar. Try again.",
-  nextMeeting: "📅 Next meeting {time}",
+  upcomingMeetings: "Upcoming meetings",
+  meetingNow: "Now",
+  inMeeting: "In a meeting",
+  busy: "Busy",
+  tomorrow: "Tomorrow",
+  gapFits: "☕ {n}-min gap · break fits",
+  noMeetings: "No meetings in the next 24 hours",
 };
 
 const AR = {
@@ -410,7 +416,13 @@ const AR = {
   calConnected: "مرتبط بتقويم Google",
   calNote: "تنتظر الاستراحات حتى تنتهي اجتماعاتك. نقرأ أوقات الانشغال والفراغ فقط، ولا نطّلع أبدًا على عناوين الأحداث أو تفاصيلها.",
   calFailed: "تعذّر الربط بتقويم Google. حاول مرة أخرى.",
-  nextMeeting: "📅 الاجتماع القادم {time}",
+  upcomingMeetings: "الاجتماعات القادمة",
+  meetingNow: "الآن",
+  inMeeting: "في اجتماع",
+  busy: "مشغول",
+  tomorrow: "غدًا",
+  gapFits: "☕ فجوة {n} دقيقة · تكفي لاستراحة",
+  noMeetings: "لا اجتماعات خلال الساعات الأربع والعشرين القادمة",
 };
 
 const STRINGS = { en: EN, ar: AR };

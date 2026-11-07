@@ -50,7 +50,7 @@ async function queryBusy(token, now) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       timeMin: new Date(now - HOUR_MS).toISOString(),
-      timeMax: new Date(now + 24 * HOUR_MS).toISOString(),
+      timeMax: new Date(now + 7 * 24 * HOUR_MS).toISOString(),
       items: [{ id: "primary" }],
     }),
   });

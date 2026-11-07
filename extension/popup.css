@@ -283,3 +283,44 @@ body {
   direction: ltr;
   unicode-bidi: isolate;
 }
+.meeting-rows {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.meeting-rows li {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.meeting-rows .when {
+  color: var(--muted);
+  font-size: 12px;
+}
+.meeting-rows .time {
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+}
+.meeting-rows .state {
+  color: var(--muted);
+  font-size: 12px;
+}
+.meeting-rows li.now .state,
+.meeting-rows li.now .when {
+  color: var(--accent);
+  font-weight: 600;
+}
+.meeting-rows li.gap,
+.meeting-rows li.empty {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  padding-inline-start: 72px;
+}
+.meeting-rows li.empty {
+  padding-inline-start: 0;
+}

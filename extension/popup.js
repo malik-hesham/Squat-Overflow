@@ -7,8 +7,8 @@ import { badgeLabel, challengeIcon } from "./lib/badges.js";
 import { initTheme } from "./lib/themes.js";
 import { heatmapWeeks, activityTotals, backfillActivity } from "./lib/activity.js";
 import { initLang, t, localeFor, levelName, areaName, nameText } from "./lib/i18n.js";
-import { getBusy } from "./lib/calendar-client.js";
-import { nextMeeting } from "./lib/calendar.js";
+import { getBusy, calendarState } from "./lib/calendar-client.js";
+import { agenda } from "./lib/calendar.js";
 
 const lang = await initLang();
 const $ = (id) => document.getElementById(id);
@@ -41,9 +41,9 @@ async function render() {
   } else {
     $("nextText").textContent = t(lang, "notScheduled");
   }
-  const meeting = nextMeeting(await getBusy(now), now);
-  $("nextMeeting").hidden = !meeting;
-  if (meeting) $("nextMeeting").textContent = t(lang, "nextMeeting", { time: hhmm(meeting.start) });
+  const cal = await calendarState();
+  $("meetings").hidden = !cal;
+  if (cal) renderMeetings(agenda(await getBusy(now), now));
   $("shifted").hidden = !(s.shiftedBy > 0 && s.nextAt && !paused);
   if (s.shiftedBy > 0 && s.nextAt) {
     $("shifted").textContent = t(lang, "shifted", { n: s.shiftedBy, times: upcoming(s, settings.intervalMin, 3).map(hhmm).join(" · ") });
@@ -219,3 +219,35 @@ chrome.storage.onChanged.addListener(render);
 setInterval(render, 30_000);
 render();
 renderBoard();
+
+function renderMeetings(items) {
+  if (!items.length) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = t(lang, "noMeetings");
+    $("meetingRows").replaceChildren(empty);
+    return;
+  }
+  $("meetingRows").replaceChildren(
+    ...items.map((item) => {
+      const li = document.createElement("li");
+      if (item.type === "gap") {
+        li.className = "gap";
+        li.textContent = t(lang, "gapFits", { n: item.minutes });
+        return li;
+      }
+      li.classList.toggle("now", item.now);
+      const when = document.createElement("span");
+      when.className = "when";
+      when.textContent = item.now ? t(lang, "meetingNow") : item.tomorrow ? t(lang, "tomorrow") : "";
+      const time = document.createElement("span");
+      time.className = "time";
+      time.textContent = `${hhmm(item.start)} – ${hhmm(item.end)}`;
+      const state = document.createElement("span");
+      state.className = "state";
+      state.textContent = item.now ? `● ${t(lang, "inMeeting")}` : t(lang, "busy");
+      li.append(when, time, state);
+      return li;
+    }),
+  );
+}

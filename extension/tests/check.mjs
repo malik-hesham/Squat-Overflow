@@ -12,7 +12,7 @@ import { THEMES, themeId } from "../lib/themes.js";
 import { activityLevel, recordActivity, backfillActivity, heatmapWeeks, activityTotals } from "../lib/activity.js";
 import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, localeFor, nameText, translationKeys } from "../lib/i18n.js";
 import { badgeLabel } from "../lib/badges.js";
-import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy } from "../lib/calendar.js";
+import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 
 function check(name, fn) {
   try {
@@ -581,6 +581,29 @@ check("dailyFor: the number of challenges changes from day to day within 2-5", (
   const counts = new Set(Array.from({ length: 60 }, (_, k) => dailyFor(mon + k * DAY).length));
   assert.ok([...counts].every((n) => n >= 2 && n <= 5));
   assert.ok(counts.size >= 3);
+});
+
+check("agenda: current meeting, upcoming blocks, break-sized gaps, tomorrow label, ended meetings dropped", () => {
+  const t = (h, m = 0, d = 9) => new Date(2026, 10, d, h, m).getTime();
+  const now = t(13, 40);
+  const busy = [
+    { start: t(12, 0), end: t(12, 30) },
+    { start: t(13, 30), end: t(14, 0) },
+    { start: t(14, 30), end: t(15, 0) },
+    { start: t(15, 5), end: t(15, 30) },
+    { start: t(10, 0, 10), end: t(11, 0, 10) },
+  ];
+  assert.deepEqual(agenda(busy, now), [
+    { type: "meeting", start: t(13, 30), end: t(14, 0), now: true, tomorrow: false },
+    { type: "gap", minutes: 30 },
+    { type: "meeting", start: t(14, 30), end: t(15, 0), now: false, tomorrow: false },
+    { type: "meeting", start: t(15, 5), end: t(15, 30), now: false, tomorrow: false },
+    { type: "meeting", start: t(10, 0, 10), end: t(11, 0, 10), now: false, tomorrow: true },
+  ]);
+  assert.equal(agenda(busy, now, 2).filter((x) => x.type === "meeting").length, 2);
+  assert.deepEqual(agenda([], now), []);
+  const later = [{ start: now + 23 * 60 * M, end: now + 27 * 60 * M }, { start: now + 25 * 60 * M, end: now + 26 * 60 * M }];
+  assert.deepEqual(agenda(later, now).map((x) => x.end), [now + 27 * 60 * M]);
 });
 
 const pending = [];
