@@ -2,6 +2,26 @@
 
 Break reminders with webcam-scored exercises, driven from VS Code. It behaves like the Chrome extension in `../extension/`: same schedule, XP, levels and leaderboard.
 
+## Quick start
+
+1. **Build or get the `.vsix`.** From this folder run `npm install && npm run package`. It creates `standup-break-vscode-0.3.0.vsix`.
+2. **Install it.** In VS Code open the Extensions view, click `...`, choose **Install from VSIX...** and pick the file. Or from a terminal: `code --install-extension standup-break-vscode-0.3.0.vsix --force`. On macOS, if `code` is not found, use `"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"` instead, or run **Shell Command: Install 'code' command in PATH** from the Command Palette.
+3. **Reload VS Code** (Command Palette, **Developer: Reload Window**). A `StandUp` item appears in the status bar.
+4. **Start the pose server** (needed for webcam scoring; see the root README for the one-time setup of `server/`):
+   ```bash
+   cd server && .venv/bin/python app.py
+   ```
+   If a pose server from before the loopback-origin change is still running, stop it and start it again.
+5. **Set up.** On the first run the Settings page opens. Pick your muscle areas and click **Get started**. You can reopen it any time with **StandUp Break: Settings**.
+6. **Try a break.** Click `StandUp` in the status bar and choose **Break now**. With the default `openIn: browser` the page opens in your default browser; allow the camera when asked.
+7. **Automatic reminders.** In Settings, check that today is a work day, that the current time is inside your active hours, and set the interval (use a short custom one such as 1 minute to test). When a break is due, a dialog appears; click **Start**.
+
+### Troubleshooting
+
+- **No reminder appears.** Run **StandUp Break: Show log** and read the `idleState` and reminder lines. The defaults only remind on weekdays during 09:00 to 17:00, and a reminder is held back when VS Code is not focused and idle for 5 minutes.
+- **Break page opens but the camera does not connect.** Make sure the pose server is running on port 8765 and was started after the loopback-origin change.
+- **Nothing happens on Break now.** Open **StandUp Break: Show log**, and check **Developer: Show Running Extensions** to confirm StandUp Break is active.
+
 ## How it works
 
 - The unmodified `extension/service-worker.js` runs inside the VS Code extension host (Node) against a fake `chrome.*` object.
