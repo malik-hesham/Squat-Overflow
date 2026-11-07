@@ -1,6 +1,6 @@
 import { getSettings, getSchedule, getCatalog } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
-import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, areaImage } from "./lib/routine.js";
+import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 import { badgeLabel } from "./lib/badges.js";
@@ -15,7 +15,7 @@ const els = Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
-    "lastScore", "cue", "areaImg", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
+    "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip",
   ].map((id) => [id, $(id)]),
 );
@@ -68,8 +68,6 @@ function showMove(i) {
   els.title.textContent = `${move.area} | ${move.label}`;
   els.step.textContent = `Exercise ${i + 1} / ${state.moves.length}`;
   els.howto.textContent = move.how_to;
-  els.areaImg.src = areaImage(move.area);
-  els.areaImg.alt = `${move.area} muscles`;
   els.hint.hidden = move.camera !== "side";
   els.hint.textContent = CAMERA_HINT;
   els.demo.hidden = !(move.demo && YOUTUBE_ID.test(move.demo.youtube_id) && navigator.onLine);

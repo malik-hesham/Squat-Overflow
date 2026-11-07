@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js";
-import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, areaImage } from "../lib/routine.js";
+import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
   nextActiveSlot, decideFire, isActive, scheduleSettingsChanged,
@@ -453,12 +452,6 @@ check("themes: seven pickable themes, auto first, unknown ids fall back to auto"
   assert.equal(themeId("ocean"), "ocean");
   assert.equal(themeId("nope"), "auto");
   assert.equal(themeId(undefined), "auto");
-});
-
-check("every muscle area has its own image file", () => {
-  const paths = AREAS.map(areaImage);
-  assert.equal(new Set(paths).size, AREAS.length);
-  for (const path of paths) assert.ok(existsSync(new URL(`../${path}`, import.meta.url)), path);
 });
 
 check("fresh schedule without counters can snooze and shows no warning", () => {

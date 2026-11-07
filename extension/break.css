@@ -193,19 +193,3 @@ footer {
     opacity: 0;
   }
 }
-.guide {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  column-gap: 12px;
-  align-items: start;
-}
-.guide > *:not(.area-img) {
-  grid-column: 2;
-}
-.area-img {
-  grid-row: 1 / span 3;
-  width: 120px;
-  aspect-ratio: 5 / 4;
-  border-radius: 10px;
-  background: #f6f7f8;
-}
