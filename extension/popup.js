@@ -1,4 +1,5 @@
 import { getSettings, getProfile, getSchedule, readLog, getActivity } from "./lib/store.js";
+import { Avatar } from "./avatar.js";
 import { LEVELS, levelFor, dayKey } from "./lib/xp.js";
 import { upcoming, isActive } from "./lib/schedule.js";
 import { fetchBoard, submitScore } from "./lib/leaderboard.js";
