@@ -8,6 +8,7 @@ const DEFAULTS = {
   exercise: "neck_tilt",
   voice: false,
   privacy: false,
+  privacyStyle: "blur", // sensitive mode look: "blur" or an Avatar.CHARACTERS key
   angleMode: "2d", // "3d" = joint angles from MediaPipe's world landmarks
   calibrations: {}, // "exercise:mode" -> { rest, target } learnt from the user's own reps
   breakEnabled: true, // read by the service worker too (desk break coach)
@@ -122,6 +123,8 @@ const els = {
   exportBtn: $("exportBtn"),
   serverUrl: $("serverUrl"),
   privacy: $("privacy"),
+  privacyStyles: $("privacyStyles"),
+  styleGrid: $("styleGrid"),
   hudPrivacy: $("hudPrivacy"),
   angle3d: $("angle3d"),
   chartLegend: $("chartLegend"),
@@ -179,6 +182,7 @@ const state = {
   maskSeq: 0, // guards against out-of-order async mask decodes
   fx: null, // full-size canvas for the blurred layer
   fxSmall: null, // tiny canvas used to blur by downscaling
+  avatar: null, // Avatar renderer while sensitive mode shows a character
   calibrating: false,
   cycle: null, // { angle, landmarks } at the deepest point of the rep in progress
   aspect: 4 / 3, // video width / height, to draw poses without distortion
@@ -284,7 +288,7 @@ function connect() {
     setConn("open", "Connected");
     sendJson({ type: "angles", mode: state.settings.angleMode });
     configureExercise();
-    sendJson({ type: "privacy", enabled: state.settings.privacy });
+    sendJson({ type: "privacy", enabled: wantsMask() });
     pump();
   });
   ws.addEventListener("message", (ev) => {
@@ -514,6 +518,8 @@ function onRep(rep) {
   }
   els.repLog.prepend(li);
 
+  // Sensitive-mode characters celebrate a full rep; a clean one gets the big burst.
+  if (!rep.partial) state.avatar?.celebrate(rep.issues.length === 0);
   flash(
     rep.partial ? "Partial" : String(rep.index),
     rep.partial || rep.issues.length ? "meh" : "good",
@@ -645,9 +651,65 @@ function drawPrivate(ctx, video, w, h) {
   ctx.restore();
 }
 
+// ---- Sensitive mode: characters -------------------------------------------
+// Instead of blurring, the preview can show a drawn character that copies the
+// pose (avatar.js). No camera pixels are drawn at all, so the server's person
+// mask isn't needed and isn't requested.
+function privacyStyle() {
+  const s = state.settings.privacyStyle;
+  return s in Avatar.CHARACTERS ? s : "blur";
+}
+
+function wantsMask() {
+  return state.settings.privacy && privacyStyle() === "blur";
+}
+
+function drawAvatar(ctx, w, h, msg) {
+  const key = privacyStyle();
+  if (state.avatar?.key !== key) state.avatar = Avatar.create(key);
+  Avatar.drawBackdrop(ctx, w, h);
+  state.avatar.draw(ctx, msg?.landmarks ?? null, w, h, {
+    issues: (msg?.feedback?.length ?? 0) > 0,
+  });
+}
+
+function renderStyleOptions() {
+  const options = [
+    ["blur", "Blur"],
+    ...Object.entries(Avatar.CHARACTERS).map(([key, c]) => [key, c.label]),
+  ];
+  els.styleGrid.replaceChildren(
+    ...options.map(([key, label]) => {
+      const opt = document.createElement("label");
+      opt.className = "style-opt";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "privacyStyle";
+      input.value = key;
+      const thumb = document.createElement("canvas");
+      thumb.width = 120;
+      thumb.height = 160;
+      thumb.setAttribute("aria-hidden", "true");
+      Avatar.drawThumb(thumb, key);
+      const name = document.createElement("span");
+      name.textContent = label;
+      opt.append(input, thumb, name);
+      return opt;
+    }),
+  );
+}
+
 function setPrivacyUi() {
-  els.privacy.checked = state.settings.privacy;
-  els.hudPrivacy.hidden = !state.settings.privacy;
+  const on = state.settings.privacy;
+  const style = privacyStyle();
+  els.privacy.checked = on;
+  els.privacyStyles.hidden = !on;
+  for (const input of els.styleGrid.querySelectorAll("input")) {
+    input.checked = input.value === style;
+  }
+  els.hudPrivacy.hidden = !on;
+  els.hudPrivacy.textContent =
+    style === "blur" ? "Blur on" : `${Avatar.CHARACTERS[style].label} on`;
 }
 
 function render() {
@@ -664,6 +726,16 @@ function render() {
   const ctx = canvas.getContext("2d");
   const { width: w, height: h } = canvas;
 
+  const msg = state.latest;
+  const fresh = msg?.landmarks && performance.now() - state.latestAt < 1000;
+
+  if (state.settings.privacy && privacyStyle() !== "blur") {
+    drawAvatar(ctx, w, h, fresh ? msg : null); // the character replaces the skeleton too
+    drawChart();
+    requestAnimationFrame(render);
+    return;
+  }
+
   if (state.settings.privacy) {
     drawPrivate(ctx, video, w, h);
   } else {
@@ -675,8 +747,7 @@ function render() {
     ctx.restore();
   }
 
-  const msg = state.latest;
-  if (msg?.landmarks && performance.now() - state.latestAt < 1000) {
+  if (fresh) {
     drawSkeleton(ctx, msg.landmarks, w, h, msg.feedback.length > 0);
   }
   drawChart();
@@ -928,6 +999,7 @@ async function start() {
 
 function stopStream() {
   clearMask();
+  state.avatar = null; // the next set starts from a fresh pose
   state.stream?.getTracks().forEach((t) => t.stop());
   state.stream = null;
   els.video.srcObject = null;
@@ -1736,6 +1808,7 @@ async function init() {
   renderExerciseOptions();
   els.voice.checked = state.settings.voice;
   els.angle3d.checked = state.settings.angleMode === "3d";
+  renderStyleOptions();
   setPrivacyUi();
   renderCalib();
   refreshBreakUi();
@@ -1809,7 +1882,14 @@ async function init() {
     clearMask(); // turning it on must not reuse an old mask
     await saveSettings({ privacy: els.privacy.checked });
     setPrivacyUi();
-    sendJson({ type: "privacy", enabled: state.settings.privacy });
+    sendJson({ type: "privacy", enabled: wantsMask() });
+  });
+  els.styleGrid.addEventListener("change", async (ev) => {
+    if (ev.target.name !== "privacyStyle") return;
+    clearMask(); // switching back to blur must not reuse an old mask
+    await saveSettings({ privacyStyle: ev.target.value });
+    setPrivacyUi();
+    sendJson({ type: "privacy", enabled: wantsMask() });
   });
   els.serverUrl.addEventListener("change", async () => {
     await saveSettings({

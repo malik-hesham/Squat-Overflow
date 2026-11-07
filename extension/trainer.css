@@ -139,6 +139,20 @@ button.ghost { background: transparent; }
 button.link { background: none; border: none; padding: 0; color: var(--line); font-size: 12px; }
 .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
 
+.styles { border: 0; margin: 0; padding: 0; min-width: 0; }
+.styles legend { padding: 0; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+.style-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.style-opt {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 4px 4px 6px; border: 2px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); font-size: 12px; color: var(--text); cursor: pointer;
+}
+.style-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.style-opt canvas { width: 100%; height: auto; aspect-ratio: 3 / 4; border-radius: 6px; display: block; }
+.style-opt:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.style-opt:has(input:checked) { border-color: var(--accent); }
+.style-opt:has(input:focus-visible) { outline: 2px solid var(--line); outline-offset: 2px; }
+
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0; }
 .stats div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
 .stats dt { font-size: 11px; color: var(--muted); }
