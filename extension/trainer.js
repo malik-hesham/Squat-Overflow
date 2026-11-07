@@ -4,7 +4,7 @@
 // Config
 // ---------------------------------------------------------------------------
 const DEFAULTS = {
-  serverUrl: "ws://127.0.0.1:8765/ws",
+  serverUrl: globalThis.POSE_SERVER_URL ?? "ws://127.0.0.1:8765/ws", // set by avatar-global.js from config.js
   exercise: "neck_tilt",
   voice: false,
   privacy: false,
