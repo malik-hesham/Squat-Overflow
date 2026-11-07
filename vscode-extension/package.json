@@ -1,0 +1,86 @@
+{
+  "name": "standup-break-vscode",
+  "displayName": "StandUp Break",
+  "version": "0.3.0",
+  "publisher": "squatoverflow",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@vscode/vsce": "^3.0.0"
+  },
+  "scripts": {
+    "sync": "node scripts/sync-web.mjs",
+    "test": "node scripts/sync-web.mjs && node --test \"test/*.test.mjs\"",
+    "vscode:prepublish": "node scripts/sync-web.mjs",
+    "package": "vsce package --no-dependencies"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "standupBreak.breakNow",
+        "title": "Break now",
+        "category": "StandUp Break"
+      },
+      {
+        "command": "standupBreak.pause",
+        "title": "Pause 1 hr",
+        "category": "StandUp Break"
+      },
+      {
+        "command": "standupBreak.resume",
+        "title": "Resume",
+        "category": "StandUp Break"
+      },
+      {
+        "command": "standupBreak.openDashboard",
+        "title": "Dashboard",
+        "category": "StandUp Break"
+      },
+      {
+        "command": "standupBreak.openSettings",
+        "title": "Settings",
+        "category": "StandUp Break"
+      },
+      {
+        "command": "standupBreak.openPractice",
+        "title": "Practice",
+        "category": "StandUp Break"
+      },
+      {
+        "command": "standupBreak.showMenu",
+        "title": "Show menu",
+        "category": "StandUp Break"
+      },
+      {
+        "command": "standupBreak.showLog",
+        "title": "Show log",
+        "category": "StandUp Break"
+      }
+    ],
+    "configuration": {
+      "title": "StandUp Break",
+      "properties": {
+        "standupBreak.port": {
+          "type": "number",
+          "default": 47821,
+          "description": "Preferred local server port; random free port used if busy."
+        },
+        "standupBreak.openIn": {
+          "type": "string",
+          "enum": [
+            "editor",
+            "browser"
+          ],
+          "default": "browser",
+          "description": "browser (default) opens Break and Practice in your default browser where the webcam works; editor opens them in a VS Code panel without webcam (VS Code blocks it). Dashboard and Settings always open inside VS Code."
+        }
+      }
+    }
+  }
+}

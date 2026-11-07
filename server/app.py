@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -50,10 +51,13 @@ from pose_engine import MODEL_PATH, PoseEngine, decode_jpeg, encode_mask, ensure
 
 MAX_FRAME_BYTES = 2 * 1024 * 1024
 
-# Comma-separated list of exact origins, e.g. "chrome-extension://abcdef...".
-# Unset = accept any Chrome or Firefox extension. Web pages are always refused, so a site
-# you visit can't stream frames to (or read results from) this local server.
+# Comma-separated list of exact origins, e.g. "chrome-extension://abcdef...". When set, it
+# replaces the defaults entirely. Unset = accept any Chrome or Firefox extension and loopback
+# pages (the VS Code extension serves its pages from http://127.0.0.1:<port>). Other web pages
+# are refused, so a site you visit can't stream frames to (or read results from) this server.
 ALLOWED_ORIGINS = {o.strip() for o in os.environ.get("FORMCOACH_ALLOWED_ORIGINS", "").split(",") if o.strip()}
+LOOPBACK_ORIGIN = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\]):[0-9]{1,5}$")
+
 
 # Release tag baked into the Docker image (Dockerfile ARG VERSION); "dev" when run from source.
 VERSION = os.environ.get("FORMCOACH_VERSION", "dev")
@@ -82,7 +86,9 @@ def origin_allowed(origin: str | None) -> bool:
         return True
     if ALLOWED_ORIGINS:
         return origin in ALLOWED_ORIGINS
-    return origin.startswith(("chrome-extension://", "moz-extension://"))
+    if origin.startswith(("chrome-extension://", "moz-extension://")):
+        return True
+    return LOOPBACK_ORIGIN.fullmatch(origin) is not None
 
 
 def exercise_catalog() -> list[dict]:

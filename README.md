@@ -2,6 +2,8 @@
 
 A Chrome extension that reminds you to move. When a break is due it opens a 2-minute routine for the pain areas you picked: neck tension, rounded shoulders, upper back, shoulder and rotator cuff, lower back, wrist and hand, knees, and (optionally) eyes. Each area has five exercises. Your webcam scores how well you do each exercise, and the score turns into XP, levels, challenges and badges. In Competitive mode your score also appears on a company leaderboard.
 
+VS Code user? See [vscode-extension/README.md](vscode-extension/README.md).
+
 ## Run the demo
 
 1. **Pose server** (Python 3.10–3.12):
@@ -19,6 +21,8 @@ A Chrome extension that reminds you to move. When a break is due it opens a 2-mi
 Tagging `vX.Y.Z` (matching `extension/manifest.json`) runs `.github/workflows/release.yml`. It applies the database migrations, deploys the pose server to Fly.io (`wss://squat-overflow-pose.fly.dev/ws`), creates a GitHub Release with the store zip, and submits the zip to the Chrome Web Store. Store builds use the hosted server; **Load unpacked** keeps using your local one. Release steps, one-time setup and rollback: [docs/deployment.md](docs/deployment.md). Store listing copy and permission justifications: [CHROMEWEBSTORE.md](CHROMEWEBSTORE.md).
 
 ## Colleagues sharing one pose server (optional)
+
+By default the pose server accepts the browser extensions and pages served from 127.0.0.1 or localhost (used by the VS Code extension), and refuses other web pages.
 
 On the machine running the server:
 
