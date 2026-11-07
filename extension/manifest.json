@@ -20,14 +20,28 @@
   },
   "background": {
     "service_worker": "service-worker.js",
+    "scripts": [
+      "service-worker.js"
+    ],
     "type": "module"
   },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
   },
-  "permissions": ["storage", "alarms", "idle", "tabs"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "idle",
+    "tabs"
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.supabase.co wss://*.trycloudflare.com"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "standup-break@squatoverflow",
+      "strict_min_version": "128.0"
+    }
   }
 }
