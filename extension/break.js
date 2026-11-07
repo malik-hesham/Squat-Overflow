@@ -7,6 +7,7 @@ import { badgeLabel } from "./lib/badges.js";
 import { initTheme } from "./lib/themes.js";
 import { backfillActivity } from "./lib/activity.js";
 import { avatarFitness, fitnessCaption } from "./lib/fitness.js";
+import { Avatar } from "./avatar.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;

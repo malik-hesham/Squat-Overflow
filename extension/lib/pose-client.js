@@ -35,7 +35,9 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
   const sendJson = (obj) => {
     if (st.ws?.readyState === WebSocket.OPEN) st.ws.send(JSON.stringify(obj));
   };
-  const character = () => (st.privacy && avatars && Object.hasOwn(avatars.CHARACTERS, st.style) ? st.style : null);
+  // A 3D character needs WebGL; without it the blurred mask stands in.
+  const character = () =>
+    st.privacy && avatars && Object.hasOwn(avatars.CHARACTERS, st.style) && avatars.supported?.() !== false ? st.style : null;
   const wantsMask = () => st.privacy && !character();
 
   function connect() {
@@ -202,7 +204,10 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
     const fresh = msg?.landmarks && performance.now() - st.latestAt < 1000;
     const key = character();
     if (key) {
-      if (st.avatar?.key !== key) st.avatar = avatars.create(key, fitness ?? {});
+      if (st.avatar?.key !== key) {
+        st.avatar?.dispose?.();
+        st.avatar = avatars.create(key, fitness ?? {});
+      }
       avatars.drawBackdrop(ctx, w, h);
       st.avatar.draw(ctx, fresh ? msg.landmarks : null, w, h, { issues: fresh && msg.feedback.length > 0 });
       requestAnimationFrame(render);

@@ -582,3 +582,70 @@ Promise.all(pending).then(
     process.exitCode = 1;
   },
 );
+
+// ---- Avatar characters: every one poses its 3D figure through squats, issues,
+// reps, buff and droop with nothing broken or non-finite. WebGL isn't
+// available in Node, so this drives the physics and scene graph; rendering is
+// checked in the browser.
+{
+  const THREE = await import("../lib/vendor/three.js");
+  const { Avatar } = await import("../avatar.js");
+  // A standing pose (normalised camera coords) that sinks into a squat by `k` (0..1), arms rising.
+  const pose = (k) => {
+    const lms = Array.from({ length: 33 }, () => [0.5, 0.5, 0]);
+    const at = (i, x, y) => (lms[i] = [x, y + k * 0.12 * (y < 0.7 ? 1 : 0), 1]);
+    [[0, 0.5, 0.17], [2, 0.53, 0.155], [5, 0.47, 0.155], [7, 0.555, 0.165], [8, 0.445, 0.165], [11, 0.6, 0.31], [12, 0.4, 0.31],
+      [13, 0.66, 0.45], [14, 0.34, 0.45], [15, 0.68 - k * 0.1, 0.58 - k * 0.3], [16, 0.32 + k * 0.1, 0.58 - k * 0.3], [23, 0.56, 0.58],
+      [24, 0.44, 0.58], [25, 0.6, 0.73], [26, 0.4, 0.73], [27, 0.575, 0.88], [28, 0.425, 0.88], [31, 0.6, 0.92], [32, 0.4, 0.92]]
+      .forEach(([i, x, y]) => at(i, x, y));
+    return lms;
+  };
+  const finiteScene = (scene) => {
+    const bad = [];
+    scene.updateMatrixWorld(true);
+    scene.traverse((o) => {
+      if (o.visible && !o.matrixWorld.elements.every(Number.isFinite)) bad.push(o.type);
+    });
+    return bad;
+  };
+  const keys = Object.keys(Avatar.CHARACTERS);
+  check("avatars: eight original characters, each with a label", () => {
+    assert.deepEqual(keys, ["slothbear", "bunny", "penguin", "dragon", "critter", "platypus", "monster", "robot"]);
+    for (const k of keys) assert.ok(Avatar.CHARACTERS[k].label, `${k} has no label`);
+  });
+  check("avatars: an unknown key falls back to a real character", () => {
+    assert.ok(keys.includes(Avatar.create("surfer").key));
+  });
+  for (const key of keys) {
+    check(`avatars: ${key} poses through squats, issues, reps, buff and droop with finite transforms`, () => {
+      for (const fitness of [{}, { buff: 1 }, { droop: 1 }]) {
+        const a = Avatar.create(key, fitness);
+        assert.equal(a.key, key);
+        let meshes = 0;
+        a.scene.traverse((o) => (meshes += o.isMesh ? 1 : 0));
+        assert.ok(meshes > 20, `only ${meshes} meshes`);
+        for (let f = 0; f < 90; f++) {
+          const p = a.update(pose((Math.sin(f / 8) + 1) / 2), 640, 480, { issues: f % 30 > 20, now: f * 33 });
+          if (f > 2) assert.ok(p, "no pose from a full body");
+          if (f % 25 === 0) a.celebrate(f % 50 === 0);
+          assert.deepEqual(finiteScene(a.scene), [], `non-finite transform at frame ${f}`);
+        }
+        a.update(null, 640, 480, { now: 99 * 33 });
+        a.dispose();
+      }
+    });
+  }
+  check("avatars: the heart and star celebration particles fly as 3D meshes", () => {
+    const a = Avatar.create("bunny");
+    for (let f = 0; f < 5; f++) a.update(pose(0), 640, 480, { now: f * 33 });
+    a.celebrate(true);
+    a.update(pose(0), 640, 480, { now: 6 * 33 });
+    let shown = 0;
+    a.scene.traverse((o) => (shown += o.visible && o.geometry?.type === "ExtrudeGeometry" ? 1 : 0));
+    assert.ok(shown >= 16, `only ${shown} particles visible`);
+    assert.ok(THREE.ExtrudeGeometry);
+  });
+  check("avatars: no WebGL means unsupported, so the blur mask stands in", () => {
+    assert.equal(Avatar.supported(), false);
+  });
+}
