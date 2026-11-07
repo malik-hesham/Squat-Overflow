@@ -3,6 +3,7 @@ import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js"
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
+  nextActiveSlot, decideFire, isActive,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
@@ -347,6 +348,75 @@ check("award total includes challenge bonuses", () => {
   const bonus = breakdown.challenges.reduce((n, c) => n + c.bonus, 0);
   assert.ok(breakdown.challenges.some((c) => c.id === "clean_form"));
   assert.equal(breakdown.total, breakdown.breakXp + breakdown.firstBreak + breakdown.streak + bonus);
+});
+
+const HOURS = { activeStart: "09:00", activeEnd: "17:00", workdays: WORKDAYS, autoPause: true };
+const at = (d, h, m = 0) => new Date(2026, 10, d, h, m).getTime();
+const sched = (nextAt, extra = {}) => ({ ...initialSchedule(0, 60), nextAt, skipsInRow: 2, snoozesInRow: 1, ...extra });
+const ctx = (extra = {}) => ({ idle: "active", meeting: false, settings: HOURS, ...extra });
+
+check("nextActiveSlot: inside stays, after hours jumps to next workday start + interval", () => {
+  assert.equal(nextActiveSlot(at(9, 11), 60, HOURS), at(9, 11));
+  assert.equal(nextActiveSlot(at(13, 17, 30), 60, HOURS), at(16, 10));
+  assert.equal(nextActiveSlot(at(14, 11), 60, HOURS), at(16, 10));
+  assert.equal(nextActiveSlot(at(9, 7), 60, HOURS), at(9, 10));
+  assert.equal(isActive(at(9, 16, 59), HOURS), true);
+  assert.equal(isActive(at(9, 17), HOURS), false);
+});
+
+check("decideFire: weekend is outside, rescheduled to Monday", () => {
+  const r = decideFire(sched(at(14, 11)), at(14, 11), 60, ctx());
+  assert.equal(r.kind, "outside");
+  assert.equal(r.schedule.nextAt, at(16, 10));
+});
+
+check("decideFire: alarm 11 min late is dropped, counters unchanged", () => {
+  const r = decideFire(sched(at(9, 11)), at(9, 11, 11), 60, ctx());
+  assert.equal(r.kind, "late");
+  assert.equal(r.schedule.nextAt, at(9, 12, 11));
+  assert.deepEqual([r.schedule.skipsInRow, r.schedule.snoozesInRow], [2, 1]);
+});
+
+check("decideFire: meeting defers 5 min, keeps deferring, never late", () => {
+  const r1 = decideFire(sched(at(9, 11)), at(9, 11), 60, ctx({ meeting: true }));
+  assert.equal(r1.kind, "defer");
+  assert.equal(r1.schedule.nextAt, at(9, 11, 5));
+  const r2 = decideFire(r1.schedule, at(9, 11, 40), 60, ctx({ meeting: true }));
+  assert.equal(r2.kind, "defer");
+  assert.equal(r2.schedule.nextAt, at(9, 11, 45));
+  assert.deepEqual([r2.schedule.skipsInRow, r2.schedule.snoozesInRow], [2, 1]);
+});
+
+check("decideFire: meeting clears 70 min after slot, opens once, grid not stacked", () => {
+  const r1 = decideFire(sched(at(9, 11)), at(9, 11), 60, ctx({ meeting: true }));
+  const r2 = decideFire({ ...r1.schedule, nextAt: at(9, 12, 10) }, at(9, 12, 10), 60, ctx());
+  assert.equal(r2.kind, "open");
+  assert.equal(r2.schedule.nextAt, at(9, 13));
+  assert.equal(r2.schedule.deferredFrom, null);
+});
+
+check("decideFire: meeting ignored when auto-pause is off", () => {
+  const r = decideFire(sched(at(9, 11)), at(9, 11), 60, ctx({ meeting: true, settings: { ...HOURS, autoPause: false } }));
+  assert.equal(r.kind, "open");
+});
+
+check("decideFire: idle user is away, grid advances, no counter change", () => {
+  const r = decideFire(sched(at(9, 11)), at(9, 11), 60, ctx({ idle: "idle" }));
+  assert.equal(r.kind, "away");
+  assert.equal(r.schedule.nextAt, at(9, 12));
+  assert.deepEqual([r.schedule.skipsInRow, r.schedule.snoozesInRow], [2, 1]);
+});
+
+check("decideFire: normal fire opens and keeps grid", () => {
+  const r = decideFire(sched(at(9, 11)), at(9, 11) + 30_000, 60, ctx());
+  assert.equal(r.kind, "open");
+  assert.equal(r.schedule.nextAt, at(9, 12));
+});
+
+check("decideFire: last slot of the day rolls to next morning", () => {
+  const r = decideFire(sched(at(13, 16, 30)), at(13, 16, 30), 60, ctx());
+  assert.equal(r.kind, "open");
+  assert.equal(r.schedule.nextAt, at(16, 10));
 });
 
 const pending = [];

@@ -1,6 +1,6 @@
 import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog } from "./lib/store.js";
 import { award } from "./lib/xp.js";
-import { initialSchedule, onFire, applyAction, rescheduleForInterval } from "./lib/schedule.js";
+import { initialSchedule, applyAction, rescheduleForInterval, decideFire, nextActiveSlot, IDLE_SEC } from "./lib/schedule.js";
 import { submitScore } from "./lib/leaderboard.js";
 import { noteAction } from "./lib/challenges.js";
 
@@ -31,7 +31,9 @@ async function updateBadge() {
   await chrome.action.setTitle({ title: `StandUp Break: next break in ${left} min` });
 }
 
-async function saveSchedule(s) {
+async function saveSchedule(schedule) {
+  const settings = await getSettings();
+  const s = schedule.nextAt ? { ...schedule, nextAt: nextActiveSlot(schedule.nextAt, settings.intervalMin, settings) } : schedule;
   await setSchedule(s);
   if (s.nextAt) await chrome.alarms.create(ALARM, { when: s.nextAt });
   await updateBadge();
@@ -65,13 +67,30 @@ async function openReminder({ manual }) {
   await setSchedule({ ...(await getSchedule()), windowId: win.id });
 }
 
+const MEETING_HOSTS = [/^meet\.google\.com$/, /(^|\.)zoom\.us$/, /^teams\.microsoft\.com$/, /^teams\.live\.com$/];
+
+async function inMeeting() {
+  const wins = await chrome.windows.getAll();
+  if (wins.some((w) => w.state === "fullscreen")) return true;
+  const tabs = await chrome.tabs.query({ audible: true });
+  return tabs.some((tab) => {
+    try {
+      const host = new URL(tab.url).hostname;
+      return MEETING_HOSTS.some((re) => re.test(host));
+    } catch {
+      return false;
+    }
+  });
+}
+
 async function onNextBreak() {
   const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
   if (!settings.setupDone) return;
   const now = Date.now();
-  const next = onFire(s, now, settings.intervalMin);
-  await saveSchedule(next);
-  if (await windowExists(s.windowId)) return;
+  const [idle, meeting] = await Promise.all([chrome.idle.queryState(IDLE_SEC), inMeeting()]);
+  const { kind, schedule } = decideFire(s, now, settings.intervalMin, { idle, meeting, settings });
+  await saveSchedule(schedule);
+  if (kind !== "open" || (await windowExists(s.windowId))) return;
   await openReminder({ manual: false });
 }
 
@@ -130,7 +149,7 @@ async function onSettingsSaved(msg) {
   submitScore(profile, settings);
   if (!s.nextAt) await saveSchedule({ ...initialSchedule(Date.now(), settings.intervalMin), lastKey: s.lastKey, breakCount: s.breakCount });
   else if (msg.intervalChanged) await saveSchedule(rescheduleForInterval(s, Date.now(), settings.intervalMin));
-  else await ensureAlarm();
+  else await saveSchedule(s);
   return { ok: true };
 }
 

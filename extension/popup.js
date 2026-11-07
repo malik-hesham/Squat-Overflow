@@ -1,6 +1,6 @@
 import { getSettings, getProfile, getSchedule, readLog } from "./lib/store.js";
 import { LEVELS, levelFor, dayKey } from "./lib/xp.js";
-import { upcoming } from "./lib/schedule.js";
+import { upcoming, isActive } from "./lib/schedule.js";
 import { fetchBoard, submitScore } from "./lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, withPeriods } from "./lib/challenges.js";
 import { badgeLabel } from "./lib/badges.js";
@@ -24,6 +24,9 @@ async function render() {
   $("pause").textContent = paused ? "Resume" : "Pause 1 hr";
   if (paused) {
     $("nextText").textContent = `Paused until ${hhmm(s.pausedUntil)}`;
+  } else if (s.nextAt && !isActive(now, settings)) {
+    const day = new Date(s.nextAt).toLocaleDateString([], { weekday: "short" });
+    $("nextText").textContent = `Outside active hours · next at ${day} ${hhmm(s.nextAt)}`;
   } else if (s.nextAt) {
     const mins = Math.max(0, Math.ceil((s.nextAt - now) / 60_000));
     $("nextText").textContent = `Next break at ${hhmm(s.nextAt)} · in ${mins} min`;
