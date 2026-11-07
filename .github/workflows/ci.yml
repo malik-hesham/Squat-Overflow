@@ -29,6 +29,8 @@ jobs:
           cache-dependency-path: |
             server/requirements.txt
             server/requirements-dev.txt
+      # libmediapipe.so links libEGL and libGLESv2, which the runner image doesn't ship.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgles2
       - run: pip install -r requirements-dev.txt
       - run: pytest -q
 

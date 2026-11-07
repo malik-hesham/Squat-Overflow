@@ -1,9 +1,11 @@
 # Pose server image for Fly.io (see fly.toml and docs/deployment.md).
-FROM python:3.12-slim
+# Bookworm pinned so the apt package names below stay valid (trixie renamed libglib2.0-0).
+FROM python:3.12-slim-bookworm
 
-# MediaPipe depends on opencv-contrib-python (not headless), which loads libGL and glib on Linux.
+# libmediapipe.so links libEGL/libGLESv2 even for CPU inference; opencv-contrib-python
+# (a MediaPipe dependency, not headless) loads libGL and glib.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && apt-get install -y --no-install-recommends libegl1 libgles2 libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # MPLCONFIGDIR: MediaPipe's vision package imports matplotlib, which needs a writable config dir.
