@@ -1,35 +1,59 @@
-// Egyptian meme sound effects for the break window. Clips are cut from
-// https://www.youtube.com/watch?v=LqTqN77Ggbs and numbered by their #label in the video.
+// Sound effects for the break window, cut from two videos and numbered by their on-screen label:
+//   meme-NN: Egyptian memes, "#NN" in https://www.youtube.com/watch?v=LqTqN77Ggbs
+//   sfx-NN:  "Sound NN" in https://www.youtube.com/watch?v=nX0EKK2RnXU
+//            1 Surprised, 2 Click, 3 Bone crack, 4 Boom, 5 Throw, 6 Woaaaah, 7 Window, 8 Whoosh,
+//            9 Slap, 10 Glitch, 11 Clock ticking, 12 Kids yeyy, 13 Mario coin, 14 Surprised 2,
+//            15 Surprised 3, 16 Display digits, 17 Pop, 18 Discord join, 19 Game point, 20 Let's go,
+//            21 Wrong answer, 22 Shotgun, 23 Reload, 24 Ding, 25 Help me
+const clips = (prefix, ...ns) => ns.map((n) => `${prefix}-${String(n).padStart(2, "0")}`);
+const range = (from, to) => Array.from({ length: to - from + 1 }, (_, k) => from + k);
+
 export const MEMES = {
-  start: [4], // "Break now"
-  done: [5, 9], // Done, with form scores
-  unscored: [7, 8, 10, 12, 14, 18, 24], // Done, nothing scored (no camera, coach offline, no reps)
-  reps: [6, 16], // every REP_MEME_EVERY reps
+  // "Break now": a new one each break
+  start: [...clips("meme", 4, 1, 2, 3, 11, 13, 15, 17, 19, 20, 21, 22, 23), ...clips("sfx", ...range(1, 25))],
+  done: clips("meme", 5, 9), // Done, with form scores
+  unscored: clips("meme", 7, 8, 10, 12, 14, 18, 24), // Done, nothing scored (no camera, coach offline, no reps)
+  reps: clips("meme", 6, 16), // spread over the break, see repMarks()
 };
 
-export const REP_MEME_EVERY = 3;
+export const memeFile = (clip) => `sounds/memes/${clip}.ogg`;
 
-export const memeFile = (n) => `sounds/memes/meme-${String(n).padStart(2, "0")}.ogg`;
-
-// True when the rep count went past a multiple of REP_MEME_EVERY.
-export const repMilestone = (was, reps) => Math.floor(reps / REP_MEME_EVERY) > Math.floor(was / REP_MEME_EVERY);
-
-// A random clip from `group`, avoiding `prev` so a clip doesn't play twice in a row.
-export function pickMeme(group, prev = 0, rand = Math.random) {
-  const pool = group.length > 1 ? group.filter((n) => n !== prev) : group;
-  return pool[Math.floor(rand() * pool.length)];
+// The clip whose turn it is in `group`, and the turn after it (wrapping round).
+export function takeTurn(group, turn) {
+  const i = Number.isInteger(turn) && turn >= 0 ? turn % group.length : 0;
+  return { clip: group[i], next: (i + 1) % group.length };
 }
 
-let last = 0;
+// The total-rep counts where the rep clips play: the break's reps split evenly
+// between them, e.g. 18 reps and 2 clips -> reps 9 and 18.
+export function repMarks(totalReps, clips = MEMES.reps.length) {
+  return Array.from({ length: clips }, (_, k) => Math.ceil(((k + 1) * totalReps) / clips));
+}
 
-// Plays a random clip from MEMES[kind]. Resolves when it ends, or right away if it can't play.
-export function playMeme(kind, volume = 0.8) {
-  last = pickMeme(MEMES[kind], last);
-  const audio = new Audio(chrome.runtime.getURL(memeFile(last)));
+// Resolves when the clip ends, or right away if it can't play.
+function playClip(n, volume = 0.8) {
+  const audio = new Audio(chrome.runtime.getURL(memeFile(n)));
   audio.volume = volume;
   return new Promise((resolve) => {
     audio.addEventListener("ended", resolve, { once: true });
     audio.addEventListener("error", resolve, { once: true });
     audio.play().catch(resolve);
   });
+}
+
+// Plays each group's clips in turn, one clip at a time. `turns` ({ group: index }) is
+// where each group left off in earlier breaks; `saveTurns` stores it after every pick.
+export function createMemePlayer(turns, saveTurns, play = playClip) {
+  const at = { ...turns };
+  let queue = Promise.resolve();
+  return {
+    // Queues the next clip of MEMES[kind]; resolves once it (and anything queued before it) has played.
+    play(kind) {
+      const { clip, next } = takeTurn(MEMES[kind], at[kind]);
+      at[kind] = next;
+      saveTurns({ ...at });
+      queue = queue.then(() => play(clip));
+      return queue;
+    },
+  };
 }

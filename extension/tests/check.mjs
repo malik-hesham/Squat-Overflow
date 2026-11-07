@@ -14,7 +14,7 @@ import { avatarFitness, missedWorkdays, fitnessCaption } from "../lib/fitness.js
 import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, localeFor, nameText, translationKeys } from "../lib/i18n.js";
 import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
-import { MEMES, memeFile, pickMeme, repMilestone } from "../lib/memes.js";
+import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
 import { readdirSync } from "node:fs";
 
 function check(name, fn) {
@@ -685,24 +685,54 @@ check("memes: exactly the grouped clips are bundled, each in one group", () => {
   assert.equal(new Set(used).size, used.length, "a clip is in two groups");
   const files = readdirSync(new URL("../sounds/memes/", import.meta.url)).sort();
   assert.deepEqual(files, used.map(memeFile).map((f) => f.split("/").pop()).sort());
-  assert.deepEqual(MEMES.start, [4]);
-  assert.equal(memeFile(7), "sounds/memes/meme-07.ogg");
+  assert.equal(files.length, 24 + 25); // every #label from the meme video, every "Sound N" from the sfx one
+  assert.deepEqual(MEMES.start.slice(0, 2), ["meme-04", "meme-01"]);
+  assert.deepEqual(MEMES.start.slice(-25, -23), ["sfx-01", "sfx-02"]);
+  assert.equal(MEMES.start.at(-1), "sfx-25");
+  assert.equal(memeFile("meme-07"), "sounds/memes/meme-07.ogg");
 });
-check("memes: picks stay in the group, cover it, and never repeat the previous clip", () => {
-  const picks = (group, prev) => new Set(Array.from({ length: 50 }, (_, k) => pickMeme(group, prev, () => k / 50)));
-  assert.deepEqual([...picks(MEMES.unscored, 0)].sort((a, b) => a - b), MEMES.unscored);
-  assert.deepEqual([...picks(MEMES.reps, 6)], [16]);
-  assert.deepEqual([...picks(MEMES.reps, 16)], [6]);
-  assert.deepEqual([...picks(MEMES.start, 4)], [4]);
-  assert.deepEqual([...picks(MEMES.done, 6)].sort(), [5, 9]);
+check("memes: each group takes turns in order, wrapping round, starting over on bad saved turns", () => {
+  const order = (group, turn, n) => Array.from({ length: n }, () => {
+    const r = takeTurn(group, turn);
+    turn = r.next;
+    return r.clip;
+  });
+  const nums = (list) => list.map((c) => Number(c.split("-")[1]));
+  assert.deepEqual(nums(order(MEMES.unscored, 0, 9)), [7, 8, 10, 12, 14, 18, 24, 7, 8]);
+  assert.deepEqual(nums(order(MEMES.done, 1, 3)), [9, 5, 9]);
+  assert.deepEqual(order(MEMES.start, 12, 3), ["meme-23", "sfx-01", "sfx-02"]);
+  assert.deepEqual(order(MEMES.start, MEMES.start.length - 1, 2), ["sfx-25", "meme-04"]);
+  for (const bad of [undefined, -1, 1.5, "2"]) assert.equal(takeTurn(MEMES.done, bad).clip, "meme-05");
+  assert.equal(takeTurn(MEMES.done, 7).clip, "meme-09"); // a group that shrank since the turn was saved
 });
-check("memes: a reps clip every 3 reps", () => {
-  const hits = [];
-  for (let r = 1; r <= 6; r++) if (repMilestone(r - 1, r)) hits.push(r);
-  assert.deepEqual(hits, [3, 6]);
-  assert.equal(repMilestone(2, 4), true);
-  assert.equal(repMilestone(3, 3), false);
+check("memes: rep clips split the break's total reps evenly", () => {
+  assert.deepEqual(repMarks(18), [9, 18]);
+  assert.deepEqual(repMarks(12), [6, 12]);
+  assert.deepEqual(repMarks(15), [8, 15]);
+  assert.deepEqual(repMarks(18, 3), [6, 12, 18]);
 });
+pending.push(
+  (async () => {
+    const heard = [];
+    const saved = [];
+    const player = createMemePlayer({ done: 1, unscored: 5 }, (t) => saved.push(t), async (clip) => {
+      heard.push(`${clip}:start`);
+      await new Promise((r) => setTimeout(r, clip === "meme-16" ? 20 : 1));
+      heard.push(`${clip}:end`);
+    });
+    player.play("reps");
+    player.play("reps");
+    await player.play("done");
+    await player.play("unscored");
+    await player.play("unscored");
+    // One at a time, in the order asked; turns pick up where earlier breaks left off.
+    assert.deepEqual(heard, [
+      "meme-06:start", "meme-06:end", "meme-16:start", "meme-16:end", "meme-09:start", "meme-09:end",
+      "meme-18:start", "meme-18:end", "meme-24:start", "meme-24:end",
+    ]);
+    assert.deepEqual(saved.at(-1), { done: 0, unscored: 0, reps: 0 });
+  })(),
+);
 check("i18n: every English string has an Arabic translation", () => {
   const ar = new Set(translationKeys("ar"));
   const missing = translationKeys("en").filter((k) => !ar.has(k));
