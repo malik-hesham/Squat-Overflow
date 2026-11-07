@@ -142,8 +142,6 @@ def test_fidgeting_at_rest_is_not_a_rep(ex):
     assert _counter_run(ex, values) == []
 
 
-# --- muscle areas and form scoring ------------------------------------------
-
 AREA_MAP = {
     "Neck": {"neck_tilt", "head_turn"},
     "Shoulders": {"overhead_reach", "alt_reach", "t_raise", "front_raise"},
