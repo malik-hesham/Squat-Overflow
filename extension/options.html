@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>StandUp Break settings</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1 id="heading">Welcome to StandUp Break</h1>
+      <p class="muted" id="intro">Short, camera-coached movement breaks that earn you XP. Set it up once, then get back to work.</p>
+
+      <section>
+        <h2>How often?</h2>
+        <div class="chips" id="intervals">
+          <label><input type="radio" name="interval" value="30" /> 30 min</label>
+          <label><input type="radio" name="interval" value="45" /> 45 min</label>
+          <label><input type="radio" name="interval" value="60" /> 1 hr</label>
+          <label><input type="radio" name="interval" value="90" /> 90 min</label>
+          <label><input type="radio" name="interval" value="120" /> 2 hr</label>
+          <label><input type="radio" name="interval" value="custom" /> Custom</label>
+        </div>
+        <label class="inline" id="customWrap" hidden>
+          Every <input type="number" id="customMin" min="1" max="240" step="1" /> minutes
+        </label>
+      </section>
+
+      <section>
+        <h2>Where do you feel it?</h2>
+        <p class="muted">Pick at least one area. Breaks focus on these.</p>
+        <div class="chips" id="areas"></div>
+      </section>
+
+      <section>
+        <h2>When?</h2>
+        <label class="inline">From <input type="time" id="activeStart" /> to <input type="time" id="activeEnd" /></label>
+        <div class="chips" id="workdays"></div>
+        <label class="check"><input type="checkbox" id="autoPause" /> Don't interrupt meetings or fullscreen</label>
+      </section>
+
+      <section>
+        <h2>Camera</h2>
+        <label class="check"><input type="checkbox" id="privacy" /> Blur me in the camera preview</label>
+        <p class="notice">Your camera is used only to count reps and is never recorded. Only your name, XP, level and streak are shared, and only in Competitive mode.</p>
+      </section>
+
+      <section>
+        <h2>Play mode</h2>
+        <div class="chips">
+          <label><input type="radio" name="mode" value="personal" /> Personal</label>
+          <label><input type="radio" name="mode" value="competitive" /> Competitive</label>
+        </div>
+        <div id="competitive" hidden>
+          <label class="field">Display name <input type="text" id="name" maxlength="40" placeholder="e.g. Malik" /></label>
+          <label class="field">Company domain <input type="text" id="company" maxlength="100" placeholder="e.g. leadliaison.com" /></label>
+        </div>
+      </section>
+
+      <details>
+        <summary>Advanced</summary>
+        <label class="field">Pose server URL <input type="text" id="serverUrl" /></label>
+      </details>
+
+      <div class="footer">
+        <span id="error" class="error"></span>
+        <span id="saved" class="saved" hidden>Saved ✓</span>
+        <button id="save" class="primary">Get started</button>
+      </div>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

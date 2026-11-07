@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>StandUp Break</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="level">
+      <div class="row"><b id="levelName">Lv 1 · Desk Potato</b><span id="levelXp" class="muted"></span></div>
+      <div class="bar"><span id="levelBar"></span></div>
+    </header>
+
+    <section id="setup" class="card" hidden>
+      <b>Finish setup to start getting breaks.</b>
+      <button id="finishSetup" class="primary">Open setup</button>
+    </section>
+
+    <section id="nextCard" class="card">
+      <div class="label">Next break</div>
+      <div id="nextText" class="big">–</div>
+      <div id="shifted" class="muted small" hidden></div>
+    </section>
+
+    <section class="card stats">
+      <div><b id="todayDone">0</b><span>breaks today</span></div>
+      <div><b id="skips">0</b><span>skips in a row</span></div>
+      <div><b id="streak">0</b><span>day streak 🔥</span></div>
+    </section>
+
+    <section id="challenges" class="card">
+      <div class="label">Today's challenges</div>
+      <ul id="challengeRows" class="challenge-rows"></ul>
+      <div id="badges" class="badges"></div>
+    </section>
+
+    <section id="board" class="card">
+      <div class="row">
+        <div class="label">Leaderboard</div>
+        <div class="tabs">
+          <button class="tab active" data-period="week">This week</button>
+          <button class="tab" data-period="all">All time</button>
+        </div>
+      </div>
+      <ol id="boardRows" class="board-rows"></ol>
+      <div id="boardMsg" class="muted small"></div>
+    </section>
+
+    <div class="actions">
+      <button id="breakNow" class="primary">Break now</button>
+      <button id="pause">Pause 1 hr</button>
+      <button id="practice">Practice</button>
+      <button id="settings">Settings</button>
+    </div>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

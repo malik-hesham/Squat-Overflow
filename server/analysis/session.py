@@ -109,7 +109,7 @@ class RepCounter:
             peak_angle=round(cyc.extreme, 1),
             rom=round(rom, 1),
             issues=rep_issues,
-            score=max(0, 100 - 20 * len(rep_issues)),
+            score=ex.rep_score(rom, needed, duration, rep_issues),
             partial=not cyc.reached_target,
         )
         (self.reps if cyc.reached_target else self.partials).append(rep)

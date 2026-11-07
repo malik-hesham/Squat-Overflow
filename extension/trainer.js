@@ -45,7 +45,7 @@ const FALLBACK_EXERCISES = [
     label: "Overhead reach",
     metric: "Arm height",
     camera: "front",
-    category: "Seated upper body",
+    category: "Shoulders",
   },
 ];
 const CATALOG_KEY = "exerciseCatalog";

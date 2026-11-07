@@ -1,203 +1,209 @@
-// Background: opens the trainer from the toolbar icon, and runs the desk break
-// coach. The coach counts minutes of keyboard/mouse activity (chrome.idle) on a
-// 1-minute alarm; after `breakInterval` active minutes it shows a notification
-// that opens the trainer straight into a 2-minute guided break. Stepping away
-// for IDLE_RESET_MIN minutes counts as a break on its own and resets the clock.
-//
-// A service worker is stopped when idle, so all coach state lives in
-// chrome.storage.local, never in variables.
-const TRAINER_URL = chrome.runtime.getURL("trainer.html");
+import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog } from "./lib/store.js";
+import { award } from "./lib/xp.js";
+import { initialSchedule, applyAction, rescheduleForInterval, decideFire, nextActiveSlot, IDLE_SEC } from "./lib/schedule.js";
+import { submitScore } from "./lib/leaderboard.js";
+import { noteAction } from "./lib/challenges.js";
+import { createSerial } from "./lib/serial.js";
 
-const SETTINGS_DEFAULTS = { breakEnabled: true, breakInterval: 50 };
-const COACH_KEY = "breakCoach"; // { activeMin, awaySince, snoozeUntil, notifiedAt }
-const LOG_KEY = "breakLog"; // [{ at, reps, moves, score, completed }]
-const LOG_MAX = 500;
-const TICK = "break-tick";
-const NOTIFICATION_ID = "formcoach-break";
-const IDLE_SECONDS = 60; // no input for this long = not at the keyboard
-const IDLE_RESET_MIN = 5; // away this long = a natural break
-const SNOOZE_MIN = 10;
-const RENOTIFY_MIN = 15; // ignored reminder: ask again after this long
+const BREAK_URL = chrome.runtime.getURL("break.html");
+const BREAK_WINDOW = { width: 520, height: 780 };
+const ALARM = "next-break";
+const BADGE_TICK = "badge-tick";
+const serial = createSerial();
 
-// ---------------------------------------------------------------------------
-// Opening the trainer
-// ---------------------------------------------------------------------------
-// Two trainer tabs would fight over the webcam, so an open one is reused.
-async function openTrainer(hash = "") {
-  const url = TRAINER_URL + hash;
+async function isBreakWindow(id) {
+  if (id == null) return false;
   try {
-    const contexts = await chrome.runtime.getContexts({
-      contextTypes: ["TAB"],
-      documentUrls: [TRAINER_URL],
-    });
-    const existing = contexts.find((c) => c.tabId >= 0);
-    if (existing) {
-      await chrome.tabs.update(existing.tabId, {
-        active: true,
-        ...(hash ? { url } : {}),
-      });
-      await chrome.windows.update(existing.windowId, { focused: true });
-      return;
-    }
-  } catch (err) {
-    console.warn("Could not look for an open trainer tab:", err);
-  }
-  const win = await chrome.windows.getLastFocused().catch(() => null);
-  await chrome.tabs.create({ url, ...(win ? { windowId: win.id } : {}) });
-  if (win) await chrome.windows.update(win.id, { focused: true }).catch(() => {});
-}
-
-// A unique hash makes the trainer's hashchange fire even if it is already on #break.
-const breakHash = () => `#break-${Date.now()}`;
-
-chrome.action.onClicked.addListener(() => openTrainer());
-
-// ---------------------------------------------------------------------------
-// Storage helpers
-// ---------------------------------------------------------------------------
-async function getSettings() {
-  return { ...SETTINGS_DEFAULTS, ...(await chrome.storage.local.get(Object.keys(SETTINGS_DEFAULTS))) };
-}
-
-async function getCoach() {
-  const { [COACH_KEY]: coach } = await chrome.storage.local.get(COACH_KEY);
-  return { activeMin: 0, awaySince: null, snoozeUntil: 0, notifiedAt: null, ...coach };
-}
-
-const setCoach = (coach) => chrome.storage.local.set({ [COACH_KEY]: coach });
-
-// ---------------------------------------------------------------------------
-// The minute tick
-// ---------------------------------------------------------------------------
-async function ensureAlarm() {
-  if (!(await chrome.alarms.get(TICK))) {
-    await chrome.alarms.create(TICK, { periodInMinutes: 1 });
+    const win = await chrome.windows.get(id, { populate: true });
+    return win.tabs.some((tab) => (tab.url || tab.pendingUrl || "").startsWith(BREAK_URL));
+  } catch {
+    return false;
   }
 }
 
-async function tick() {
-  const settings = await getSettings();
-  const coach = await getCoach();
-  if (!settings.breakEnabled) {
-    await updateBadge(settings, coach);
-    return;
-  }
-  const now = Date.now();
-  const idle = await chrome.idle.queryState(IDLE_SECONDS);
-  if (idle === "active") {
-    coach.awaySince = null;
-    coach.activeMin += 1;
-  } else {
-    coach.awaySince ??= now;
-    if (now - coach.awaySince >= IDLE_RESET_MIN * 60_000) {
-      coach.activeMin = 0; // they got up: that was a break
-      coach.notifiedAt = null;
-      chrome.notifications.clear(NOTIFICATION_ID);
-    }
-  }
-
-  const due = coach.activeMin >= Number(settings.breakInterval);
-  const snoozed = now < coach.snoozeUntil;
-  const recentlyAsked = coach.notifiedAt && now - coach.notifiedAt < RENOTIFY_MIN * 60_000;
-  if (due && !snoozed && !recentlyAsked && idle === "active") {
-    coach.notifiedAt = now;
-    await notify(coach.activeMin);
-  }
-  await setCoach(coach);
-  await updateBadge(settings, coach);
-}
-
-async function notify(minutes) {
-  await chrome.notifications.create(NOTIFICATION_ID, {
-    type: "basic",
-    iconUrl: "icons/icon-128.png",
-    title: "Time for a 2-minute desk break",
-    message: `You've been at your desk for ${minutes} min. 3 quick moves, coached by your camera.`,
-    buttons: [{ title: "Start break" }, { title: `Snooze ${SNOOZE_MIN} min` }],
-    requireInteraction: true,
-    priority: 2,
-  });
-}
-
-async function updateBadge(settings, coach) {
-  if (!settings.breakEnabled) {
+async function updateBadge() {
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  if (!settings.setupDone || !s.nextAt) {
     await chrome.action.setBadgeText({ text: "" });
     return;
   }
-  const left = Number(settings.breakInterval) - coach.activeMin;
+  const left = Math.max(0, Math.ceil((s.nextAt - Date.now()) / 60_000));
   await chrome.action.setBadgeBackgroundColor({ color: left <= 0 ? "#ff6b6b" : "#3ddc97" });
-  await chrome.action.setBadgeText({ text: left <= 0 ? "move" : `${left}m` });
-  await chrome.action.setTitle({
-    title: left <= 0 ? "FormCoach: time for a break" : `FormCoach: next break in ${left} min`,
+  await chrome.action.setBadgeText({ text: left <= 0 ? "move" : left >= 100 ? `${Math.round(left / 60)}h` : `${left}m` });
+  await chrome.action.setTitle({ title: `StandUp Break: next break in ${left} min` });
+}
+
+async function saveSchedule(schedule) {
+  const settings = await getSettings();
+  const s = schedule.nextAt ? { ...schedule, nextAt: nextActiveSlot(schedule.nextAt, settings.intervalMin, settings) } : schedule;
+  await setSchedule(s);
+  if (s.nextAt) await chrome.alarms.create(ALARM, { when: s.nextAt });
+  await updateBadge();
+}
+
+async function ensureAlarm() {
+  const settings = await getSettings();
+  if (!(await chrome.alarms.get(BADGE_TICK))) await chrome.alarms.create(BADGE_TICK, { periodInMinutes: 1 });
+  if (!settings.setupDone) return;
+  const s = await getSchedule();
+  if (!s.nextAt) {
+    await saveSchedule({ ...initialSchedule(Date.now(), settings.intervalMin), lastKey: s.lastKey, breakCount: s.breakCount });
+    return;
+  }
+  if (!(await chrome.alarms.get(ALARM))) await chrome.alarms.create(ALARM, { when: Math.max(s.nextAt, Date.now() + 1000) });
+  await updateBadge();
+}
+
+async function openBreakWindowId(s) {
+  if (await isBreakWindow(s.windowId)) return s.windowId;
+  if (await isBreakWindow(s.extraWindowId)) return s.extraWindowId;
+  return null;
+}
+
+async function openReminder({ manual }) {
+  const s = await getSchedule();
+  const open = await openBreakWindowId(s);
+  if (open != null) {
+    await chrome.windows.update(open, { focused: true });
+    return;
+  }
+  const win = await chrome.windows.create({
+    url: BREAK_URL + (manual ? "#manual" : ""),
+    type: "popup",
+    focused: true,
+    ...BREAK_WINDOW,
+  });
+  await setSchedule(manual ? { ...s, windowId: null, extraWindowId: win.id } : { ...s, windowId: win.id });
+}
+
+const MEETING_HOSTS = [/^meet\.google\.com$/, /(^|\.)zoom\.us$/, /^teams\.microsoft\.com$/, /^teams\.live\.com$/];
+
+async function inMeeting() {
+  const wins = await chrome.windows.getAll();
+  if (wins.some((w) => w.state === "fullscreen")) return true;
+  const tabs = await chrome.tabs.query({ audible: true });
+  return tabs.some((tab) => {
+    try {
+      const host = new URL(tab.url).hostname;
+      return MEETING_HOSTS.some((re) => re.test(host));
+    } catch {
+      return false;
+    }
   });
 }
 
-// ---------------------------------------------------------------------------
-// Events
-// ---------------------------------------------------------------------------
-chrome.runtime.onInstalled.addListener(ensureAlarm);
-chrome.runtime.onStartup.addListener(ensureAlarm);
-ensureAlarm();
+async function onNextBreak() {
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  if (!settings.setupDone) return;
+  const now = Date.now();
+  const [idle, meeting] = await Promise.all([chrome.idle.queryState(IDLE_SEC), inMeeting()]);
+  const { kind, schedule } = decideFire(s, now, settings.intervalMin, { idle, meeting, settings });
+  await saveSchedule(schedule);
+  if (kind !== "open" || (await openBreakWindowId(s)) != null) return;
+  await openReminder({ manual: false });
+}
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === TICK) tick();
-});
+async function onDone(msg, s, settings) {
+  const now = Date.now();
+  const profile = await getProfile();
+  const result = msg.result;
+  const { profile: next, breakdown, levelUp, newBadges } = award(profile, result, now, settings.workdays);
+  await setProfile(next);
+  submitScore(next, settings);
+  const scores = result.scores ?? [];
+  await appendLog({
+    at: now,
+    reps: result.countedReps,
+    moves: result.moves.filter((m) => m.completed).length,
+    score: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+    xp: breakdown.total,
+    scored: result.scored,
+    completed: result.moves.length > 0 && result.moves.every((m) => m.completed),
+  });
+  await saveSchedule({
+    ...applyAction(s, "done", now, settings.intervalMin),
+    lastKey: msg.lastKey ?? s.lastKey,
+    breakCount: s.breakCount + 1,
+    extraWindowId: s.windowId ?? s.extraWindowId ?? null,
+  });
+  return { ok: true, breakdown, levelUp, newBadges, profile: next };
+}
 
-chrome.notifications.onButtonClicked.addListener(async (id, index) => {
-  if (id !== NOTIFICATION_ID) return;
-  chrome.notifications.clear(id);
-  if (index === 0) {
-    await openTrainer(breakHash());
-  } else {
-    const coach = await getCoach();
-    coach.snoozeUntil = Date.now() + SNOOZE_MIN * 60_000;
-    coach.notifiedAt = null;
-    await setCoach(coach);
-  }
-});
+async function onBreakAction(msg) {
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  if (msg.action === "done") return onDone(msg, s, settings);
+  await setProfile(noteAction(await getProfile(), msg.action, Date.now()));
+  await saveSchedule(applyAction(s, msg.action, Date.now(), settings.intervalMin));
+  return { ok: true };
+}
 
-chrome.notifications.onClicked.addListener(async (id) => {
-  if (id !== NOTIFICATION_ID) return;
-  chrome.notifications.clear(id);
-  await openTrainer(breakHash());
-});
+async function onPause() {
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  await saveSchedule({ ...applyAction(s, "pause", Date.now(), settings.intervalMin), windowId: s.windowId });
+  return { ok: true };
+}
 
-// Settings changed in the trainer: refresh the badge right away.
-chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area !== "local" || !("breakEnabled" in changes || "breakInterval" in changes)) return;
-  await updateBadge(await getSettings(), await getCoach());
-});
+async function onResume() {
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  await saveSchedule({ ...rescheduleForInterval(s, Date.now(), settings.intervalMin), pausedUntil: 0 });
+  return { ok: true };
+}
 
-// Messages from the trainer page (only our own extension pages can send these).
+async function onLeftBoard() {
+  const [settings, profile] = await Promise.all([getSettings(), getProfile()]);
+  return { ok: await submitScore(profile, settings, { remove: true }) };
+}
+
+async function onSettingsSaved(msg) {
+  const [settings, s, profile] = await Promise.all([getSettings(), getSchedule(), getProfile()]);
+  submitScore(profile, settings);
+  if (!s.nextAt) await saveSchedule({ ...initialSchedule(Date.now(), settings.intervalMin), lastKey: s.lastKey, breakCount: s.breakCount });
+  else if (msg.intervalChanged) await saveSchedule(rescheduleForInterval(s, Date.now(), settings.intervalMin));
+  else await saveSchedule(s);
+  return { ok: true };
+}
+
+const HANDLERS = {
+  "break-now": () => openReminder({ manual: true }).then(() => ({ ok: true })),
+  "break-action": onBreakAction,
+  pause: onPause,
+  "settings-saved": onSettingsSaved,
+  resume: onResume,
+  "left-board": onLeftBoard,
+};
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
-  (async () => {
-    if (msg?.type === "break-done") {
-      const { [LOG_KEY]: log = [] } = await chrome.storage.local.get(LOG_KEY);
-      log.push({
-        at: Date.now(),
-        reps: Number(msg.reps) || 0,
-        moves: Number(msg.moves) || 0,
-        score: msg.score == null ? null : Number(msg.score),
-        completed: msg.completed === true,
-      });
-      await chrome.storage.local.set({ [LOG_KEY]: log.slice(-LOG_MAX) });
-      const coach = await getCoach();
-      Object.assign(coach, { activeMin: 0, notifiedAt: null, snoozeUntil: 0 });
-      await setCoach(coach);
-      chrome.notifications.clear(NOTIFICATION_ID);
-      await updateBadge(await getSettings(), coach);
-      sendResponse({ ok: true });
-    } else if (msg?.type === "break-test") {
-      // Demo helper: show the reminder now, as if the interval had passed.
-      const coach = await getCoach();
-      coach.notifiedAt = Date.now();
-      await setCoach(coach);
-      await notify(Math.max(coach.activeMin, 1));
-      sendResponse({ ok: true });
-    } else {
-      sendResponse({ ok: false });
-    }
-  })();
-  return true; // async response
+  const handler = HANDLERS[msg?.type];
+  if (!handler) return false;
+  serial(() => handler(msg)).then(sendResponse, (err) => sendResponse({ ok: false, error: String(err) }));
+  return true;
 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ALARM) serial(onNextBreak);
+  else if (alarm.name === BADGE_TICK) updateBadge();
+});
+
+chrome.windows.onRemoved.addListener((id) =>
+  serial(async () => {
+    const s = await getSchedule();
+    if (s.windowId !== id) return;
+    const settings = await getSettings();
+    await setProfile(noteAction(await getProfile(), "close", Date.now()));
+    await saveSchedule(applyAction(s, "close", Date.now(), settings.intervalMin));
+  }),
+);
+
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === "install") chrome.runtime.openOptionsPage();
+  serial(ensureAlarm);
+});
+
+chrome.runtime.onStartup.addListener(() =>
+  serial(async () => {
+    await setSchedule({ ...(await getSchedule()), windowId: null, extraWindowId: null });
+    await ensureAlarm();
+  }),
+);
+serial(ensureAlarm);

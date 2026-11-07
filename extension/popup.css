@@ -1,0 +1,134 @@
+body {
+  width: 360px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.level .row {
+  margin-bottom: 6px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+#setup {
+  display: grid;
+  gap: 8px;
+}
+.label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.big {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.small {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  text-align: center;
+}
+.stats b {
+  display: block;
+  font-size: 22px;
+}
+.stats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tab {
+  padding: 3px 8px;
+  font-size: 12px;
+  border-radius: 99px;
+}
+.tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.board-rows {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.board-rows li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  align-items: center;
+}
+.board-rows li.me {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  font-weight: 600;
+}
+.board-rows .rank {
+  color: var(--muted);
+}
+.board-rows .sub {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.board-rows .pts {
+  text-align: right;
+  font-size: 12px;
+}
+.challenge-rows {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.challenge-rows li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  font-size: 13px;
+}
+.challenge-rows li.done {
+  color: var(--accent);
+}
+.challenge-rows .bar {
+  grid-column: 1 / -1;
+  height: 5px;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+.badges span {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}

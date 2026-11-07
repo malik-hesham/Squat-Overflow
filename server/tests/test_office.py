@@ -12,6 +12,7 @@ from analysis.exercises import (
 from analysis.geometry import Pose
 from analysis.session import RepCounter, Session
 from tests import synthetic as syn
+from analysis.exercises import AREAS, office_rep_score
 
 FPS = 30
 
@@ -125,12 +126,11 @@ def _counter_run(ex, values, fps=FPS):
 
 
 @pytest.mark.parametrize("ex", OFFICE_EXERCISES, ids=lambda e: e.key)
-def test_relaxed_rep_that_just_reaches_target_scores_full_marks(ex):
-    """A calm one-second rep from a relaxed start to just past the target is a clean rep."""
+def test_relaxed_rep_that_just_reaches_target_scores_well_but_not_full(ex):
     step = 1 if ex.target > ex.rest else -1
     relaxed, just_past = ex.rest - 5 * step, ex.target + 2 * step
-    (rep,) = _counter_run(ex, syn.trajectory(relaxed, just_past, FPS))
-    assert not rep.partial and rep.issues == [] and rep.score == 100
+    (rep,) = _counter_run(ex, syn.trajectory(relaxed, just_past, 2 * FPS))
+    assert not rep.partial and rep.issues == [] and 70 <= rep.score < 100
 
 
 @pytest.mark.parametrize("ex", OFFICE_EXERCISES, ids=lambda e: e.key)
@@ -140,3 +140,44 @@ def test_fidgeting_at_rest_is_not_a_rep(ex):
     rng = np.random.default_rng(0)
     values = relaxed + rng.uniform(-3, 3, 10 * FPS)
     assert _counter_run(ex, values) == []
+
+
+AREA_MAP = {
+    "Neck": {"neck_tilt", "head_turn"},
+    "Shoulders": {"overhead_reach", "alt_reach", "t_raise", "front_raise"},
+    "Upper back & posture": {"seated_row", "cross_swing", "desk_punch", "desk_pushup"},
+    "Arms & wrists": {"wrist_flex", "air_curl", "triceps_reach", "chair_dip"},
+    "Lower back & core": {"seated_side_bend", "seated_lean_back", "standing_side_bend", "hip_hinge"},
+    "Hips & glutes": {"sit_to_stand", "mini_squat", "side_leg_raise", "reverse_lunge", "leg_swing"},
+    "Legs & circulation": {"seated_knee_ext", "seated_knee_lift", "seated_heel_raise", "calf_raise",
+                           "march", "hamstring_curl", "step_jack"},
+}
+
+
+def test_every_office_exercise_sits_in_its_muscle_area():
+    assert list(AREAS) == list(AREA_MAP)
+    for area, keys in AREA_MAP.items():
+        assert {e.key for e in OFFICE_EXERCISES if e.category == area} == keys
+
+
+@pytest.mark.parametrize("rom,needed,duration,expected", [
+    (50, 50, 1.5, 70),
+    (65, 50, 1.5, 100),
+    (20, 50, 1.5, 0),
+    (35, 50, 1.5, 35),
+    (65, 50, 0.4, 70),
+    (65, 50, 0.8, 85),
+    (200, 50, 1.5, 100),
+    (5, 50, 0.2, 0),
+])
+def test_office_rep_score(rom, needed, duration, expected):
+    assert office_rep_score(rom, needed, duration) == expected
+
+
+@pytest.mark.parametrize("ex", OFFICE_EXERCISES, ids=lambda e: e.key)
+def test_partial_office_rep_scores_below_a_full_one(ex):
+    step = 1 if ex.target > ex.rest else -1
+    relaxed = ex.rest - 5 * step
+    halfway = relaxed + (ex.target - relaxed) * 0.7
+    (rep,) = _counter_run(ex, syn.trajectory(relaxed, halfway, 2 * FPS))
+    assert rep.partial and rep.score < 70
