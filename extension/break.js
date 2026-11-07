@@ -19,7 +19,7 @@ const els = Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
-    "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
+    "lastScore", "cue", "howto", "hint", "demoPane", "demoFrame", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "lookBtn", "lookName",
     "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
@@ -192,8 +192,7 @@ function showMove(i) {
   els.howto.textContent = move.how_to;
   els.hint.hidden = move.camera !== "side";
   els.hint.textContent = t(state.lang, "cameraHint");
-  els.demo.hidden = !(move.demo && YOUTUBE_ID.test(move.demo.youtube_id) && navigator.onLine);
-  if (!els.demo.hidden) els.demo.textContent = t(state.lang, "watchDemo", { n: move.demo.seconds });
+  showDemo(move);
   els.swap.hidden = !swapMove(state.catalog, state.moves, i);
   els.lastScore.hidden = true;
   els.cue.hidden = true;
@@ -298,6 +297,8 @@ function onStatus(status) {
   setStarting(false);
   els.lookBtn.hidden = els.lookGrid.hidden = true;
   els.fallback.hidden = false;
+  els.demoPane.hidden = true;
+  els.demoFrame.removeAttribute("src");
   els.fallbackTitle.textContent = t(state.lang, status === "offline" ? "coachOffline" : "cameraUnavailable");
   els.fallbackText.textContent = t(state.lang, status === "offline" ? "offlineText" : "deniedText");
 }
@@ -393,10 +394,17 @@ async function leave(action) {
   closeWindow();
 }
 
-async function openDemo() {
-  const demo = state.moves[state.i]?.demo;
-  if (!demo || !YOUTUBE_ID.test(demo.youtube_id)) return;
-  await chrome.windows.create({ url: `https://www.youtube.com/watch?v=${demo.youtube_id}`, type: "popup", width: 480, height: 400 });
+function demoUrl(move) {
+  if (!move.demo || !YOUTUBE_ID.test(move.demo.youtube_id) || !navigator.onLine || !els.fallback.hidden) return null;
+  const origin = new URL(state.settings.serverUrl.replace(/^ws/, "http")).origin;
+  return `${origin}/embed/${move.demo.youtube_id}`;
+}
+
+function showDemo(move) {
+  const url = demoUrl(move);
+  els.demoPane.hidden = !url;
+  if (url && els.demoFrame.getAttribute("src") !== url) els.demoFrame.src = url;
+  if (!url) els.demoFrame.removeAttribute("src");
 }
 
 function swap(ev) {
@@ -466,7 +474,6 @@ async function init() {
   els.snooze.addEventListener("click", () => leave("snooze"));
   els.skip.addEventListener("click", () => leave("skip"));
   els.back.addEventListener("click", closeWindow);
-  els.demo.addEventListener("click", openDemo);
   els.swap.addEventListener("click", swap);
   els.voice.checked = settings.voice;
   els.voice.addEventListener("change", onVoiceChange);

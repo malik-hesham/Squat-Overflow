@@ -10,7 +10,7 @@ import { busyNow } from "./lib/calendar.js";
 import { t, resolveLang, localeFor } from "./lib/i18n.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
-const BREAK_WINDOW = { width: 520, height: 780 };
+const BREAK_WINDOW = { width: 980, height: 760 };
 const ALARM = "next-break";
 const BADGE_TICK = "badge-tick";
 const serial = createSerial();

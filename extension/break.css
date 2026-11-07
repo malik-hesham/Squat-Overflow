@@ -446,3 +446,29 @@ footer {
   direction: ltr;
   unicode-bidi: isolate;
 }
+.media {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.media > .stage:only-child,
+.media > .stage:has(+ .demo-pane[hidden]) {
+  grid-column: 1 / -1;
+}
+.demo-pane {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+}
+.demo-pane iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+@media (max-width: 720px) {
+  .media {
+    grid-template-columns: 1fr;
+  }
+}

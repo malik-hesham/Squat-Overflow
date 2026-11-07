@@ -32,28 +32,33 @@
     </section>
 
     <main id="routine">
-      <div class="stage">
-        <video id="video" playsinline muted hidden></video>
-        <canvas id="canvas"></canvas>
-        <div id="position" class="overlay" hidden>
-          <strong data-i18n="getInPosition">Get in position</strong>
-          <span id="positionText" data-i18n="positionText">Stand up, turn sideways, step back until your feet are in frame</span>
+      <div class="media">
+        <div class="stage">
+          <video id="video" playsinline muted hidden></video>
+          <canvas id="canvas"></canvas>
+          <div id="position" class="overlay" hidden>
+            <strong data-i18n="getInPosition">Get in position</strong>
+            <span id="positionText" data-i18n="positionText">Stand up, turn sideways, step back until your feet are in frame</span>
+          </div>
+          <div id="starting" class="overlay starting" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <strong data-i18n="startingCamera">Starting camera…</strong>
+            <span id="startingText" class="muted">Frames stay on this computer.</span>
+          </div>
+          <div id="fallback" class="overlay fallback" hidden>
+            <strong id="fallbackTitle" data-i18n="cameraUnavailable">Camera unavailable</strong>
+            <span id="fallbackText" data-i18n="fallbackText">Follow the instructions below and press Done when finished. No XP this time.</span>
+          </div>
+          <div class="hud">
+            <span class="reps" dir="ltr"><b id="reps">0</b> / <span id="target">6</span></span>
+            <span id="lastScore" class="score" hidden></span>
+          </div>
+          <div id="cue" class="cue" hidden></div>
+          <div id="lookGrid" class="look-grid" role="radiogroup" aria-label="Camera look" data-i18n-aria="cameraLook" hidden></div>
         </div>
-        <div id="starting" class="overlay starting" hidden>
-          <span class="spinner" aria-hidden="true"></span>
-          <strong data-i18n="startingCamera">Starting camera…</strong>
-          <span id="startingText" class="muted">Frames stay on this computer.</span>
+        <div id="demoPane" class="demo-pane" hidden>
+          <iframe id="demoFrame" title="Exercise demo" data-i18n-title="demoTitle" allow="autoplay; encrypted-media"></iframe>
         </div>
-        <div id="fallback" class="overlay fallback" hidden>
-          <strong id="fallbackTitle" data-i18n="cameraUnavailable">Camera unavailable</strong>
-          <span id="fallbackText" data-i18n="fallbackText">Follow the instructions below and press Done when finished. No XP this time.</span>
-        </div>
-        <div class="hud">
-          <span class="reps" dir="ltr"><b id="reps">0</b> / <span id="target">6</span></span>
-          <span id="lastScore" class="score" hidden></span>
-        </div>
-        <div id="cue" class="cue" hidden></div>
-        <div id="lookGrid" class="look-grid" role="radiogroup" aria-label="Camera look" data-i18n-aria="cameraLook" hidden></div>
       </div>
 
       <div class="guide">
@@ -62,7 +67,6 @@
           <p id="hint" class="muted small" hidden></p>
         </div>
         <div class="guide-actions">
-          <button id="demo" class="small" hidden data-i18n="demo">▶ Demo</button>
           <button id="swap" class="small" title="Show me a different exercise" data-i18n-title="swapTitle" data-i18n="swap">↻ Swap</button>
         </div>
       </div>
