@@ -16,6 +16,7 @@
         <div class="profile">
           <div class="avatars" id="avatars" role="radiogroup" aria-label="Avatar" data-i18n-aria="avatar"></div>
           <label class="field"><span data-i18n="displayName">Display name</span> <input type="text" id="name" maxlength="40" placeholder="e.g. Malik" data-i18n-placeholder="namePlaceholder" /></label>
+          <label class="field"><span data-i18n="companyDomain">Company domain</span> <input type="text" id="company" maxlength="100" placeholder="e.g. leadliaison.com" data-i18n-placeholder="companyPlaceholder" /></label>
         </div>
       </section>
 
@@ -80,9 +81,7 @@
           <label><input type="radio" name="mode" value="personal" /> <span data-i18n="personal">Personal</span></label>
           <label><input type="radio" name="mode" value="competitive" /> <span data-i18n="competitive">Competitive</span></label>
         </div>
-        <div id="competitive" hidden>
-          <label class="field"><span data-i18n="companyDomain">Company domain</span> <input type="text" id="company" maxlength="100" placeholder="e.g. leadliaison.com" data-i18n-placeholder="companyPlaceholder" /></label>
-        </div>
+        <p class="notice" id="modeHint"></p>
       </section>
 
       <section>

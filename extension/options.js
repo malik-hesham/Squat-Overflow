@@ -7,7 +7,6 @@ import { LANGS, initLang, applyLang, resolveLang, t, areaName, nameText } from "
 import { calendarState, connectCalendar, disconnectCalendar } from "./lib/calendar-client.js";
 
 const PRESETS = ["30", "45", "60", "90", "120"];
-const DAYS = [1, 2, 3, 4, 5, 6, 0];
 const COMPANY_RE = /^[a-z0-9.-]+\.[a-z]{2,}$/;
 
 const $ = (id) => document.getElementById(id);
@@ -35,8 +34,8 @@ function read() {
     areas: [...$("areas").querySelectorAll("input:checked")].map((i) => i.value),
     activeStart: $("activeStart").value,
     activeEnd: $("activeEnd").value,
-    weekStart: Number($("weekStart").value),
     workdays: [...$("workdays").querySelectorAll("input:checked")].map((i) => Number(i.value)),
+    weekStart: Number($("weekStart").value),
     autoPause: $("autoPause").checked,
     privacy: $("privacy").checked,
     mode,
@@ -55,13 +54,14 @@ function problem(s) {
     if (!s.name || s.name.length > 40) return t(lang, "errName");
     if (!COMPANY_RE.test(s.company)) return t(lang, "errCompany");
   }
+  if (s.company && !COMPANY_RE.test(s.company)) return t(lang, "errCompany");
   if (!/^wss?:\/\//.test(s.serverUrl)) return t(lang, "errServer");
   return "";
 }
 
 function refresh() {
   $("customWrap").hidden = checkedValue("interval") !== "custom";
-  $("competitive").hidden = checkedValue("mode") !== "competitive";
+  $("modeHint").textContent = t(lang, checkedValue("mode") === "competitive" ? "modeCompetitiveHint" : "modePersonalHint");
   const err = problem(read());
   $("error").textContent = initial.setupDone ? err : "";
   $("save").disabled = Boolean(err);
