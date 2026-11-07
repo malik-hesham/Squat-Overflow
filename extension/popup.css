@@ -99,3 +99,36 @@ body {
   text-align: right;
   font-size: 12px;
 }
+.challenge-rows {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.challenge-rows li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  font-size: 13px;
+}
+.challenge-rows li.done {
+  color: var(--accent);
+}
+.challenge-rows .bar {
+  grid-column: 1 / -1;
+  height: 5px;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+.badges span {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}

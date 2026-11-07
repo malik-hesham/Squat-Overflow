@@ -1,3 +1,5 @@
+import { updateChallenges } from "./challenges.js";
+
 export const LEVELS = [
   { level: 1, name: "Desk Potato", xp: 0 },
   { level: 2, name: "Chair Escapee", xp: 100 },
@@ -77,7 +79,7 @@ export function award(profile, result, now, workdays) {
   }
   const breakdown = { breakXp: 0, firstBreak: 0, streak: 0, challenges: [], total: 0 };
   p.lastBreakDay = today;
-  if (!result.scored) return { profile: p, breakdown, levelUp: null };
+  if (!result.scored) return { profile: p, breakdown, levelUp: null, newBadges: [] };
 
   breakdown.breakXp = breakXp(result);
   if (breakdown.breakXp > 0 && p.lastStreakDay !== today) {
@@ -86,10 +88,15 @@ export function award(profile, result, now, workdays) {
     breakdown.firstBreak = XP.firstBreak;
     breakdown.streak = Math.min(p.streak * XP.streakPerDay, XP.streakMax);
   }
-  breakdown.total = breakdown.breakXp + breakdown.firstBreak + breakdown.streak;
-  p.xp += breakdown.total;
-  p.weekXp += breakdown.total;
-  const after = levelFor(p.xp);
+  const avgForm = result.scores.length ? result.scores.reduce((a, b) => a + b, 0) / result.scores.length : 0;
+  const ch = updateChallenges(p, result, avgForm, now);
+  const out = ch.profile;
+  breakdown.challenges = ch.completed;
+  const bonus = ch.completed.reduce((n, c) => n + c.bonus, 0);
+  breakdown.total = breakdown.breakXp + breakdown.firstBreak + breakdown.streak + bonus;
+  out.xp += breakdown.total;
+  out.weekXp += breakdown.total;
+  const after = levelFor(out.xp);
   const levelUp = after.level > before ? { from: before, to: after.level, name: after.name } : null;
-  return { profile: p, breakdown, levelUp };
+  return { profile: out, breakdown, levelUp, newBadges: ch.newBadges };
 }

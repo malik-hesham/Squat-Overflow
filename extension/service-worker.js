@@ -2,6 +2,7 @@ import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLo
 import { award } from "./lib/xp.js";
 import { initialSchedule, onFire, applyAction, rescheduleForInterval } from "./lib/schedule.js";
 import { submitScore } from "./lib/leaderboard.js";
+import { noteAction } from "./lib/challenges.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 520, height: 780 };
@@ -78,7 +79,7 @@ async function onDone(msg, s, settings) {
   const now = Date.now();
   const profile = await getProfile();
   const result = msg.result;
-  const { profile: next, breakdown, levelUp } = award(profile, result, now, settings.workdays);
+  const { profile: next, breakdown, levelUp, newBadges } = award(profile, result, now, settings.workdays);
   await setProfile(next);
   submitScore(next, settings);
   const scores = result.scores ?? [];
@@ -96,12 +97,13 @@ async function onDone(msg, s, settings) {
     lastKey: msg.lastKey ?? s.lastKey,
     breakCount: s.breakCount + 1,
   });
-  return { ok: true, breakdown, levelUp, profile: next };
+  return { ok: true, breakdown, levelUp, newBadges, profile: next };
 }
 
 async function onBreakAction(msg) {
   const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
   if (msg.action === "done") return onDone(msg, s, settings);
+  await setProfile(noteAction(await getProfile(), msg.action, Date.now()));
   await saveSchedule(applyAction(s, msg.action, Date.now(), settings.intervalMin));
   return { ok: true };
 }
@@ -158,6 +160,7 @@ chrome.windows.onRemoved.addListener(async (id) => {
   const s = await getSchedule();
   if (s.windowId !== id) return;
   const settings = await getSettings();
+  await setProfile(noteAction(await getProfile(), "close", Date.now()));
   await saveSchedule(applyAction(s, "close", Date.now(), settings.intervalMin));
 });
 

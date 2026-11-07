@@ -3,6 +3,7 @@ import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
+import { badgeLabel } from "./lib/badges.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const YOUTUBE_ID = /^[\w-]{11}$/;
@@ -155,7 +156,7 @@ function renderLevel(xp) {
   return lv.progress;
 }
 
-function showSummary({ breakdown, levelUp, profile }) {
+function showSummary({ breakdown, levelUp, newBadges = [], profile }) {
   els.routine.hidden = true;
   els.warning.hidden = true;
   els.actions.hidden = true;
@@ -170,13 +171,16 @@ function showSummary({ breakdown, levelUp, profile }) {
     ...breakdown.challenges.map((c) => [`Challenge: ${c.name}`, c.bonus]),
   ].filter(([, v]) => v > 0);
   if (!lines.length) lines.push(["No reps counted this time", 0]);
+  for (const id of newBadges) lines.push([`New badge: ${badgeLabel(id)}`, null]);
   els.lines.replaceChildren(
     ...lines.map(([label, v]) => {
       const li = document.createElement("li");
       li.append(label);
-      const b = document.createElement("b");
-      b.textContent = `+${v}`;
-      li.append(b);
+      if (v !== null) {
+        const b = document.createElement("b");
+        b.textContent = `+${v}`;
+        li.append(b);
+      }
       return li;
     }),
   );

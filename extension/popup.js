@@ -2,6 +2,8 @@ import { getSettings, getProfile, getSchedule, readLog } from "./lib/store.js";
 import { LEVELS, levelFor, dayKey } from "./lib/xp.js";
 import { upcoming } from "./lib/schedule.js";
 import { fetchBoard, submitScore } from "./lib/leaderboard.js";
+import { DAILY_POOL, WEEKLY, withPeriods } from "./lib/challenges.js";
+import { badgeLabel } from "./lib/badges.js";
 
 const $ = (id) => document.getElementById(id);
 const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -37,6 +39,53 @@ async function render() {
   $("todayDone").textContent = log.filter((b) => dayKey(b.at) === today).length;
   $("skips").textContent = s.skipsInRow ?? 0;
   $("streak").textContent = profile.streak;
+  renderChallenges(withPeriods(profile, now));
+}
+
+function challengeProgress(id, d) {
+  const table = {
+    variety: [d.areas.length, 3, "areas"],
+    high_five: [d.breaks, 5, "breaks"],
+    clean_form: [d.done.includes(id) ? 1 : 0, 1, "break with 90+ form"],
+    early_mover: [d.done.includes(id) ? 1 : 0, 1, "break before 10:00"],
+    no_excuses: [d.run, 3, "in a row, no skips"],
+  };
+  return table[id];
+}
+
+function challengeRow(name, bonus, [have, need, unit], done) {
+  const li = document.createElement("li");
+  li.classList.toggle("done", done);
+  const title = document.createElement("span");
+  title.textContent = `${done ? "✓ " : ""}${name}`;
+  const meta = document.createElement("span");
+  meta.className = "muted";
+  meta.textContent = `${Math.min(have, need)}/${need} ${unit} · +${bonus}`;
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  const fill = document.createElement("span");
+  fill.style.width = `${Math.min(1, have / need) * 100}%`;
+  bar.append(fill);
+  li.append(title, meta, bar);
+  return li;
+}
+
+function renderChallenges(p) {
+  const d = p.daily;
+  const w = p.weekly;
+  const rows = d.ids.map((id) => {
+    const c = DAILY_POOL.find((x) => x.id === id);
+    return challengeRow(c.name, c.bonus, challengeProgress(id, d), d.done.includes(id));
+  });
+  rows.push(challengeRow(`${w.area} week`, WEEKLY.bonus, [w.count, WEEKLY.target, `${w.area} exercises`], w.done));
+  $("challengeRows").replaceChildren(...rows);
+  $("badges").replaceChildren(
+    ...p.badges.map((id) => {
+      const el = document.createElement("span");
+      el.textContent = badgeLabel(id);
+      return el;
+    }),
+  );
 }
 
 $("breakNow").addEventListener("click", async () => {

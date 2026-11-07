@@ -5,6 +5,7 @@ import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
+import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
 
 function check(name, fn) {
   try {
@@ -262,6 +263,90 @@ check("leaderboard payload maps fields, lowercases company, zeroes stale week", 
   assert.equal(stale.p_week, "2026-W46");
   assert.equal(stale.p_week_xp, 0);
   assert.equal(stale.p_delete, true);
+});
+
+const dayWith = (id, hour = 11) => {
+  for (let k = 0; k < 60; k++) {
+    const t = new Date(2026, 10, 9 + k, hour).getTime();
+    if (dailyFor(t).includes(id)) return t;
+  }
+  throw new Error(`no day with ${id}`);
+};
+const brk = (areas, completed = true) => ({
+  scored: true,
+  countedReps: 18,
+  targetReps: 18,
+  scores: Array(18).fill(80),
+  moves: areas.map((area, k) => ({ key: `k${k}`, area, completed })),
+});
+const ids = (r) => r.completed.map((c) => c.id);
+
+check("dailyFor: stable, 3 distinct pool ids, varies across a week", () => {
+  const a = dailyFor(mon);
+  assert.deepEqual(a, dailyFor(mon + H));
+  assert.equal(new Set(a).size, 3);
+  assert.ok(a.every((id) => DAILY_POOL.some((c) => c.id === id)));
+  const seen = new Set(Array.from({ length: 7 }, (_, k) => dailyFor(mon + k * DAY).join()));
+  assert.ok(seen.size > 1);
+});
+
+check("variety completes on the 3rd distinct area, only once", () => {
+  const t = dayWith("variety");
+  let p = blankProfile();
+  let r = updateChallenges(p, brk(["Neck", "Shoulders"]), 80, t);
+  assert.ok(!ids(r).includes("variety"));
+  r = updateChallenges(r.profile, brk(["Neck", "Arms & wrists"]), 80, t + M);
+  assert.ok(ids(r).includes("variety"));
+  assert.ok(r.newBadges.includes("daily:variety"));
+  r = updateChallenges(r.profile, brk(["Lower back & core"]), 80, t + 2 * M);
+  assert.ok(!ids(r).includes("variety"));
+});
+
+check("no_excuses resets after a skip", () => {
+  const t = dayWith("no_excuses");
+  let r = updateChallenges(blankProfile(), brk(["Neck"]), 80, t);
+  r = updateChallenges(r.profile, brk(["Neck"]), 80, t + M);
+  let p = noteAction(r.profile, "skip", t + 2 * M);
+  r = updateChallenges(p, brk(["Neck"]), 80, t + 3 * M);
+  assert.ok(!ids(r).includes("no_excuses"));
+  r = updateChallenges(r.profile, brk(["Neck"]), 80, t + 4 * M);
+  r = updateChallenges(r.profile, brk(["Neck"]), 80, t + 5 * M);
+  assert.ok(ids(r).includes("no_excuses"));
+});
+
+check("early_mover before 10:00 only", () => {
+  const t = dayWith("early_mover", 9);
+  const at959 = new Date(t).setHours(9, 59);
+  const at1000 = new Date(t).setHours(10, 0);
+  assert.ok(ids(updateChallenges(blankProfile(), brk(["Neck"]), 80, at959)).includes("early_mover"));
+  assert.ok(!ids(updateChallenges(blankProfile(), brk(["Neck"]), 80, at1000)).includes("early_mover"));
+});
+
+check("clean_form at 90 yes, 89 no", () => {
+  const t = dayWith("clean_form");
+  assert.ok(ids(updateChallenges(blankProfile(), brk(["Neck"]), 90, t)).includes("clean_form"));
+  assert.ok(!ids(updateChallenges(blankProfile(), brk(["Neck"]), 89, t)).includes("clean_form"));
+});
+
+check("weekly featured area completes at 10 moves with +100 and badge, resets next week", () => {
+  const area = featuredArea(mon);
+  let r = updateChallenges(blankProfile(), brk(Array(9).fill(area)), 80, mon);
+  assert.equal(r.profile.weekly.count, 9);
+  r = updateChallenges(r.profile, brk([area, "Neck"]), 80, mon + M);
+  const weekly = r.completed.find((c) => c.id === "weekly");
+  assert.equal(weekly.bonus, WEEKLY.bonus);
+  assert.ok(r.newBadges.includes(`weekly:${area}`));
+  const next = updateChallenges(r.profile, brk(["Neck"], false), 80, mon + 7 * DAY);
+  assert.equal(next.profile.weekly.count, 0);
+  assert.equal(next.profile.weekly.area, featuredArea(mon + 7 * DAY));
+});
+
+check("award total includes challenge bonuses", () => {
+  const t = dayWith("clean_form");
+  const { breakdown } = award(blankProfile(), { ...full(), scores: Array(18).fill(95) }, t, WORKDAYS);
+  const bonus = breakdown.challenges.reduce((n, c) => n + c.bonus, 0);
+  assert.ok(breakdown.challenges.some((c) => c.id === "clean_form"));
+  assert.equal(breakdown.total, breakdown.breakXp + breakdown.firstBreak + breakdown.streak + bonus);
 });
 
 const pending = [];
