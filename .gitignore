@@ -14,3 +14,5 @@ dist/
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+node_modules/
