@@ -1,10 +1,55 @@
 body {
-  width: 340px;
+  width: 360px;
   padding: 14px;
+  display: grid;
+  gap: 10px;
 }
-h1 {
-  font-size: 16px;
-  margin: 0 0 12px;
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.level .row {
+  margin-bottom: 6px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+#setup {
+  display: grid;
+  gap: 8px;
+}
+.label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.big {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.small {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  text-align: center;
+}
+.stats b {
+  display: block;
+  font-size: 22px;
+}
+.stats span {
+  color: var(--muted);
+  font-size: 12px;
 }
 .actions {
   display: grid;

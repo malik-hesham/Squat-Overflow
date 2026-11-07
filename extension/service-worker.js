@@ -110,6 +110,12 @@ async function onPause() {
   return { ok: true };
 }
 
+async function onResume() {
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  await saveSchedule({ ...rescheduleForInterval(s, Date.now(), settings.intervalMin), pausedUntil: 0 });
+  return { ok: true };
+}
+
 async function onSettingsSaved(msg) {
   const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
   if (!s.nextAt) await saveSchedule({ ...initialSchedule(Date.now(), settings.intervalMin), lastKey: s.lastKey, breakCount: s.breakCount });
@@ -123,6 +129,7 @@ const HANDLERS = {
   "break-action": onBreakAction,
   pause: onPause,
   "settings-saved": onSettingsSaved,
+  resume: onResume,
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

@@ -7,9 +7,32 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <h1>StandUp Break</h1>
+    <header class="level">
+      <div class="row"><b id="levelName">Lv 1 · Desk Potato</b><span id="levelXp" class="muted"></span></div>
+      <div class="bar"><span id="levelBar"></span></div>
+    </header>
+
+    <section id="setup" class="card" hidden>
+      <b>Finish setup to start getting breaks.</b>
+      <button id="finishSetup" class="primary">Open setup</button>
+    </section>
+
+    <section id="nextCard" class="card">
+      <div class="label">Next break</div>
+      <div id="nextText" class="big">–</div>
+      <div id="shifted" class="muted small" hidden></div>
+    </section>
+
+    <section class="card stats">
+      <div><b id="todayDone">0</b><span>breaks today</span></div>
+      <div><b id="skips">0</b><span>skips in a row</span></div>
+      <div><b id="streak">0</b><span>day streak 🔥</span></div>
+    </section>
+
     <div class="actions">
       <button id="breakNow" class="primary">Break now</button>
+      <button id="pause">Pause 1 hr</button>
+      <button id="practice">Practice</button>
       <button id="settings">Settings</button>
     </div>
     <script type="module" src="popup.js"></script>
