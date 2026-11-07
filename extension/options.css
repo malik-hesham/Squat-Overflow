@@ -1,0 +1,81 @@
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+h1 {
+  margin: 0 0 6px;
+}
+h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+section,
+details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 14px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.chips label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.chips label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
+.chips input {
+  accent-color: var(--accent);
+}
+.inline,
+.check,
+.field {
+  display: block;
+  margin: 8px 0;
+}
+.field input,
+.inline input {
+  margin-left: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.field input {
+  width: 100%;
+  margin: 4px 0 0;
+}
+.notice {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 18px;
+}
+.error {
+  color: var(--bad);
+  margin-right: auto;
+}
+.saved {
+  color: var(--accent);
+}

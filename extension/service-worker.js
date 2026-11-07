@@ -68,3 +68,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   handler(msg).then(sendResponse, (err) => sendResponse({ ok: false, error: String(err) }));
   return true;
 });
+
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === "install") chrome.runtime.openOptionsPage();
+});
