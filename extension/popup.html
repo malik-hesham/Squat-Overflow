@@ -7,53 +7,58 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <header class="level">
-      <div class="row"><b id="levelName">Lv 1 · Desk Potato</b><span id="levelXp" class="muted"></span></div>
-      <div class="bar"><span id="levelBar"></span></div>
+    <header class="level me">
+      <canvas id="meAvatar" width="72" height="90" aria-hidden="true"></canvas>
+      <div class="me-text">
+        <b id="meName" class="me-name" data-i18n="you">You</b>
+        <div class="row"><span id="levelName">Lv 1 · Desk Potato</span><span id="levelXp" class="muted" dir="ltr"></span></div>
+        <div class="bar"><span id="levelBar"></span></div>
+      </div>
     </header>
 
     <section id="setup" class="card" hidden>
-      <b>Finish setup to start getting breaks.</b>
-      <button id="finishSetup" class="primary">Open setup</button>
+      <b data-i18n="finishSetup">Finish setup to start getting breaks.</b>
+      <button id="finishSetup" class="primary" data-i18n="openSetup">Open setup</button>
     </section>
 
     <section id="nextCard" class="card">
-      <div class="label">Next break</div>
+      <div class="label" data-i18n="nextBreak">Next break</div>
       <div id="nextText" class="big">–</div>
       <div id="shifted" class="muted small" hidden></div>
+      <div id="nextMeeting" class="muted small" hidden></div>
     </section>
 
     <section class="card stats">
-      <div><b id="todayDone">0</b><span>breaks today</span></div>
-      <div><b id="skips">0</b><span>skips in a row</span></div>
-      <div><b id="streak">0</b><span>day streak 🔥</span></div>
+      <div><b id="todayDone">0</b><span data-i18n="breaksToday">breaks today</span></div>
+      <div><b id="skips">0</b><span data-i18n="skipsInRow">skips in a row</span></div>
+      <div><b id="streak">0</b><span data-i18n="dayStreak">day streak 🔥</span></div>
     </section>
 
     <section id="activity" class="card">
       <div class="row">
-        <div class="label">Activity</div>
+        <div class="label" data-i18n="activity">Activity</div>
         <span id="activityTotal" class="muted small"></span>
       </div>
       <div id="heatMonths" class="heat-months"></div>
       <div class="heat-wrap">
-        <div class="heat-days"><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span>Sun</span></div>
+        <div class="heat-days"><span data-i18n="day.1">Mon</span><span></span><span data-i18n="day.3">Wed</span><span></span><span data-i18n="day.5">Fri</span><span></span><span data-i18n="day.0">Sun</span></div>
         <div id="heatmap" class="heatmap"></div>
       </div>
-      <div class="heat-legend">Less <i class="cell l0"></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i> More</div>
+      <div class="heat-legend"><span data-i18n="less">Less</span> <i class="cell l0"></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i> <span data-i18n="more">More</span></div>
     </section>
 
     <section id="challenges" class="card">
-      <div class="label">Today's challenges</div>
-      <ul id="challengeRows" class="challenge-rows"></ul>
+      <div class="label" data-i18n="challenges">Today's challenges</div>
+      <div id="challengeTiles" class="challenge-tiles"></div>
       <div id="badges" class="badges"></div>
     </section>
 
     <section id="board" class="card">
       <div class="row">
-        <div class="label">Leaderboard</div>
+        <div class="label" data-i18n="leaderboard">Leaderboard</div>
         <div class="tabs">
-          <button class="tab active" data-period="week">This week</button>
-          <button class="tab" data-period="all">All time</button>
+          <button class="tab active" data-period="week" data-i18n="thisWeek">This week</button>
+          <button class="tab" data-period="all" data-i18n="allTime">All time</button>
         </div>
       </div>
       <ol id="boardRows" class="board-rows"></ol>
@@ -61,11 +66,12 @@
     </section>
 
     <div class="actions">
-      <button id="breakNow" class="primary">Break now</button>
-      <button id="pause">Pause 1 hr</button>
-      <button id="practice">Practice</button>
-      <button id="settings">Settings</button>
+      <button id="breakNow" class="primary" data-i18n="breakNow">Break now</button>
+      <button id="pause" data-i18n="pause">Pause 1 hr</button>
+      <button id="practice" data-i18n="practice">Practice</button>
+      <button id="settings" data-i18n="settings">Settings</button>
     </div>
+    <script src="avatar.js"></script>
     <script type="module" src="popup.js"></script>
   </body>
 </html>
