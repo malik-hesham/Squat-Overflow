@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "StandUp Break",
+  "name": "Squat Overflow",
   "version": "0.3.0",
   "description": "Movement reminders with camera-coached 2-minute breaks, form-based XP, levels and a company leaderboard.",
   "action": {
-    "default_title": "StandUp Break",
+    "default_title": "Squat Overflow",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
