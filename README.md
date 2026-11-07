@@ -26,6 +26,10 @@ Each colleague opens Settings, then Advanced, and sets **Pose server URL** to `w
 
 **Privacy:** blurred mode blurs only the on-screen preview. The pose server needs the real camera frames, so through a tunnel those frames travel over HTTPS to the machine running the server. They are processed in memory and never written to disk or logged. Only your name, XP, level and streak go to the leaderboard, and only in Competitive mode.
 
+## Mobile app (iOS and Android)
+
+`mobile/` is the same product as a React Native app (Expo + React Native Reusables). Pose detection runs on the phone with MediaPipe, so it needs no pose server, and it reuses the extension's XP, schedule, challenge and leaderboard logic from `extension/lib`. See [mobile/README.md](mobile/README.md).
+
 ## Tests
 
 ```bash
