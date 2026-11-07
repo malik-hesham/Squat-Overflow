@@ -11,12 +11,27 @@
       <h1 id="heading" data-i18n="welcome">Welcome to Squat Overflow</h1>
       <p class="muted" id="intro" data-i18n="intro">Short, camera-coached movement breaks that earn you XP. Set it up once, then get back to work.</p>
 
+      <section id="welcomeCard" class="welcome" hidden>
+        <h2 data-i18n="signInTitle">Join your team's leaderboard</h2>
+        <p class="muted" data-i18n="signInWhy">Sign in with your work Google account. Your company comes from your email, so only teammates see your scores.</p>
+        <button id="welcomeSignIn" type="button" class="cal-btn"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285f4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.3-4.8 3.3-8z"/><path fill="#34a853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#fbbc05" d="M5.8 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2.1A11 11 0 0 0 1 12c0 1.8.4 3.4 1.1 4.9L5.8 14z"/><path fill="#ea4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10c.9-2.7 3.3-4.6 6.2-4.6z"/></svg> <span data-i18n="continueGoogle">Continue with Google</span></button>
+        <label class="check"><input type="checkbox" id="signInCalendar" checked /> <span data-i18n="signInCalendar">Also hold breaks during my Google Calendar meetings</span></label>
+        <a href="#" id="skipSignIn" class="skip" data-i18n="skipSignIn">Skip for now (Personal mode only)</a>
+        <p class="error" id="welcomeError"></p>
+      </section>
+
       <section>
         <h2 data-i18n="profile">Profile</h2>
         <div class="profile">
           <div class="avatars" id="avatars" role="radiogroup" aria-label="Avatar" data-i18n-aria="avatar"></div>
           <label class="field"><span data-i18n="displayName">Display name</span> <input type="text" id="name" maxlength="40" placeholder="e.g. Malik" data-i18n-placeholder="namePlaceholder" /></label>
-          <label class="field"><span data-i18n="companyDomain">Company domain</span> <input type="text" id="company" maxlength="100" placeholder="e.g. leadliaison.com" data-i18n-placeholder="companyPlaceholder" /></label>
+          <p class="notice" id="companyText"></p>
+          <div class="account-row">
+            <span id="accountEmail"></span>
+            <button id="signOut" type="button" data-i18n="signOut">Sign out</button>
+            <button id="accountSignIn" type="button" class="cal-btn"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285f4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.3-4.8 3.3-8z"/><path fill="#34a853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#fbbc05" d="M5.8 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2.1A11 11 0 0 0 1 12c0 1.8.4 3.4 1.1 4.9L5.8 14z"/><path fill="#ea4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10c.9-2.7 3.3-4.6 6.2-4.6z"/></svg> <span data-i18n="continueGoogle">Continue with Google</span></button>
+            <span class="error" id="accountError"></span>
+          </div>
         </div>
       </section>
 

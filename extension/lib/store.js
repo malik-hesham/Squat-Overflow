@@ -10,7 +10,6 @@ export const SETTINGS_DEFAULTS = {
   voice: false,
   mode: "personal",
   name: "",
-  company: "",
   serverUrl: "ws://127.0.0.1:8765/ws",
   setupDone: false,
   theme: "auto",
