@@ -1,6 +1,6 @@
 import { getSettings, saveSettings, getSchedule, getCatalog } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
-import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "./lib/routine.js";
+import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 import { badgeLabel } from "./lib/badges.js";
@@ -18,7 +18,7 @@ const els = Object.fromEntries(
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
     "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "lookBtn", "lookName",
-    "lookGrid", "lookThumb", "area", "dots", "starting", "startingText",
+    "lookGrid", "lookThumb", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
 );
 
@@ -158,17 +158,18 @@ function renderProgress() {
   const done = state.progress.reduce((n, q) => n + q.reps, 0);
   els.bar.style.width = `${(100 * done) / total}%`;
   els.xpTicker.textContent = `+${breakXp(currentResult())} XP`;
+  renderMoves();
 }
 
 function showMove(i) {
   state.i = i;
   const move = state.moves[i];
+  state.progress[i].base = state.progress[i].reps;
   document.title = `${move.area} | ${move.label}`;
   els.title.textContent = move.label;
   els.area.textContent = move.area;
   els.area.hidden = false;
   els.step.textContent = `Exercise ${i + 1} of ${state.moves.length}`;
-  renderDots();
   els.howto.textContent = move.how_to;
   els.hint.hidden = move.camera !== "side";
   els.hint.textContent = CAMERA_HINT;
@@ -185,15 +186,33 @@ function showMove(i) {
   renderProgress();
 }
 
-function renderDots() {
-  els.dots.replaceChildren(
+function renderMoves() {
+  els.moves.replaceChildren(
     ...state.moves.map((m, k) => {
-      const dot = document.createElement("i");
-      if (k < state.i || state.progress[k].reps >= m.target) dot.className = "done";
-      else if (k === state.i) dot.className = "now";
-      return dot;
+      const tab = document.createElement("button");
+      const reps = state.progress[k].reps;
+      const done = reps >= m.target;
+      tab.type = "button";
+      tab.className = done ? "done" : "";
+      tab.setAttribute("aria-current", String(k === state.i));
+      tab.title = `${m.area} | ${m.label}`;
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = m.label;
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = done ? "✓" : `${reps}/${m.target}`;
+      tab.append(name, count);
+      tab.addEventListener("click", () => selectMove(k));
+      return tab;
     }),
   );
+}
+
+function selectMove(k) {
+  if (state.finished || k === state.i) return;
+  showMove(k);
+  announce(k);
 }
 
 function setStarting(on) {
@@ -224,7 +243,8 @@ function onFrame(msg) {
   if (state.positioning && !msg.feedback.some((f) => f.code === "not_visible")) endPositioning();
   const move = state.moves[state.i];
   const p = state.progress[state.i];
-  p.reps = Math.min(msg.summary.reps, move.target);
+  const was = p.reps;
+  p.reps = Math.min((p.base ?? 0) + msg.summary.reps, move.target);
   if (msg.rep_event) {
     const { score, partial } = msg.rep_event;
     p.scores.push(score);
@@ -236,11 +256,13 @@ function onFrame(msg) {
     speak(partial ? "Go deeper" : (issue ?? String(p.reps)));
   }
   renderProgress();
-  if (p.reps >= move.target) {
-    if (state.i + 1 < state.moves.length) {
-      showMove(state.i + 1);
-      announce(state.i);
-    } else finish();
+  if (was < move.target && p.reps >= move.target) {
+    const next = nextOpenMove(state.moves, state.progress, state.i);
+    if (next === -1) finish();
+    else {
+      showMove(next);
+      announce(next);
+    }
   }
 }
 
@@ -293,7 +315,7 @@ function showSummary({ breakdown, levelUp, newBadges = [], profile }) {
   els.actions.hidden = true;
   els.summary.hidden = false;
   document.title = "Break complete";
-  els.area.hidden = els.dots.hidden = true;
+  els.area.hidden = els.moves.hidden = true;
   els.title.textContent = "Nice work!";
   els.step.textContent = "Break complete";
   const lines = [

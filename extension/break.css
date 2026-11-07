@@ -107,22 +107,6 @@ h1 {
   align-items: center;
   gap: 10px;
 }
-.dots {
-  display: inline-flex;
-  gap: 5px;
-}
-.dots i {
-  width: 18px;
-  height: 4px;
-  border-radius: 99px;
-  background: var(--border);
-}
-.dots i.done {
-  background: var(--accent);
-}
-.dots i.now {
-  background: var(--line);
-}
 .chip {
   display: inline-block;
   margin-top: 8px;
@@ -416,4 +400,36 @@ footer {
 .look-opt:has(input:focus-visible) {
   outline: 2px solid var(--line);
   outline-offset: 2px;
+}
+.moves {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.moves button {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.moves .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.moves .count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.moves button[aria-current="true"] {
+  border-color: var(--line);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line) 30%, transparent);
+}
+.moves button.done .count {
+  color: var(--accent);
+  font-weight: 700;
 }

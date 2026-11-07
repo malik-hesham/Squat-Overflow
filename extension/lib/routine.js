@@ -56,3 +56,11 @@ export function swapMove(catalog, moves, i) {
 export function needsPositioning(move) {
   return move.camera === "side" || FULL_BODY_AREAS.includes(move.area);
 }
+
+export function nextOpenMove(moves, progress, from) {
+  for (let step = 1; step <= moves.length; step++) {
+    const k = (from + step) % moves.length;
+    if (progress[k].reps < moves[k].target) return k;
+  }
+  return -1;
+}

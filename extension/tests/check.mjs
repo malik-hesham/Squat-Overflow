@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js";
-import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "../lib/routine.js";
+import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
   nextActiveSlot, decideFire, isActive, scheduleSettingsChanged,
@@ -500,6 +500,15 @@ check("activity: totals over the visible weeks", () => {
   const wed = new Date(2026, 10, 11, 15).getTime();
   const a = { "2026-11-09": { breaks: 4, xp: 38 }, "2026-11-10": { breaks: 1, xp: 9 }, "2025-01-01": { breaks: 9, xp: 90 } };
   assert.deepEqual(activityTotals(a, wed, 20), { breaks: 5, xp: 47, activeDays: 2 });
+});
+
+check("nextOpenMove: next unfinished exercise after the current one, wrapping, -1 when all done", () => {
+  const moves = [{ target: 6 }, { target: 6 }, { target: 6 }];
+  const prog = (...reps) => reps.map((r) => ({ reps: r }));
+  assert.equal(nextOpenMove(moves, prog(6, 0, 0), 0), 1);
+  assert.equal(nextOpenMove(moves, prog(0, 6, 6), 2), 0);
+  assert.equal(nextOpenMove(moves, prog(6, 3, 6), 2), 1);
+  assert.equal(nextOpenMove(moves, prog(6, 6, 6), 1), -1);
 });
 
 const pending = [];
