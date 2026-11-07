@@ -1,0 +1,11 @@
+# Python 3.10–3.12 (MediaPipe has no wheels for 3.14 yet)
+mediapipe==1.2.2
+opencv-python-headless==5.0.0.93
+numpy==2.5.4
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+
+# tests
+pytest==9.2.0
+httpx==0.28.1
+websockets==17.4
