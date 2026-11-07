@@ -12,7 +12,7 @@ from analysis.exercises import (
 from analysis.geometry import Pose
 from analysis.session import RepCounter, Session
 from tests import synthetic as syn
-from analysis.exercises import AREAS
+from analysis.exercises import AREAS, office_rep_score
 
 FPS = 30
 
@@ -126,12 +126,11 @@ def _counter_run(ex, values, fps=FPS):
 
 
 @pytest.mark.parametrize("ex", OFFICE_EXERCISES, ids=lambda e: e.key)
-def test_relaxed_rep_that_just_reaches_target_scores_full_marks(ex):
-    """A calm one-second rep from a relaxed start to just past the target is a clean rep."""
+def test_relaxed_rep_that_just_reaches_target_scores_well_but_not_full(ex):
     step = 1 if ex.target > ex.rest else -1
     relaxed, just_past = ex.rest - 5 * step, ex.target + 2 * step
-    (rep,) = _counter_run(ex, syn.trajectory(relaxed, just_past, FPS))
-    assert not rep.partial and rep.issues == [] and rep.score == 100
+    (rep,) = _counter_run(ex, syn.trajectory(relaxed, just_past, 2 * FPS))
+    assert not rep.partial and rep.issues == [] and 70 <= rep.score < 100
 
 
 @pytest.mark.parametrize("ex", OFFICE_EXERCISES, ids=lambda e: e.key)
@@ -143,7 +142,7 @@ def test_fidgeting_at_rest_is_not_a_rep(ex):
     assert _counter_run(ex, values) == []
 
 
-# --- muscle areas ----------------------------------------------------------
+# --- muscle areas and form scoring ------------------------------------------
 
 AREA_MAP = {
     "Neck": {"neck_tilt", "head_turn"},
@@ -161,3 +160,26 @@ def test_every_office_exercise_sits_in_its_muscle_area():
     assert list(AREAS) == list(AREA_MAP)
     for area, keys in AREA_MAP.items():
         assert {e.key for e in OFFICE_EXERCISES if e.category == area} == keys
+
+
+@pytest.mark.parametrize("rom,needed,duration,expected", [
+    (50, 50, 1.5, 70),
+    (65, 50, 1.5, 100),
+    (20, 50, 1.5, 0),
+    (35, 50, 1.5, 35),
+    (65, 50, 0.4, 70),
+    (65, 50, 0.8, 85),
+    (200, 50, 1.5, 100),
+    (5, 50, 0.2, 0),
+])
+def test_office_rep_score(rom, needed, duration, expected):
+    assert office_rep_score(rom, needed, duration) == expected
+
+
+@pytest.mark.parametrize("ex", OFFICE_EXERCISES, ids=lambda e: e.key)
+def test_partial_office_rep_scores_below_a_full_one(ex):
+    step = 1 if ex.target > ex.rest else -1
+    relaxed = ex.rest - 5 * step
+    halfway = relaxed + (ex.target - relaxed) * 0.7
+    (rep,) = _counter_run(ex, syn.trajectory(relaxed, halfway, 2 * FPS))
+    assert rep.partial and rep.score < 70

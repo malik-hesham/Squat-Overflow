@@ -65,6 +65,9 @@ class Exercise:
     def measure(self, pose: Pose, side: str) -> Measurement:  # pragma: no cover
         raise NotImplementedError
 
+    def rep_score(self, rom: float, needed: float, duration: float, issues: list[str]) -> int:
+        return max(0, 100 - 20 * len(issues))
+
 
 class Squat(Exercise):
     def measure(self, pose: Pose, side: str) -> Measurement:
@@ -244,6 +247,9 @@ class Gentle(Exercise):
         assert self.angle_fn is not None
         return Measurement(float(self.angle_fn(pose, side)))
 
+    def rep_score(self, rom: float, needed: float, duration: float, issues: list[str]) -> int:
+        return office_rep_score(rom, needed, duration)
+
 
 def gentle(key: str, label: str, metric: str, fn: AngleFn, rest: float, target: float, *,
            category: str, camera: str, joints: tuple[str, ...], how_to: str) -> Gentle:
@@ -392,3 +398,12 @@ EXERCISES: dict[str, Exercise] = {
 # above stay defined and tested, but are not sent to clients or accepted by them.
 CATALOG: dict[str, Exercise] = {e.key: e for e in OFFICE_EXERCISES}
 DEFAULT_EXERCISE = OFFICE_EXERCISES[0].key
+
+
+def office_rep_score(rom: float, needed: float, duration: float) -> int:
+    if needed <= 0:
+        return 0
+    ratio = rom / needed
+    depth = 70 * min(1.0, max(0.0, (ratio - 0.4) / 0.6)) + 30 * min(1.0, max(0.0, (ratio - 1.0) / 0.3))
+    tempo = -30 if duration < 0.5 else -15 if duration < 1.0 else 0
+    return int(min(100, max(0, round(depth + tempo))))
