@@ -150,35 +150,38 @@ check("award: new ISO week resets weekXp", () => {
   assert.equal(profile.weekXp, breakdown.total);
 });
 
-check("routine: featured slot first, no dupes, rest from user areas", () => {
-  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], featured: "Knees", lastKey: null, n: 0 });
+check("routine: only the areas the user selected, no dupes", () => {
+  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], lastKey: null, n: 0 });
   assert.equal(moves.length, 3);
-  assert.equal(moves[0].area, "Knees");
   assert.equal(new Set(moves.map((m) => m.key)).size, 3);
-  assert.ok(moves.slice(1).every((m) => ["Neck tension", "Shoulder & rotator cuff"].includes(m.area)));
+  assert.ok(moves.every((m) => ["Neck tension", "Shoulder & rotator cuff"].includes(m.area)));
   assert.ok(moves.every((m) => m.target === BREAK_REPS && m.how_to && m.label));
+  for (let n = 0; n < 8; n++) {
+    const single = buildRoutine(CATALOG, { areas: ["Knees"], lastKey: null, n });
+    assert.ok(single.every((m) => m.area === "Knees"), `n=${n}`);
+  }
 });
 
 check("routine: avoids lastKey in slot 1", () => {
-  const opts = { areas: ["Neck tension"], featured: "Neck tension", lastKey: null, n: 0 };
+  const opts = { areas: ["Neck tension"], lastKey: null, n: 0 };
   const first = buildRoutine(CATALOG, opts)[0].key;
   assert.notEqual(buildRoutine(CATALOG, { ...opts, lastKey: first })[0].key, first);
 });
 
 check("routine: all slots from user areas when featured is one of them", () => {
-  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], featured: "Shoulder & rotator cuff", lastKey: null, n: 1 });
+  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], lastKey: null, n: 1 });
   assert.equal(moves.length, 3);
   assert.ok(moves.every((m) => ["Neck tension", "Shoulder & rotator cuff"].includes(m.area)));
 });
 
 check("swapMove returns same-area exercise not already in routine; null when area exhausted", () => {
-  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], featured: "Shoulder & rotator cuff", lastKey: null, n: 0 });
+  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], lastKey: null, n: 0 });
   const i = moves.findIndex((m) => m.area === "Shoulder & rotator cuff");
   const swapped = swapMove(CATALOG, moves, i);
   assert.equal(swapped.area, "Shoulder & rotator cuff");
   assert.ok(!moves.some((m) => m.key === swapped.key));
   const tiny = CATALOG.filter((e) => ["neck_tilt", "head_turn"].includes(e.key));
-  const neck = buildRoutine(tiny, { areas: ["Neck tension"], featured: "Neck tension", lastKey: null, n: 0 });
+  const neck = buildRoutine(tiny, { areas: ["Neck tension"], lastKey: null, n: 0 });
   assert.equal(neck.length, 2);
   assert.equal(swapMove(tiny, neck, 0), null);
 });
@@ -186,7 +189,7 @@ check("swapMove returns same-area exercise not already in routine; null when are
 check("needsPositioning", () => {
   const byKey = (k) => {
     const only = CATALOG.filter((e) => e.key === k);
-    return buildRoutine(only, { areas: [only[0].category], featured: only[0].category, lastKey: null, n: 0 })[0];
+    return buildRoutine(only, { areas: [only[0].category], lastKey: null, n: 0 })[0];
   };
   assert.equal(needsPositioning(byKey("sit_to_stand")), true); // side-on
   assert.equal(needsPositioning(byKey("standing_side_bend")), true); // front, but standing

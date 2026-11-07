@@ -52,8 +52,8 @@ const toMove = (e) => ({
   target: BREAK_REPS,
 });
 
-export function buildRoutine(catalog, { areas, featured, lastKey, n }) {
-  const slots = areas.includes(featured) ? [] : [featured];
+export function buildRoutine(catalog, { areas, lastKey, n }) {
+  const slots = [];
   for (let i = 0; slots.length < 3 && areas.length && i < 3; i++) {
     slots.push(areas[(n + i) % areas.length]);
   }

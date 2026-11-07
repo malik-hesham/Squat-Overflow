@@ -1,6 +1,6 @@
 import { getSettings, saveSettings, getSchedule, getCatalog, getProfile, getActivity, readLog, getMemeTurns, setMemeTurns } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
-import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "./lib/routine.js";
+import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, nextOpenMove } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 import { badgeLabel } from "./lib/badges.js";
@@ -502,7 +502,6 @@ async function init() {
   }));
   state.moves = buildRoutine(state.catalog, {
     areas: settings.areas.length ? settings.areas : AREAS.slice(0, 2),
-    featured: featuredArea(Date.now()),
     lastKey: schedule.lastKey,
     n: schedule.breakCount,
   });
