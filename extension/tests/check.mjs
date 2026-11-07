@@ -14,6 +14,8 @@ import { avatarFitness, missedWorkdays, fitnessCaption } from "../lib/fitness.js
 import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, localeFor, nameText, translationKeys } from "../lib/i18n.js";
 import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
+import { MEMES, memeFile, pickMeme, repMilestone } from "../lib/memes.js";
+import { readdirSync } from "node:fs";
 
 function check(name, fn) {
   try {
@@ -677,6 +679,29 @@ check("i18n: t() translates, interpolates and falls back to English then the key
   assert.equal(t("en", "level", { n: 2 }), "Lv 2 · {name}");
   assert.equal(t("xx", "done"), "Done");
   assert.equal(t("ar", "no.such.key"), "no.such.key");
+});
+check("memes: exactly the grouped clips are bundled, each in one group", () => {
+  const used = Object.values(MEMES).flat();
+  assert.equal(new Set(used).size, used.length, "a clip is in two groups");
+  const files = readdirSync(new URL("../sounds/memes/", import.meta.url)).sort();
+  assert.deepEqual(files, used.map(memeFile).map((f) => f.split("/").pop()).sort());
+  assert.deepEqual(MEMES.start, [4]);
+  assert.equal(memeFile(7), "sounds/memes/meme-07.ogg");
+});
+check("memes: picks stay in the group, cover it, and never repeat the previous clip", () => {
+  const picks = (group, prev) => new Set(Array.from({ length: 50 }, (_, k) => pickMeme(group, prev, () => k / 50)));
+  assert.deepEqual([...picks(MEMES.unscored, 0)].sort((a, b) => a - b), MEMES.unscored);
+  assert.deepEqual([...picks(MEMES.reps, 6)], [16]);
+  assert.deepEqual([...picks(MEMES.reps, 16)], [6]);
+  assert.deepEqual([...picks(MEMES.start, 4)], [4]);
+  assert.deepEqual([...picks(MEMES.done, 6)].sort(), [5, 9]);
+});
+check("memes: a reps clip every 3 reps", () => {
+  const hits = [];
+  for (let r = 1; r <= 6; r++) if (repMilestone(r - 1, r)) hits.push(r);
+  assert.deepEqual(hits, [3, 6]);
+  assert.equal(repMilestone(2, 4), true);
+  assert.equal(repMilestone(3, 3), false);
 });
 check("i18n: every English string has an Arabic translation", () => {
   const ar = new Set(translationKeys("ar"));

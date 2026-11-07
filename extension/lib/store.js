@@ -8,6 +8,7 @@ export const SETTINGS_DEFAULTS = {
   privacy: true,
   privacyStyle: "blur",
   voice: false,
+  memes: true,
   mode: "personal",
   name: "",
   company: "",
