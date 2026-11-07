@@ -7,7 +7,8 @@ export const SETTINGS_DEFAULTS = {
   autoPause: true,
   privacy: true,
   privacyStyle: "blur",
-  voice: false,
+  voice: true,
+  memes: true,
   mode: "personal",
   name: "",
   company: "",
@@ -24,6 +25,7 @@ const SCHEDULE_KEY = "schedule";
 const LOG_KEY = "breakLog";
 const LOG_MAX = 500;
 const CATALOG_KEY = "exerciseCatalog";
+const MEME_TURNS_KEY = "memeTurns";
 
 const local = chrome.storage.local;
 
@@ -96,4 +98,14 @@ export async function getActivity() {
 
 export function setActivity(activity) {
   return local.set({ activity });
+}
+
+// Where each meme sound group left off ({ group: next clip index }), so breaks take turns.
+export async function getMemeTurns() {
+  const { [MEME_TURNS_KEY]: turns } = await local.get(MEME_TURNS_KEY);
+  return turns && typeof turns === "object" ? turns : {};
+}
+
+export function setMemeTurns(turns) {
+  return local.set({ [MEME_TURNS_KEY]: turns });
 }
