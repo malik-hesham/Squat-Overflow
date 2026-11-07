@@ -1,6 +1,7 @@
 import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog } from "./lib/store.js";
 import { award } from "./lib/xp.js";
 import { initialSchedule, onFire, applyAction, rescheduleForInterval } from "./lib/schedule.js";
+import { submitScore } from "./lib/leaderboard.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 520, height: 780 };
@@ -79,6 +80,7 @@ async function onDone(msg, s, settings) {
   const result = msg.result;
   const { profile: next, breakdown, levelUp } = award(profile, result, now, settings.workdays);
   await setProfile(next);
+  submitScore(next, settings);
   const scores = result.scores ?? [];
   await appendLog({
     at: now,
@@ -116,8 +118,14 @@ async function onResume() {
   return { ok: true };
 }
 
+async function onLeftBoard() {
+  const [settings, profile] = await Promise.all([getSettings(), getProfile()]);
+  return { ok: await submitScore(profile, settings, { remove: true }) };
+}
+
 async function onSettingsSaved(msg) {
-  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  const [settings, s, profile] = await Promise.all([getSettings(), getSchedule(), getProfile()]);
+  submitScore(profile, settings);
   if (!s.nextAt) await saveSchedule({ ...initialSchedule(Date.now(), settings.intervalMin), lastKey: s.lastKey, breakCount: s.breakCount });
   else if (msg.intervalChanged) await saveSchedule(rescheduleForInterval(s, Date.now(), settings.intervalMin));
   else await ensureAlarm();
@@ -130,6 +138,7 @@ const HANDLERS = {
   pause: onPause,
   "settings-saved": onSettingsSaved,
   resume: onResume,
+  "left-board": onLeftBoard,
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

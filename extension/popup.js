@@ -1,6 +1,7 @@
 import { getSettings, getProfile, getSchedule, readLog } from "./lib/store.js";
-import { levelFor, dayKey } from "./lib/xp.js";
+import { LEVELS, levelFor, dayKey } from "./lib/xp.js";
 import { upcoming } from "./lib/schedule.js";
+import { fetchBoard, submitScore } from "./lib/leaderboard.js";
 
 const $ = (id) => document.getElementById(id);
 const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -47,6 +48,56 @@ $("practice").addEventListener("click", () => chrome.tabs.create({ url: "trainer
 $("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("finishSetup").addEventListener("click", () => chrome.runtime.openOptionsPage());
 
+let period = "week";
+
+function boardRow(r) {
+  const li = document.createElement("li");
+  li.classList.toggle("me", r.is_me);
+  const rank = document.createElement("span");
+  rank.className = "rank";
+  rank.textContent = `#${r.rank}`;
+  const who = document.createElement("span");
+  who.textContent = r.name;
+  const sub = document.createElement("span");
+  sub.className = "sub";
+  sub.textContent = LEVELS[r.level - 1]?.name ?? "";
+  who.append(sub);
+  const pts = document.createElement("span");
+  pts.className = "pts";
+  pts.textContent = `${r.xp} XP · 🔥${r.streak}`;
+  li.append(rank, who, pts);
+  return li;
+}
+
+async function renderBoard() {
+  const [settings, profile] = await Promise.all([getSettings(), getProfile()]);
+  const rows = $("boardRows");
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.period === period));
+  if (settings.mode !== "competitive") {
+    rows.replaceChildren();
+    $("boardMsg").textContent = `Switch to Competitive to join ${settings.company || "your company"}'s board`;
+    return;
+  }
+  $("boardMsg").textContent = "Loading…";
+  await submitScore(profile, settings);
+  const board = await fetchBoard(settings.company, period, profile.playerId);
+  if (!board) {
+    rows.replaceChildren();
+    $("boardMsg").textContent = "Leaderboard unavailable";
+    return;
+  }
+  rows.replaceChildren(...board.map(boardRow));
+  $("boardMsg").textContent = board.length ? "" : "No scores yet this week. Be the first!";
+}
+
+document.querySelectorAll(".tab").forEach((t) =>
+  t.addEventListener("click", () => {
+    period = t.dataset.period;
+    renderBoard();
+  }),
+);
+
 chrome.storage.onChanged.addListener(render);
 setInterval(render, 30_000);
 render();
+renderBoard();

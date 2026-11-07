@@ -29,6 +29,18 @@
       <div><b id="streak">0</b><span>day streak 🔥</span></div>
     </section>
 
+    <section id="board" class="card">
+      <div class="row">
+        <div class="label">Leaderboard</div>
+        <div class="tabs">
+          <button class="tab active" data-period="week">This week</button>
+          <button class="tab" data-period="all">All time</button>
+        </div>
+      </div>
+      <ol id="boardRows" class="board-rows"></ol>
+      <div id="boardMsg" class="muted small"></div>
+    </section>
+
     <div class="actions">
       <button id="breakNow" class="primary">Break now</button>
       <button id="pause">Pause 1 hr</button>

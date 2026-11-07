@@ -56,3 +56,46 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tab {
+  padding: 3px 8px;
+  font-size: 12px;
+  border-radius: 99px;
+}
+.tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.board-rows {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.board-rows li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  align-items: center;
+}
+.board-rows li.me {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  font-weight: 600;
+}
+.board-rows .rank {
+  color: var(--muted);
+}
+.board-rows .sub {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.board-rows .pts {
+  text-align: right;
+  font-size: 12px;
+}

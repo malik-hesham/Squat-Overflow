@@ -4,6 +4,7 @@ import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredAr
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
 } from "../lib/schedule.js";
+import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 
 function check(name, fn) {
   try {
@@ -249,3 +250,31 @@ check("upcoming after snooze lists shifted times", () => {
   const s = applyAction(fired(), "snooze", now, 60);
   assert.deepEqual(upcoming(s, 60, 3), [now + 20 * M, now + 80 * M, now + 140 * M]);
 });
+
+check("leaderboard payload maps fields, lowercases company, zeroes stale week", () => {
+  const profile = { ...blankProfile(), playerId: "id1", secret: "sec", xp: 260, streak: 4, weekXp: 40, week: "2026-W45" };
+  const settings = { name: "Malik", company: "LeadLiaison.COM" };
+  assert.deepEqual(toPayload(profile, settings, false, fri), {
+    p_id: "id1", p_secret: "sec", p_name: "Malik", p_company: "leadliaison.com", p_xp: 260, p_level: 3,
+    p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false,
+  });
+  const stale = toPayload(profile, settings, true, mon);
+  assert.equal(stale.p_week, "2026-W46");
+  assert.equal(stale.p_week_xp, 0);
+  assert.equal(stale.p_delete, true);
+});
+
+const pending = [];
+check("leaderboard unconfigured resolves null/false without throwing", () => {
+  pending.push(
+    fetchBoard("x.com", "week", "id", { url: "", key: "" }).then((r) => assert.equal(r, null)),
+    submitScore(blankProfile(), { mode: "competitive", name: "a", company: "x.com" }, { remove: false }, { url: "", key: "" }).then((r) => assert.equal(r, false)),
+  );
+});
+Promise.all(pending).then(
+  () => console.log("ok leaderboard async checks"),
+  (err) => {
+    console.log(`FAIL leaderboard async checks\n  ${err.message}`);
+    process.exitCode = 1;
+  },
+);
