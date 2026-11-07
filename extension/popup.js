@@ -1,10 +1,11 @@
-import { getSettings, getProfile, getSchedule, readLog } from "./lib/store.js";
+import { getSettings, getProfile, getSchedule, readLog, getActivity } from "./lib/store.js";
 import { LEVELS, levelFor, dayKey } from "./lib/xp.js";
 import { upcoming, isActive } from "./lib/schedule.js";
 import { fetchBoard, submitScore } from "./lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, withPeriods } from "./lib/challenges.js";
 import { badgeLabel } from "./lib/badges.js";
 import { initTheme } from "./lib/themes.js";
+import { heatmapWeeks, activityTotals, backfillActivity } from "./lib/activity.js";
 
 const $ = (id) => document.getElementById(id);
 const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -44,6 +45,32 @@ async function render() {
   $("skips").textContent = s.skipsInRow ?? 0;
   $("streak").textContent = profile.streak;
   renderChallenges(withPeriods(profile, now));
+  renderActivity((await getActivity()) ?? backfillActivity(log), settings, now);
+}
+
+const HEAT_WEEKS = 20;
+const dayLabel = (t) => new Date(t).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+
+function renderActivity(activity, settings, now) {
+  const weeks = heatmapWeeks(activity, now, HEAT_WEEKS, settings.workdays);
+  $("heatmap").replaceChildren(
+    ...weeks.flat().map((c) => {
+      const el = document.createElement("i");
+      el.className = `cell l${c.level}${c.offday ? " offday" : ""}${c.future ? " future" : ""}`;
+      el.title = `${dayLabel(c.at)} · ${c.breaks} break${c.breaks === 1 ? "" : "s"} · ${c.xp} XP`;
+      return el;
+    }),
+  );
+  const months = weeks.map((w, i) => {
+    const el = document.createElement("span");
+    const m = new Date(w[0].at).getMonth();
+    const changed = i === 0 ? weeks.slice(1, 3).every((x) => new Date(x[0].at).getMonth() === m) : new Date(weeks[i - 1][0].at).getMonth() !== m;
+    el.textContent = changed ? new Date(w[0].at).toLocaleDateString([], { month: "short" }) : "";
+    return el;
+  });
+  $("heatMonths").replaceChildren(...months);
+  const t = activityTotals(activity, now, HEAT_WEEKS);
+  $("activityTotal").textContent = `${t.breaks} breaks · ${t.activeDays} active days`;
 }
 
 function challengeProgress(id, d) {

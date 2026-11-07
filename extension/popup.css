@@ -132,3 +132,71 @@ body {
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
+.heat-months,
+.heatmap,
+.heat-days {
+  display: grid;
+  gap: 3px;
+}
+.heat-months {
+  grid-template-columns: repeat(20, 11px);
+  margin: 8px 0 2px 31px;
+  height: 12px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.heat-months span {
+  white-space: nowrap;
+}
+.heat-wrap {
+  display: flex;
+  gap: 4px;
+}
+.heat-days {
+  grid-template-rows: repeat(7, 11px);
+  width: 27px;
+  font-size: 9px;
+  line-height: 11px;
+  color: var(--muted);
+}
+.heatmap {
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-flow: column;
+  grid-auto-columns: 11px;
+}
+.cell {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  outline: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  outline-offset: -1px;
+}
+.cell.l1 {
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface-2));
+}
+.cell.l2 {
+  background: color-mix(in srgb, var(--accent) 55%, var(--surface-2));
+}
+.cell.l3 {
+  background: color-mix(in srgb, var(--accent) 80%, var(--surface-2));
+}
+.cell.l4 {
+  background: var(--accent);
+}
+.cell.offday.l0 {
+  opacity: 0.45;
+}
+.cell.future {
+  visibility: hidden;
+}
+.heat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}

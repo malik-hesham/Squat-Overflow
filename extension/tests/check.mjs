@@ -9,6 +9,7 @@ import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
 import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
+import { activityLevel, recordActivity, backfillActivity, heatmapWeeks, activityTotals } from "../lib/activity.js";
 
 function check(name, fn) {
   try {
@@ -457,6 +458,48 @@ check("themes: seven pickable themes, auto first, unknown ids fall back to auto"
 check("fresh schedule without counters can snooze and shows no warning", () => {
   assert.equal(canSnooze({ windowId: null, lastKey: null, breakCount: 0 }), true);
   assert.equal(showWarning({ windowId: null, lastKey: null, breakCount: 0 }), false);
+});
+
+check("activity: shade levels 0, 1-2, 3-4, 5-6, 7+", () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 12].map(activityLevel), [0, 1, 1, 2, 2, 3, 3, 4, 4]);
+});
+
+check("activity: recording a break adds to today, keeps input, drops days older than a year", () => {
+  const old = { "2025-10-01": { breaks: 2, xp: 20 } };
+  const a1 = recordActivity(old, mon, 12);
+  const a2 = recordActivity(a1, mon + H, 8);
+  assert.deepEqual(a2["2026-11-09"], { breaks: 2, xp: 20 });
+  assert.equal("2025-10-01" in a2, false);
+  assert.deepEqual(Object.keys(old), ["2025-10-01"]);
+});
+
+check("activity: backfill groups the break log by day", () => {
+  const log = [{ at: fri, xp: 10 }, { at: fri + H, xp: 15 }, { at: mon, xp: 0 }, { at: mon + H }];
+  assert.deepEqual(backfillActivity(log), {
+    "2026-11-06": { breaks: 2, xp: 25 },
+    "2026-11-09": { breaks: 2, xp: 0 },
+  });
+});
+
+check("activity: heatmap is weeks of Mon-Sun cells ending this week, future cells flagged", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  const weeks = heatmapWeeks({ "2026-11-09": { breaks: 4, xp: 38 } }, wed, 20, WORKDAYS);
+  assert.equal(weeks.length, 20);
+  assert.ok(weeks.every((w) => w.length === 7));
+  assert.equal(new Date(weeks[0][0].at).getDay(), 1);
+  const last = weeks[19];
+  assert.equal(last[0].day, "2026-11-09");
+  assert.deepEqual([last[0].breaks, last[0].xp, last[0].level], [4, 38, 2]);
+  assert.equal(last[2].future, false);
+  assert.equal(last[3].future, true);
+  assert.equal(last[5].offday, true);
+  assert.equal(last[0].offday, false);
+});
+
+check("activity: totals over the visible weeks", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  const a = { "2026-11-09": { breaks: 4, xp: 38 }, "2026-11-10": { breaks: 1, xp: 9 }, "2025-01-01": { breaks: 9, xp: 90 } };
+  assert.deepEqual(activityTotals(a, wed, 20), { breaks: 5, xp: 47, activeDays: 2 });
 });
 
 const pending = [];

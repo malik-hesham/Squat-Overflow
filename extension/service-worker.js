@@ -1,9 +1,10 @@
-import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog } from "./lib/store.js";
+import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog, readLog, getActivity, setActivity } from "./lib/store.js";
 import { award } from "./lib/xp.js";
 import { initialSchedule, applyAction, rescheduleForInterval, decideFire, nextActiveSlot, IDLE_SEC } from "./lib/schedule.js";
 import { submitScore } from "./lib/leaderboard.js";
 import { noteAction } from "./lib/challenges.js";
 import { createSerial } from "./lib/serial.js";
+import { recordActivity, backfillActivity } from "./lib/activity.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 520, height: 780 };
@@ -111,6 +112,8 @@ async function onDone(msg, s, settings) {
   await setProfile(next);
   submitScore(next, settings);
   const scores = result.scores ?? [];
+  const activity = (await getActivity()) ?? backfillActivity(await readLog());
+  await setActivity(recordActivity(activity, now, breakdown.total));
   await appendLog({
     at: now,
     reps: result.countedReps,
