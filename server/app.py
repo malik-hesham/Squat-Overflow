@@ -34,6 +34,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 import re
 
@@ -53,6 +54,11 @@ MAX_FRAME_BYTES = 2 * 1024 * 1024
 # Unset = accept any Chrome or Firefox extension. Web pages are always refused, so a site
 # you visit can't stream frames to (or read results from) this local server.
 ALLOWED_ORIGINS = {o.strip() for o in os.environ.get("FORMCOACH_ALLOWED_ORIGINS", "").split(",") if o.strip()}
+
+# Release tag baked into the Docker image (Dockerfile ARG VERSION); "dev" when run from source.
+VERSION = os.environ.get("FORMCOACH_VERSION", "dev")
+
+PRIVACY_PAGE = Path(__file__).parent / "static" / "privacy.html"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -90,7 +96,13 @@ def exercise_catalog() -> list[dict]:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "exercises": exercise_catalog()}
+    return {"ok": True, "version": VERSION, "exercises": exercise_catalog()}
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy() -> str:
+    """Public privacy policy; the Chrome Web Store listing links here."""
+    return PRIVACY_PAGE.read_text(encoding="utf-8")
 
 
 @app.websocket("/ws")

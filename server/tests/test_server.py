@@ -30,11 +30,19 @@ def test_health(client):
     body = client.get("/health").json()
     keys = {e["key"] for e in body["exercises"]}
     assert body["ok"] and {"neck_tilt", "palming"} <= keys
+    assert body["version"] == "dev"  # FORMCOACH_VERSION is only set inside the Docker image
     assert not keys & {"squat", "pushup", "curl", "press"}  # office set only
     assert len(keys) == 40
     assert all(e["category"] and e["how_to"] and e["demo"]["url"] for e in body["exercises"])
     assert {e["stance"] for e in body["exercises"]} == {"seated", "standing"}
 
+
+
+def test_privacy_page(client):
+    res = client.get("/privacy")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/html")
+    assert "privacy policy" in res.text.lower() and "Competitive mode" in res.text
 
 def test_web_page_origin_is_rejected(client):
     with pytest.raises(WebSocketDisconnect):
