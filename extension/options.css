@@ -79,3 +79,28 @@ details {
 .saved {
   color: var(--accent);
 }
+.themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.theme-card {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  padding: 10px;
+}
+.theme-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.theme-card .dots {
+  display: flex;
+  gap: 4px;
+}
+.theme-card .dots span {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}

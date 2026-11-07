@@ -8,6 +8,7 @@ import {
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
 import { createSerial } from "../lib/serial.js";
+import { THEMES, themeId } from "../lib/themes.js";
 
 function check(name, fn) {
   try {
@@ -443,6 +444,14 @@ check("changing workdays to today reschedules from now, not from the old Monday 
   const satOnly = { activeStart: "12:17", activeEnd: "17:00", workdays: [6] };
   const s = rescheduleForInterval(sched(at(9, 10)), sat, 60);
   assert.equal(nextActiveSlot(s.nextAt, 60, satOnly), at(7, 13, 18));
+});
+
+check("themes: seven pickable themes, auto first, unknown ids fall back to auto", () => {
+  assert.deepEqual(THEMES.map((t) => t.id), ["auto", "midnight", "daylight", "sunrise", "ocean", "forest", "neon"]);
+  assert.ok(THEMES.every((t) => t.name && t.swatch.length === 3));
+  assert.equal(themeId("ocean"), "ocean");
+  assert.equal(themeId("nope"), "auto");
+  assert.equal(themeId(undefined), "auto");
 });
 
 const pending = [];

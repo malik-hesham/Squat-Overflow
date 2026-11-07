@@ -4,6 +4,7 @@ import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredAr
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 import { badgeLabel } from "./lib/badges.js";
+import { initTheme } from "./lib/themes.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const YOUTUBE_ID = /^[\w-]{11}$/;
@@ -255,6 +256,7 @@ async function startRoutine() {
 }
 
 async function init() {
+  initTheme();
   const [settings, schedule] = await Promise.all([getSettings(), getSchedule()]);
   let catalog = await fetchCatalog(settings.serverUrl);
   if (!catalog.length) catalog = await getCatalog();

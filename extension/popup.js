@@ -4,6 +4,7 @@ import { upcoming, isActive } from "./lib/schedule.js";
 import { fetchBoard, submitScore } from "./lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, withPeriods } from "./lib/challenges.js";
 import { badgeLabel } from "./lib/badges.js";
+import { initTheme } from "./lib/themes.js";
 
 const $ = (id) => document.getElementById(id);
 const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -149,6 +150,7 @@ document.querySelectorAll(".tab").forEach((t) =>
   }),
 );
 
+initTheme();
 chrome.storage.onChanged.addListener(render);
 setInterval(render, 30_000);
 render();

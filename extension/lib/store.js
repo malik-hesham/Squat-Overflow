@@ -11,6 +11,7 @@ export const SETTINGS_DEFAULTS = {
   company: "",
   serverUrl: "ws://127.0.0.1:8765/ws",
   setupDone: false,
+  theme: "auto",
 };
 
 const PROFILE_KEY = "profile";
