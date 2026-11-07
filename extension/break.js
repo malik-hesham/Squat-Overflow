@@ -267,11 +267,14 @@ function selectMove(k) {
   announce(k);
 }
 
+// Frames only stay on this computer when the pose server runs on it (the hosted one is remote).
+const LOCAL_SERVER = /^wss?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//;
+
 function setStarting(on) {
   clearTimeout(state.startingTimer);
   els.starting.hidden = !on;
   if (!on) return;
-  els.startingText.textContent = t(state.lang, "framesLocal");
+  els.startingText.textContent = t(state.lang, LOCAL_SERVER.test(state.settings.serverUrl) ? "framesLocal" : "framesServer");
   state.startingTimer = setTimeout(() => {
     els.startingText.textContent = t(state.lang, "cameraSlow");
   }, CAMERA_SLOW_MS);
