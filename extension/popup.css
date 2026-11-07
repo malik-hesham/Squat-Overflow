@@ -132,3 +132,6 @@ body {
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
+.actions #breakNow {
+  grid-column: 1 / -1;
+}
