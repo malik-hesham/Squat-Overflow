@@ -7,6 +7,7 @@ import {
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
+import { createSerial } from "../lib/serial.js";
 
 function check(name, fn) {
   try {
@@ -433,6 +434,21 @@ check("leaderboard unconfigured resolves null/false without throwing", () => {
     submitScore(blankProfile(), { mode: "competitive", name: "a", company: "x.com" }, { remove: false }, { url: "", key: "" }).then((r) => assert.equal(r, false)),
   );
 });
+const log = [];
+const serial = createSerial();
+const step = (name, ms) => async () => {
+  log.push(`${name}:start`);
+  await new Promise((r) => setTimeout(r, ms));
+  log.push(`${name}:end`);
+};
+pending.push(
+  Promise.all([serial(step("a", 30)), serial(step("b", 1)), serial(async () => { throw new Error("boom"); }).catch(() => "caught"), serial(step("c", 1))]).then(
+    ([, , caught]) => {
+      assert.deepEqual(log, ["a:start", "a:end", "b:start", "b:end", "c:start", "c:end"]);
+      assert.equal(caught, "caught");
+    },
+  ),
+);
 Promise.all(pending).then(
   () => console.log("ok leaderboard async checks"),
   (err) => {

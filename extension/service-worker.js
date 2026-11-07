@@ -3,17 +3,19 @@ import { award } from "./lib/xp.js";
 import { initialSchedule, applyAction, rescheduleForInterval, decideFire, nextActiveSlot, IDLE_SEC } from "./lib/schedule.js";
 import { submitScore } from "./lib/leaderboard.js";
 import { noteAction } from "./lib/challenges.js";
+import { createSerial } from "./lib/serial.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 520, height: 780 };
 const ALARM = "next-break";
 const BADGE_TICK = "badge-tick";
+const serial = createSerial();
 
-async function windowExists(id) {
+async function isBreakWindow(id) {
   if (id == null) return false;
   try {
-    await chrome.windows.get(id);
-    return true;
+    const win = await chrome.windows.get(id, { populate: true });
+    return win.tabs.some((tab) => (tab.url || tab.pendingUrl || "").startsWith(BREAK_URL));
   } catch {
     return false;
   }
@@ -52,10 +54,17 @@ async function ensureAlarm() {
   await updateBadge();
 }
 
+async function openBreakWindowId(s) {
+  if (await isBreakWindow(s.windowId)) return s.windowId;
+  if (await isBreakWindow(s.extraWindowId)) return s.extraWindowId;
+  return null;
+}
+
 async function openReminder({ manual }) {
   const s = await getSchedule();
-  if (await windowExists(s.windowId)) {
-    await chrome.windows.update(s.windowId, { focused: true });
+  const open = await openBreakWindowId(s);
+  if (open != null) {
+    await chrome.windows.update(open, { focused: true });
     return;
   }
   const win = await chrome.windows.create({
@@ -64,7 +73,7 @@ async function openReminder({ manual }) {
     focused: true,
     ...BREAK_WINDOW,
   });
-  await setSchedule({ ...(await getSchedule()), windowId: win.id });
+  await setSchedule(manual ? { ...s, windowId: null, extraWindowId: win.id } : { ...s, windowId: win.id });
 }
 
 const MEETING_HOSTS = [/^meet\.google\.com$/, /(^|\.)zoom\.us$/, /^teams\.microsoft\.com$/, /^teams\.live\.com$/];
@@ -90,7 +99,7 @@ async function onNextBreak() {
   const [idle, meeting] = await Promise.all([chrome.idle.queryState(IDLE_SEC), inMeeting()]);
   const { kind, schedule } = decideFire(s, now, settings.intervalMin, { idle, meeting, settings });
   await saveSchedule(schedule);
-  if (kind !== "open" || (await windowExists(s.windowId))) return;
+  if (kind !== "open" || (await openBreakWindowId(s)) != null) return;
   await openReminder({ manual: false });
 }
 
@@ -115,6 +124,7 @@ async function onDone(msg, s, settings) {
     ...applyAction(s, "done", now, settings.intervalMin),
     lastKey: msg.lastKey ?? s.lastKey,
     breakCount: s.breakCount + 1,
+    extraWindowId: s.windowId ?? s.extraWindowId ?? null,
   });
   return { ok: true, breakdown, levelUp, newBadges, profile: next };
 }
@@ -166,27 +176,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
   const handler = HANDLERS[msg?.type];
   if (!handler) return false;
-  handler(msg).then(sendResponse, (err) => sendResponse({ ok: false, error: String(err) }));
+  serial(() => handler(msg)).then(sendResponse, (err) => sendResponse({ ok: false, error: String(err) }));
   return true;
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM) onNextBreak();
+  if (alarm.name === ALARM) serial(onNextBreak);
   else if (alarm.name === BADGE_TICK) updateBadge();
 });
 
-chrome.windows.onRemoved.addListener(async (id) => {
-  const s = await getSchedule();
-  if (s.windowId !== id) return;
-  const settings = await getSettings();
-  await setProfile(noteAction(await getProfile(), "close", Date.now()));
-  await saveSchedule(applyAction(s, "close", Date.now(), settings.intervalMin));
-});
+chrome.windows.onRemoved.addListener((id) =>
+  serial(async () => {
+    const s = await getSchedule();
+    if (s.windowId !== id) return;
+    const settings = await getSettings();
+    await setProfile(noteAction(await getProfile(), "close", Date.now()));
+    await saveSchedule(applyAction(s, "close", Date.now(), settings.intervalMin));
+  }),
+);
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") chrome.runtime.openOptionsPage();
-  ensureAlarm();
+  serial(ensureAlarm);
 });
 
-chrome.runtime.onStartup.addListener(ensureAlarm);
-ensureAlarm();
+chrome.runtime.onStartup.addListener(() =>
+  serial(async () => {
+    await setSchedule({ ...(await getSchedule()), windowId: null, extraWindowId: null });
+    await ensureAlarm();
+  }),
+);
+serial(ensureAlarm);
