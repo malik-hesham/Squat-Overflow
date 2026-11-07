@@ -14,6 +14,7 @@ import { avatarFitness, missedWorkdays, fitnessCaption } from "../lib/fitness.js
 import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, localeFor, nameText, translationKeys } from "../lib/i18n.js";
 import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
+import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
 import { readdirSync } from "node:fs";
 
@@ -299,15 +300,14 @@ check("upcoming after snooze lists shifted times", () => {
   assert.deepEqual(upcoming(s, 60, 3), [now + 20 * M, now + 80 * M, now + 140 * M]);
 });
 
-check("leaderboard payload maps fields, lowercases company, zeroes stale week", () => {
+check("leaderboard payload maps fields without id, secret or company, zeroes stale week", () => {
   const profile = { ...blankProfile(), playerId: "id1", secret: "sec", xp: 260, streak: 4, weekXp: 40, week: "2026-W45" };
-  const settings = { name: "Malik", company: "LeadLiaison.COM", avatar: "penguin" };
+  const settings = { name: "Malik", avatar: "penguin" };
   assert.deepEqual(toPayload(profile, settings, false, fri), {
-    p_id: "id1", p_secret: "sec", p_name: "Malik", p_company: "leadliaison.com", p_xp: 260, p_level: 3,
-    p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false, p_avatar: "penguin",
+    p_name: "Malik", p_xp: 260, p_level: 3, p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false, p_avatar: "penguin",
   });
   assert.equal(toPayload(profile, { ...settings, avatar: "<script>" }, false, fri).p_avatar, "bunny");
-  assert.equal(toPayload(profile, { name: "M", company: "x.com" }, false, fri).p_avatar, "bunny");
+  assert.equal(toPayload(profile, { name: "M" }, false, fri).p_avatar, "bunny");
   const stale = toPayload(profile, settings, true, mon);
   assert.equal(stale.p_week, "2026-W46");
   assert.equal(stale.p_week_xp, 0);
@@ -691,11 +691,72 @@ check("weekOrder: seven days starting from the chosen first day", () => {
   assert.deepEqual(weekOrder(1), [1, 2, 3, 4, 5, 6, 0]);
 });
 
+check("auth: company comes from a work email domain, personal and invalid emails get none", () => {
+  assert.equal(companyFromEmail("malik@leadliaison.com"), "leadliaison.com");
+  assert.equal(companyFromEmail("Malik@LeadLiaison.COM"), "leadliaison.com");
+  assert.equal(companyFromEmail("someone@gmail.com"), null);
+  assert.equal(companyFromEmail("Someone@GMAIL.com"), null);
+  for (const d of PERSONAL_DOMAINS) assert.equal(companyFromEmail(`a@${d}`), null, d);
+  assert.equal(PERSONAL_DOMAINS.length, 16);
+  for (const bad of ["", "nobody", "@leadliaison.com", "a@", null, undefined]) assert.equal(companyFromEmail(bad), null, String(bad));
+});
+
+check("auth: sign-in URL asks Google for an id token with the hashed nonce, calendar only when asked", () => {
+  const url = new URL(buildSignInUrl("cid.apps.googleusercontent.com", "https://abc.chromiumapp.org/", "hashed123", false));
+  assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
+  assert.equal(url.searchParams.get("client_id"), "cid.apps.googleusercontent.com");
+  assert.equal(url.searchParams.get("response_type"), "id_token token");
+  assert.equal(url.searchParams.get("redirect_uri"), "https://abc.chromiumapp.org/");
+  assert.equal(url.searchParams.get("scope"), "openid email profile");
+  assert.equal(url.searchParams.get("nonce"), "hashed123");
+  assert.equal(url.searchParams.get("prompt"), "select_account");
+  const withCal = new URL(buildSignInUrl("c", "https://r/", "n", true));
+  assert.equal(withCal.searchParams.get("scope"), `openid email profile ${CALENDAR_SCOPE}`);
+});
+
+check("auth: parses id and access tokens from the redirect, rejects errors and missing tokens", () => {
+  const ok = parseSignInResponse("https://abc.chromiumapp.org/#access_token=ya29.x&id_token=eyJ.a.b&token_type=Bearer&expires_in=3599", CAL_NOW);
+  assert.deepEqual(ok, { idToken: "eyJ.a.b", accessToken: "ya29.x", expiresAt: CAL_NOW + 3599 * 1000 });
+  assert.equal(parseSignInResponse("https://abc.chromiumapp.org/#error=access_denied", CAL_NOW), null);
+  assert.equal(parseSignInResponse("https://abc.chromiumapp.org/#access_token=ya29.x&expires_in=3599", CAL_NOW), null);
+  assert.equal(parseSignInResponse("https://abc.chromiumapp.org/", CAL_NOW), null);
+});
+
+check("auth: Supabase token response maps to the stored session", () => {
+  const body = {
+    access_token: "jwt", refresh_token: "r1", expires_in: 3600,
+    user: { id: "u1", email: "malik@leadliaison.com", user_metadata: { full_name: "Malik Hesham", avatar_url: "https://pic" } },
+  };
+  assert.deepEqual(toSession(body, CAL_NOW), {
+    accessToken: "jwt", refreshToken: "r1", expiresAt: CAL_NOW + 3600 * 1000,
+    user: { id: "u1", email: "malik@leadliaison.com", name: "Malik Hesham", picture: "https://pic" },
+  });
+  assert.equal(toSession({ ...body, user: { id: "u1", email: "e@x.com" } }, CAL_NOW).user.name, "");
+});
+
 const pending = [];
+check("auth: Google gets the SHA-256 hex of a fresh random nonce", () => {
+  const a = newNonce();
+  assert.match(a, /^[0-9a-f]{32}$/);
+  assert.notEqual(a, newNonce());
+  pending.push(sha256Hex("abc").then((h) => assert.equal(h, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")));
+});
 check("leaderboard unconfigured resolves null/false without throwing", () => {
   pending.push(
-    fetchBoard("x.com", "week", "id", { url: "", key: "" }).then((r) => assert.equal(r, null)),
-    submitScore(blankProfile(), { mode: "competitive", name: "a", company: "x.com" }, { remove: false }, { url: "", key: "" }).then((r) => assert.equal(r, false)),
+    fetchBoard("week", { url: "", key: "", session: async () => ({ accessToken: "t" }) }).then((r) => assert.equal(r, null)),
+    submitScore(blankProfile(), { mode: "competitive", name: "a" }, { remove: false }, { url: "", key: "", session: async () => ({ accessToken: "t" }) }).then((r) => assert.equal(r, false)),
+  );
+});
+check("leaderboard signed out resolves null/false without calling the server", () => {
+  const cfg = { url: "https://x.supabase.co", key: "k", session: async () => null };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.reject(new Error("fetch called while signed out"));
+  pending.push(
+    Promise.all([
+      fetchBoard("week", cfg).then((r) => assert.equal(r, null)),
+      submitScore(blankProfile(), { mode: "competitive", name: "a" }, { remove: false }, cfg).then((r) => assert.equal(r, false)),
+      submitScore(blankProfile(), { mode: "competitive", name: "a" }, { remove: true }, cfg).then((r) => assert.equal(r, false)),
+    ]).finally(() => (globalThis.fetch = realFetch)),
   );
 });
 const log = [];

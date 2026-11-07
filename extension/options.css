@@ -178,3 +178,18 @@ details {
   align-items: center;
   column-gap: 24px;
 }
+.welcome {
+  border-color: var(--accent);
+}
+.welcome .skip {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.account-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}

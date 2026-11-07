@@ -14,7 +14,6 @@ export const SETTINGS_DEFAULTS = {
   memes: true,
   mode: "personal",
   name: "",
-  company: "",
   serverUrl: POSE_SERVER_URL,
   setupDone: false,
   theme: "auto",

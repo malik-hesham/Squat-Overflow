@@ -5,9 +5,10 @@ import { scheduleSettingsChanged, weekOrder } from "./lib/schedule.js";
 import { THEMES, themeId, applyTheme, initTheme } from "./lib/themes.js";
 import { LANGS, initLang, applyLang, resolveLang, t, areaName, nameText } from "./lib/i18n.js";
 import { calendarState, connectCalendar, disconnectCalendar } from "./lib/calendar-client.js";
+import { getSession, signIn, signOut } from "./lib/session.js";
+import { companyFromEmail } from "./lib/auth.js";
 
 const PRESETS = ["30", "45", "60", "90", "120"];
-const COMPANY_RE = /^[a-z0-9.-]+\.[a-z]{2,}$/;
 
 const $ = (id) => document.getElementById(id);
 const radios = (name) => [...document.querySelectorAll(`input[name="${name}"]`)];
@@ -15,6 +16,8 @@ const checkedValue = (name) => radios(name).find((r) => r.checked)?.value;
 
 let initial = null;
 let lang = "en";
+let session = null;
+let skipped = false;
 
 function chip(container, value, label, checked, hint = "") {
   const el = document.createElement("label");
@@ -50,7 +53,6 @@ function read() {
     privacy: $("privacy").checked,
     mode,
     name: $("name").value.trim(),
-    company: $("company").value.trim().toLowerCase(),
     serverUrl: $("serverUrl").value.trim(),
   };
 }
@@ -62,9 +64,8 @@ function problem(s) {
   if (!s.activeStart || !s.activeEnd || s.activeStart >= s.activeEnd) return t(lang, "errHours");
   if (s.mode === "competitive") {
     if (!s.name || s.name.length > 40) return t(lang, "errName");
-    if (!COMPANY_RE.test(s.company)) return t(lang, "errCompany");
+    if (!companyFromEmail(session?.user?.email)) return t(lang, "errCompany");
   }
-  if (s.company && !COMPANY_RE.test(s.company)) return t(lang, "errCompany");
   if (!/^wss?:\/\//.test(s.serverUrl)) return t(lang, "errServer");
   return "";
 }
@@ -99,6 +100,7 @@ function render() {
   $("heading").textContent = t(lang, first ? "welcome" : "settingsTitle");
   $("intro").hidden = !first;
   $("save").textContent = t(lang, first ? "getStarted" : "save");
+  renderAccount();
 }
 
 function avatarKey(key) {
@@ -159,6 +161,7 @@ async function init() {
   initTheme();
   lang = await initLang(relabel);
   initial = await getSettings();
+  session = await getSession();
   renderThemes(themeId(initial.theme));
   renderAvatars(avatarKey(initial.avatar));
   await getProfile();
@@ -177,7 +180,6 @@ async function init() {
   $("privacy").checked = initial.privacy;
   radios("mode").forEach((r) => (r.checked = r.value === initial.mode));
   $("name").value = initial.name;
-  $("company").value = initial.company;
   $("serverUrl").value = initial.serverUrl;
   radios("lang").forEach((r) => (r.checked = r.value === (LANGS.includes(initial.lang) ? initial.lang : "auto")));
   $("langs").addEventListener("change", (ev) => saveSettings({ lang: ev.target.value }));
@@ -188,6 +190,16 @@ async function init() {
   refresh();
   renderCalendar();
   $("calBtn").addEventListener("click", toggleCalendar);
+  $("welcomeSignIn").addEventListener("click", () => startSignIn($("signInCalendar").checked, "welcomeError"));
+  $("accountSignIn").addEventListener("click", () => startSignIn(false, "accountError"));
+  $("signOut").addEventListener("click", leaveAccount);
+  $("skipSignIn").addEventListener("click", (ev) => {
+    ev.preventDefault();
+    skipped = true;
+    radios("mode").forEach((r) => (r.checked = r.value === "personal"));
+    renderAccount();
+    refresh();
+  });
 }
 
 function renderChips(areas, workdays, weekStart) {
@@ -231,6 +243,44 @@ async function relabel(setting) {
   render();
   refresh();
   renderCalendar();
+}
+
+function renderAccount() {
+  const email = session?.user?.email;
+  const company = companyFromEmail(email);
+  $("welcomeCard").hidden = Boolean(session) || initial.setupDone || skipped;
+  $("companyText").textContent = !session ? t(lang, "notSignedIn") : company ? t(lang, "companyFrom", { domain: company }) : t(lang, "companyPersonal");
+  $("accountEmail").textContent = session ? t(lang, "signedInAs", { email }) : "";
+  $("accountEmail").hidden = !session;
+  $("signOut").hidden = !session;
+  $("accountSignIn").hidden = Boolean(session);
+}
+
+async function startSignIn(calendar, errorId) {
+  $(errorId).textContent = "";
+  try {
+    session = await signIn({ calendar });
+  } catch {
+    $(errorId).textContent = t(lang, "signInFailed");
+    return;
+  }
+  if (!$("name").value.trim()) $("name").value = session.user.name.slice(0, 40);
+  renderAccount();
+  refresh();
+  renderCalendar();
+}
+
+async function leaveAccount() {
+  if (initial.mode === "competitive") {
+    await chrome.runtime.sendMessage({ type: "left-board" }).catch(() => {});
+    await saveSettings({ mode: "personal" });
+    initial = { ...initial, mode: "personal" };
+    radios("mode").forEach((r) => (r.checked = r.value === "personal"));
+  }
+  await signOut();
+  session = null;
+  renderAccount();
+  refresh();
 }
 
 init();

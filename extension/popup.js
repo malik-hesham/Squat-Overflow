@@ -10,6 +10,8 @@ import { heatmapWeeks, activityTotals, backfillActivity } from "./lib/activity.j
 import { initLang, t, localeFor, levelName, areaName, nameText } from "./lib/i18n.js";
 import { getBusy, calendarState } from "./lib/calendar-client.js";
 import { agenda } from "./lib/calendar.js";
+import { getSession } from "./lib/session.js";
+import { companyFromEmail } from "./lib/auth.js";
 
 const lang = await initLang();
 const $ = (id) => document.getElementById(id);
@@ -188,18 +190,18 @@ function boardRow(r) {
 }
 
 async function renderBoard() {
-  const [settings, profile] = await Promise.all([getSettings(), getProfile()]);
+  const [settings, profile, session] = await Promise.all([getSettings(), getProfile(), getSession()]);
   const rows = $("boardRows");
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.period === period));
-  if (!settings.company) {
+  if (!companyFromEmail(session?.user?.email)) {
     rows.replaceChildren();
-    $("boardMsg").textContent = t(lang, "boardNeedsCompany");
+    $("boardMsg").textContent = t(lang, session ? "boardNeedsWorkEmail" : "boardNeedsSignIn");
     return;
   }
   const competitive = settings.mode === "competitive";
   $("boardMsg").textContent = t(lang, "loading");
   if (competitive) await submitScore(profile, settings);
-  const board = await fetchBoard(settings.company, period, profile.playerId);
+  const board = await fetchBoard(period);
   if (!board) {
     rows.replaceChildren();
     $("boardMsg").textContent = t(lang, "boardUnavailable");
