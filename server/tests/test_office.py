@@ -12,6 +12,7 @@ from analysis.exercises import (
 from analysis.geometry import Pose
 from analysis.session import RepCounter, Session
 from tests import synthetic as syn
+from analysis.exercises import AREAS
 
 FPS = 30
 
@@ -140,3 +141,23 @@ def test_fidgeting_at_rest_is_not_a_rep(ex):
     rng = np.random.default_rng(0)
     values = relaxed + rng.uniform(-3, 3, 10 * FPS)
     assert _counter_run(ex, values) == []
+
+
+# --- muscle areas ----------------------------------------------------------
+
+AREA_MAP = {
+    "Neck": {"neck_tilt", "head_turn"},
+    "Shoulders": {"overhead_reach", "alt_reach", "t_raise", "front_raise"},
+    "Upper back & posture": {"seated_row", "cross_swing", "desk_punch", "desk_pushup"},
+    "Arms & wrists": {"wrist_flex", "air_curl", "triceps_reach", "chair_dip"},
+    "Lower back & core": {"seated_side_bend", "seated_lean_back", "standing_side_bend", "hip_hinge"},
+    "Hips & glutes": {"sit_to_stand", "mini_squat", "side_leg_raise", "reverse_lunge", "leg_swing"},
+    "Legs & circulation": {"seated_knee_ext", "seated_knee_lift", "seated_heel_raise", "calf_raise",
+                           "march", "hamstring_curl", "step_jack"},
+}
+
+
+def test_every_office_exercise_sits_in_its_muscle_area():
+    assert list(AREAS) == list(AREA_MAP)
+    for area, keys in AREA_MAP.items():
+        assert {e.key for e in OFFICE_EXERCISES if e.category == area} == keys
