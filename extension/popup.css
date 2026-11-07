@@ -1,0 +1,13 @@
+body {
+  width: 340px;
+  padding: 14px;
+}
+h1 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}

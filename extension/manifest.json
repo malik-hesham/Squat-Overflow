@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "FormCoach (POC)",
-  "version": "0.2.0",
-  "description": "Counts your reps and flags form mistakes live from your webcam, using a pose-analysis server on your own computer.",
+  "name": "StandUp Break",
+  "version": "0.3.0",
+  "description": "Movement reminders with camera-coached 2-minute breaks, form-based XP, levels and a company leaderboard.",
   "action": {
-    "default_title": "Open FormCoach trainer",
+    "default_title": "StandUp Break",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -18,9 +19,10 @@
     "128": "icons/icon-128.png"
   },
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "service-worker.js",
+    "type": "module"
   },
-  "permissions": ["storage", "alarms", "idle", "notifications"],
+  "permissions": ["storage", "alarms", "idle", "tabs"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*"
   }

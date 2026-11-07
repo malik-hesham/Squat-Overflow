@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>StandUp Break</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="break.css" />
+  </head>
+  <body>
+    <header>
+      <div class="row">
+        <span id="step" class="muted">Break</span>
+        <span id="xpTicker" class="xp-ticker">+0 XP</span>
+      </div>
+      <h1 id="title">Loading…</h1>
+      <div class="bar"><span id="bar"></span></div>
+    </header>
+
+    <section id="warning" class="panel warning" hidden>
+      <div class="big">⚠️</div>
+      <h2 id="warningTitle">~3 hours without moving</h2>
+      <p class="muted">You've skipped your last few breaks. Your neck, back and shoulders have been in the same position the whole time. Two minutes now makes a real difference.</p>
+      <div class="actions">
+        <button id="warnStart" class="primary">Start a break now</button>
+        <button id="warnSnooze">Snooze 20 min</button>
+        <button id="warnPause">Pause 1 hr</button>
+      </div>
+    </section>
+
+    <main id="routine">
+      <div class="stage">
+        <video id="video" playsinline muted hidden></video>
+        <canvas id="canvas"></canvas>
+        <div id="position" class="overlay" hidden>
+          <strong>Get in position</strong>
+          <span id="positionText">Stand up, turn sideways, step back until your feet are in frame</span>
+        </div>
+        <div id="fallback" class="overlay fallback" hidden>
+          <strong id="fallbackTitle">Camera unavailable</strong>
+          <span id="fallbackText">Follow the instructions below and press Done when finished. No XP this time.</span>
+        </div>
+        <div class="hud">
+          <span class="reps"><b id="reps">0</b> / <span id="target">6</span></span>
+          <span id="lastScore" class="score" hidden></span>
+        </div>
+        <div id="cue" class="cue" hidden></div>
+      </div>
+
+      <div class="guide">
+        <p id="howto"></p>
+        <p id="hint" class="muted" hidden></p>
+        <div class="row">
+          <button id="demo" hidden>▶ Watch demo</button>
+          <a id="swap" href="#">Show me a different exercise</a>
+        </div>
+      </div>
+    </main>
+
+    <section id="summary" class="panel" hidden>
+      <div id="confetti" class="confetti" aria-hidden="true"></div>
+      <p class="muted">Break complete</p>
+      <div class="total">+<span id="total">0</span> XP</div>
+      <ul id="lines" class="lines"></ul>
+      <p id="levelUp" class="level-up" hidden></p>
+      <div class="level">
+        <div class="row"><b id="levelName"></b><span id="levelXp" class="muted"></span></div>
+        <div class="bar"><span id="levelBar"></span></div>
+      </div>
+      <button id="back" class="primary">Back to work</button>
+    </section>
+
+    <footer id="actions">
+      <button id="done" class="primary">Done</button>
+      <button id="snooze">Snooze 20 min</button>
+      <button id="skip">Skip</button>
+    </footer>
+
+    <script type="module" src="break.js"></script>
+  </body>
+</html>
