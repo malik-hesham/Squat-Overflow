@@ -200,3 +200,6 @@ body {
   font-size: 11px;
   color: var(--muted);
 }
+.actions #breakNow {
+  grid-column: 1 / -1;
+}

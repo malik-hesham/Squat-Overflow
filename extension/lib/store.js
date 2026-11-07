@@ -6,6 +6,8 @@ export const SETTINGS_DEFAULTS = {
   workdays: [1, 2, 3, 4, 5],
   autoPause: true,
   privacy: true,
+  privacyStyle: "blur",
+  voice: false,
   mode: "personal",
   name: "",
   company: "",

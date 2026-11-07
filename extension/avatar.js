@@ -15,7 +15,7 @@
 //    when they move; the space critter's jelly body squashes and stretches;
 //  - a finished rep throws hearts and stars that arc and fall under gravity;
 //  - a ground shadow stays on the floor and shrinks when the feet leave it.
-// Exposed as the global `Avatar` (the trainer page has no module loader).
+// Exposed as the global `Avatar`: break.html loads it as a classic script before break.js.
 const Avatar = (() => {
   const MIN_VIS = 0.5;
   const IDX = {

@@ -13,7 +13,8 @@ body {
 }
 h1 {
   margin: 4px 0 10px;
-  font-size: 20px;
+  font-size: 22px;
+  line-height: 1.2;
 }
 .xp-ticker {
   color: var(--gold);
@@ -96,11 +97,99 @@ h1 {
   background: var(--accent);
   color: var(--accent-ink);
 }
-.guide p {
-  margin: 0 0 8px;
+#routine {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.guide a {
+.step-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.dots i {
+  width: 18px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border);
+}
+.dots i.done {
+  background: var(--accent);
+}
+.dots i.now {
+  background: var(--line);
+}
+.chip {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 10px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--line) 16%, transparent);
   color: var(--line);
+  font-size: 12px;
+  font-weight: 600;
+}
+.guide {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.guide-text {
+  flex: 1;
+  min-width: 0;
+}
+.guide-text p:last-child {
+  margin-bottom: 0;
+}
+.guide p {
+  margin: 0 0 6px;
+}
+.howto {
+  font-size: 15px;
+}
+.small {
+  font-size: 12px;
+}
+.guide-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.guide-actions:not(:has(button:not([hidden]))) {
+  display: none;
+}
+.guide-actions button {
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.starting {
+  background: radial-gradient(circle at 50% 40%, #1f2a33, #0b0e10);
+}
+.starting .muted {
+  max-width: 34ch;
+  color: #a9b3bb;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 4px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 footer {
   margin-top: auto;
@@ -192,4 +281,139 @@ footer {
     transform: translateY(520px) rotate(720deg);
     opacity: 0;
   }
+}
+.prefs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.pill b {
+  color: var(--text);
+  font-weight: 600;
+}
+.pill:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.pill input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.pill:has(input:focus-visible) {
+  outline: 2px solid var(--line);
+  outline-offset: 2px;
+}
+.switch {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 99px;
+  background: var(--border);
+  transition: background 0.2s;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+.pill:has(input:checked) {
+  color: var(--text);
+}
+.pill:has(input:checked) .switch {
+  background: var(--accent);
+}
+.pill:has(input:checked) .switch::after {
+  transform: translateX(12px);
+}
+#lookBtn {
+  padding-left: 6px;
+}
+#lookThumb {
+  width: 18px;
+  height: 24px;
+  border-radius: 4px;
+}
+.caret {
+  transition: transform 0.2s;
+}
+#lookBtn[aria-expanded="true"] .caret {
+  transform: rotate(180deg);
+}
+.look-grid {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 5px;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(10, 14, 18, 0.72);
+  backdrop-filter: blur(8px);
+  animation: rise 0.18s ease-out;
+}
+.stage:has(.look-grid:not([hidden])) .hud {
+  visibility: hidden;
+}
+@keyframes rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+.look-opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 3px 4px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8ecef;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+.look-opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.look-opt canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  border-radius: 5px;
+  display: block;
+}
+.look-opt:has(input:checked) {
+  border-color: var(--accent);
+}
+.look-opt:has(input:focus-visible) {
+  outline: 2px solid var(--line);
+  outline-offset: 2px;
 }

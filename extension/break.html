@@ -9,9 +9,13 @@
   <body>
     <header>
       <div class="row">
-        <span id="step" class="muted">Break</span>
+        <span class="step-wrap">
+          <span id="step" class="muted">Break</span>
+          <span id="dots" class="dots" aria-hidden="true"></span>
+        </span>
         <span id="xpTicker" class="xp-ticker">+0 XP</span>
       </div>
+      <span id="area" class="chip" hidden></span>
       <h1 id="title">Loading…</h1>
       <div class="bar"><span id="bar"></span></div>
     </header>
@@ -35,6 +39,11 @@
           <strong>Get in position</strong>
           <span id="positionText">Stand up, turn sideways, step back until your feet are in frame</span>
         </div>
+        <div id="starting" class="overlay starting" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <strong>Starting camera…</strong>
+          <span id="startingText" class="muted">Frames stay on this computer.</span>
+        </div>
         <div id="fallback" class="overlay fallback" hidden>
           <strong id="fallbackTitle">Camera unavailable</strong>
           <span id="fallbackText">Follow the instructions below and press Done when finished. No XP this time.</span>
@@ -44,15 +53,31 @@
           <span id="lastScore" class="score" hidden></span>
         </div>
         <div id="cue" class="cue" hidden></div>
+        <div id="lookGrid" class="look-grid" role="radiogroup" aria-label="Camera look" hidden></div>
       </div>
 
       <div class="guide">
-        <p id="howto"></p>
-        <p id="hint" class="muted" hidden></p>
-        <div class="row">
-          <button id="demo" hidden>▶ Watch demo</button>
-          <a id="swap" href="#">Show me a different exercise</a>
+        <div class="guide-text">
+          <p id="howto" class="howto"></p>
+          <p id="hint" class="muted small" hidden></p>
         </div>
+        <div class="guide-actions">
+          <button id="demo" class="small" hidden>▶ Demo</button>
+          <button id="swap" class="small" title="Show me a different exercise">↻ Swap</button>
+        </div>
+      </div>
+
+      <div class="prefs">
+        <label class="pill">
+          <input type="checkbox" id="voice" role="switch" />
+          <span class="switch" aria-hidden="true"></span>
+          Voice cues
+        </label>
+        <button id="lookBtn" class="pill" aria-expanded="false" aria-controls="lookGrid">
+          <canvas id="lookThumb" width="36" height="48" aria-hidden="true"></canvas>
+          Look: <b id="lookName">Blur</b>
+          <span class="caret" aria-hidden="true">▾</span>
+        </button>
       </div>
     </main>
 
@@ -75,6 +100,7 @@
       <button id="skip">Skip</button>
     </footer>
 
+    <script src="avatar.js"></script>
     <script type="module" src="break.js"></script>
   </body>
 </html>
