@@ -8,8 +8,8 @@ primary_region = "fra"
 
 [env]
   # Only these extension origins may open the WebSocket (see origin_allowed in app.py).
-  # The first is the unpacked dev build (from the manifest "key"). Add the Chrome Web Store
-  # ID here after the first store upload: "chrome-extension://<dev-id>,chrome-extension://<store-id>".
+  # The extension ID comes from the manifest "key", which both the dev folder and the release
+  # zips keep, so this one ID covers every install. Comma-separate more origins if needed.
   FORMCOACH_ALLOWED_ORIGINS = "chrome-extension://lpkaoaegdjhciohkfidnmabjigidofnd"
 
 [http_service]

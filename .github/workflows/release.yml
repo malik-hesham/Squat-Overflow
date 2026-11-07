@@ -2,8 +2,8 @@ name: Release
 
 # Push a tag that matches extension/manifest.json "version" to ship everything:
 #   git tag v0.4.0 && git push origin v0.4.0
-# Order: tests -> DB migrations -> pose server on Fly.io -> GitHub Release -> Chrome Web Store.
-# One-time setup (secrets, Fly app, first store upload) is in docs/deployment.md.
+# Order: tests -> DB migrations -> pose server on Fly.io -> GitHub Release with the extension zip.
+# One-time setup (secrets, Fly app) is in docs/deployment.md.
 on:
   push:
     tags: ["v*"]
@@ -79,7 +79,7 @@ jobs:
           exit 1
 
   github-release:
-    name: GitHub Release
+    name: GitHub Release with the extension zip
     needs: deploy-server
     runs-on: ubuntu-latest
     permissions:
@@ -88,36 +88,20 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ github.ref_name }}
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: extension-zip
           path: dist
-      # A release drafted in the GitHub UI already exists for the tag: attach the zip to it instead.
+      # squat-overflow.zip keeps one name across releases, so
+      # https://github.com/<owner>/<repo>/releases/latest/download/squat-overflow.zip always works.
+      - run: cp dist/squat-overflow-*.zip dist/squat-overflow.zip
+      # Install steps go first, then the notes GitHub generates from merged PRs.
+      # A release drafted in the GitHub UI already exists for the tag: attach the zips to it instead.
       - run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.zip --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" dist/*.zip --verify-tag --generate-notes --title "Squat Overflow $TAG" --repo "$GITHUB_REPOSITORY"
+            gh release create "$TAG" dist/*.zip --verify-tag --generate-notes \
+              --notes-file .github/release-notes.md --title "Squat Overflow $TAG" --repo "$GITHUB_REPOSITORY"
           fi
-
-  publish-cws:
-    name: Submit to Chrome Web Store
-    needs: deploy-server
-    # Skipped until the store item exists and CWS_ITEM_ID is set (see docs/deployment.md).
-    if: vars.CWS_ITEM_ID != ''
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - uses: actions/download-artifact@v8
-        with:
-          name: extension-zip
-          path: dist
-      - env:
-          CWS_SERVICE_ACCOUNT_JSON: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
-          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
-          CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
-        run: node scripts/publish-cws.mjs dist/*.zip

@@ -101,7 +101,7 @@ def health() -> dict:
 
 @app.get("/privacy", response_class=HTMLResponse)
 def privacy() -> str:
-    """Public privacy policy; the Chrome Web Store listing links here."""
+    """Public privacy policy (linked from the README and the Google sign-in consent screen)."""
     return PRIVACY_PAGE.read_text(encoding="utf-8")
 
 
