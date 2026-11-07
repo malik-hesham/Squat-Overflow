@@ -72,11 +72,18 @@
       </div>
 
       <div class="prefs">
-        <label class="pill">
-          <input type="checkbox" id="voice" role="switch" />
-          <span class="switch" aria-hidden="true"></span>
-          <span data-i18n="voiceCues">Voice cues</span>
-        </label>
+        <div class="toggles">
+          <label class="pill">
+            <input type="checkbox" id="voice" role="switch" />
+            <span class="switch" aria-hidden="true"></span>
+            <span data-i18n="voiceCues">Voice cues</span>
+          </label>
+          <label class="pill">
+            <input type="checkbox" id="memes" role="switch" />
+            <span class="switch" aria-hidden="true"></span>
+            <span data-i18n="memeSounds">Meme sounds</span>
+          </label>
+        </div>
         <button id="lookBtn" class="pill" aria-expanded="false" aria-controls="lookGrid">
           <canvas id="lookThumb" width="36" height="48" aria-hidden="true"></canvas>
           <span data-i18n="look">Look:</span> <b id="lookName">Blur</b>
