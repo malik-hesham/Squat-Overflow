@@ -37,6 +37,14 @@ export async function createHost({ webDir, shimPath, state, openUrl, idleState, 
   hostObj = made.host;
 
   globalThis.chrome = chromeObj;
+  // The VS Code extension host has no `navigator`; the shared service worker reads navigator.language.
+  if (!globalThis.navigator?.language) {
+    Object.defineProperty(globalThis, "navigator", {
+      value: { language: Intl.DateTimeFormat().resolvedOptions().locale },
+      configurable: true,
+      writable: true,
+    });
+  }
   const { port: boundPort, baseUrl } = await server.start();
 
   await import(pathToFileURL(path.join(webDir, "service-worker.js")).href);

@@ -143,8 +143,8 @@ async function activate(context) {
 
   const openUrl = (url) => {
     const u = new URL(url);
-    const isAutoBreak =
-      u.pathname.endsWith("/break.html") && u.hash !== "#manual";
+    // Show the "Time to move!" popup for both automatic and manual breaks.
+    const isAutoBreak = u.pathname.endsWith("/break.html");
     const logSegs = u.pathname.split("/");
     log(
       `openUrl ${u.origin}/<token>/${logSegs.slice(2).join("/")}${u.search}${u.hash} auto=${isAutoBreak}`
