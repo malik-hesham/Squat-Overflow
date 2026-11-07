@@ -29,10 +29,11 @@ def jpeg(img: np.ndarray) -> bytes:
 def test_health(client):
     body = client.get("/health").json()
     keys = {e["key"] for e in body["exercises"]}
-    assert body["ok"] and {"neck_tilt", "march"} <= keys
+    assert body["ok"] and {"neck_tilt", "palming"} <= keys
     assert not keys & {"squat", "pushup", "curl", "press"}  # office set only
-    assert len(keys) == 30
+    assert len(keys) == 40
     assert all(e["category"] and e["how_to"] and e["demo"]["url"] for e in body["exercises"])
+    assert {e["stance"] for e in body["exercises"]} == {"seated", "standing"}
 
 
 def test_web_page_origin_is_rejected(client):
@@ -45,18 +46,18 @@ def test_extension_round_trip(client):
     with client.websocket_connect("/ws", headers=EXT) as ws:
         ready = ws.receive_json()
         assert ready["type"] == "ready" and len(ready["connections"]) > 10
-        assert len(ready["exercises"]) == 30  # whole office catalog, so the extension can prefetch it
+        assert len(ready["exercises"]) == 40  # whole office catalog, so the extension can prefetch it
         assert ready["exercise"] == ready["exercises"][0]["key"] == "neck_tilt"
 
         ws.send_json({"type": "config", "exercise": "curl"})  # Workout set is not offered
         assert ws.receive_json()["type"] == "error"
 
-        ws.send_json({"type": "config", "exercise": "air_curl"})
-        assert ws.receive_json() == {"type": "config", "exercise": "air_curl", "calibrated": False}
+        ws.send_json({"type": "config", "exercise": "nerve_glide"})
+        assert ws.receive_json() == {"type": "config", "exercise": "nerve_glide", "calibrated": False}
 
         ws.send_bytes(jpeg(np.full((360, 480, 3), 40, np.uint8)))
         frame = ws.receive_json()
-        assert frame["type"] == "frame" and frame["exercise"] == "air_curl"
+        assert frame["type"] == "frame" and frame["exercise"] == "nerve_glide"
         assert frame["landmarks"] is None and frame["feedback"][0]["code"] == "not_visible"
         assert frame["latency_ms"] > 0
 

@@ -1,3 +1,5 @@
+import { currentAreas } from "./routine.js";
+
 export const SETTINGS_DEFAULTS = {
   intervalMin: 60,
   areas: [],
@@ -30,7 +32,8 @@ const MEME_TURNS_KEY = "memeTurns";
 const local = chrome.storage.local;
 
 export async function getSettings() {
-  return { ...SETTINGS_DEFAULTS, ...(await local.get(Object.keys(SETTINGS_DEFAULTS))) };
+  const settings = { ...SETTINGS_DEFAULTS, ...(await local.get(Object.keys(SETTINGS_DEFAULTS))) };
+  return { ...settings, areas: currentAreas(settings.areas) };
 }
 
 export function saveSettings(patch) {

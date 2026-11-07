@@ -1,5 +1,5 @@
 import { dayKey, isoWeek } from "./xp.js";
-import { featuredArea } from "./routine.js";
+import { AREAS, featuredArea } from "./routine.js";
 
 export const DAILY_POOL = [
   { id: "variety", name: "Variety pack", bonus: 25 },
@@ -34,6 +34,7 @@ export function withPeriods(profile, now) {
   const week = isoWeek(now);
   if (p.daily?.day !== day) p.daily = { day, ids: dailyFor(now), areas: [], breaks: 0, run: 0, done: [] };
   if (p.weekly?.week !== week) p.weekly = { week, area: featuredArea(now), count: 0, done: false };
+  else if (!AREAS.includes(p.weekly.area)) p.weekly.area = featuredArea(now); // area renamed by an update
   return p;
 }
 
