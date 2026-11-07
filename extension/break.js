@@ -6,6 +6,7 @@ import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 import { badgeLabel } from "./lib/badges.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
+const CAMERA_SLOW_MS = 6_000;
 const YOUTUBE_ID = /^[\w-]{11}$/;
 const CAMERA_HINT = "Put the camera side-on, 2–3 m away, with your whole body in frame.";
 
@@ -16,7 +17,7 @@ const els = Object.fromEntries(
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
     "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "lookBtn", "lookName",
-    "lookGrid",
+    "lookGrid", "lookThumb", "area", "dots", "starting", "startingText",
   ].map((id) => [id, $(id)]),
 );
 
@@ -30,6 +31,7 @@ const state = {
   finished: false,
   positioning: false,
   positionTimer: 0,
+  startingTimer: 0,
 };
 
 const send = (msg) => chrome.runtime.sendMessage(msg);
@@ -72,6 +74,11 @@ function drawCameraThumb(canvas) {
   g.fillText("📷", w / 2, h / 2);
 }
 
+function drawLookThumb(canvas, key) {
+  if (key === "camera") drawCameraThumb(canvas);
+  else Avatar.drawThumb(canvas, key);
+}
+
 function renderLooks() {
   els.lookGrid.replaceChildren(
     ...lookOptions().map(([key, label]) => {
@@ -85,8 +92,7 @@ function renderLooks() {
       thumb.width = 90;
       thumb.height = 120;
       thumb.setAttribute("aria-hidden", "true");
-      if (key === "camera") drawCameraThumb(thumb);
-      else Avatar.drawThumb(thumb, key);
+      drawLookThumb(thumb, key);
       const name = document.createElement("span");
       name.textContent = label;
       opt.append(input, thumb, name);
@@ -100,6 +106,7 @@ function syncLook() {
   const key = lookKey();
   for (const input of els.lookGrid.querySelectorAll("input")) input.checked = input.value === key;
   els.lookName.textContent = lookOptions().find(([k]) => k === key)[1];
+  drawLookThumb(els.lookThumb, key);
 }
 
 async function onLookChange(ev) {
@@ -112,9 +119,9 @@ async function onLookChange(ev) {
   await saveSettings(patch);
 }
 
-function toggleLooks() {
-  els.lookGrid.hidden = !els.lookGrid.hidden;
-  els.lookBtn.setAttribute("aria-expanded", String(!els.lookGrid.hidden));
+function toggleLooks(open = els.lookGrid.hidden) {
+  els.lookGrid.hidden = !open;
+  els.lookBtn.setAttribute("aria-expanded", String(open));
 }
 
 async function onVoiceChange() {
@@ -156,8 +163,11 @@ function showMove(i) {
   state.i = i;
   const move = state.moves[i];
   document.title = `${move.area} | ${move.label}`;
-  els.title.textContent = `${move.area} | ${move.label}`;
-  els.step.textContent = `Exercise ${i + 1} / ${state.moves.length}`;
+  els.title.textContent = move.label;
+  els.area.textContent = move.area;
+  els.area.hidden = false;
+  els.step.textContent = `Exercise ${i + 1} of ${state.moves.length}`;
+  renderDots();
   els.howto.textContent = move.how_to;
   els.hint.hidden = move.camera !== "side";
   els.hint.textContent = CAMERA_HINT;
@@ -172,6 +182,28 @@ function showMove(i) {
   els.position.hidden = !state.positioning;
   if (state.positioning) state.positionTimer = setTimeout(endPositioning, POSITION_TIMEOUT_MS);
   renderProgress();
+}
+
+function renderDots() {
+  els.dots.replaceChildren(
+    ...state.moves.map((m, k) => {
+      const dot = document.createElement("i");
+      if (k < state.i || state.progress[k].reps >= m.target) dot.className = "done";
+      else if (k === state.i) dot.className = "now";
+      return dot;
+    }),
+  );
+}
+
+function setStarting(on) {
+  clearTimeout(state.startingTimer);
+  els.starting.hidden = !on;
+  if (!on) return;
+  els.startingText.textContent = "Frames stay on this computer.";
+  state.startingTimer = setTimeout(() => {
+    els.startingText.textContent =
+      "Still waiting for a picture. Check that this browser is allowed to use the camera (on a Mac: System Settings › Privacy & Security › Camera).";
+  }, CAMERA_SLOW_MS);
 }
 
 function endPositioning() {
@@ -215,6 +247,7 @@ function onStatus(status) {
   if (status !== "offline" && status !== "camera-denied") return;
   if (state.finished) return;
   endPositioning();
+  setStarting(false);
   els.lookBtn.hidden = els.lookGrid.hidden = true;
   els.fallback.hidden = false;
   els.fallbackTitle.textContent = status === "offline" ? "Coach offline" : "Camera unavailable";
@@ -259,6 +292,7 @@ function showSummary({ breakdown, levelUp, newBadges = [], profile }) {
   els.actions.hidden = true;
   els.summary.hidden = false;
   document.title = "Break complete";
+  els.area.hidden = els.dots.hidden = true;
   els.title.textContent = "Nice work!";
   els.step.textContent = "Break complete";
   const lines = [
@@ -297,6 +331,7 @@ async function finish() {
   if (state.finished) return;
   state.finished = true;
   endPositioning();
+  setStarting(false);
   state.client?.stop();
   els.done.disabled = els.snooze.disabled = els.skip.disabled = true;
   speak("Break done. Back to work!");
@@ -352,7 +387,10 @@ async function startRoutine() {
     onFrame,
     onStatus,
   });
-  if (await state.client.start()) showMove(state.i);
+  setStarting(true);
+  const started = await state.client.start();
+  setStarting(false);
+  if (started) showMove(state.i);
   announce(state.i);
 }
 
@@ -379,7 +417,10 @@ async function init() {
   els.swap.addEventListener("click", swap);
   els.voice.checked = settings.voice;
   els.voice.addEventListener("change", onVoiceChange);
-  els.lookBtn.addEventListener("click", toggleLooks);
+  els.lookBtn.addEventListener("click", () => toggleLooks());
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !els.lookGrid.hidden) toggleLooks(false);
+  });
   els.lookGrid.addEventListener("change", onLookChange);
   renderLooks();
 
@@ -402,6 +443,7 @@ function showWarningScreen(schedule, intervalMin) {
   const text = `~${warningHours(schedule.skipsInRow, intervalMin)} hours without moving`;
   els.warningTitle.textContent = text;
   els.title.textContent = "Time to move";
+  els.area.hidden = true;
   els.step.textContent = `${schedule.skipsInRow} breaks skipped in a row`;
   document.title = text;
   els.warnStart.addEventListener("click", startRoutine);
