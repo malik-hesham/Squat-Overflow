@@ -45,13 +45,12 @@ Camera frames are sent over an encrypted connection to the Squat Overflow pose s
 | Asset | Dimensions | Status | File |
 |-------|-----------|--------|------|
 | Store icon | 128×128 PNG | ✅ Ready | `extension/icons/icon-128.png` |
-| Screenshot 1 | 1280×800 | ⬜ Not created | Break window: camera with skeleton overlay, rep counter, demo clip |
-| Screenshot 2 | 1280×800 | ⬜ Not created | Toolbar popup: level, XP bar, next break, leaderboard |
-| Screenshot 3 | 1280×800 | ⬜ Not created | Settings page: areas, workdays, interval, Personal/Competitive |
-| Screenshot 4 | 1280×800 | ⬜ Not created | Privacy mode: blurred body or 3D avatar in the break window |
+| Screenshot 1 | 1280×800 | ⬜ Needs a real camera session | Break window during a real break: rep counter and skeleton, with the 3D-avatar look on so no face shows. Leave the YouTube demo pane out of frame; it's a third-party creator's video. |
+| Screenshot 2 | 1280×800 | ✅ Ready | `docs/store/screenshot-popup.png`: toolbar popup with level, next-break countdown, activity, challenges |
+| Screenshot 3 | 1280×800 | ✅ Ready | `docs/store/screenshot-settings.png`: avatar picker, Google sign-in, reminder interval |
 | Small promo tile | 440×280 | ⬜ Not created | Dumbbell-pulse icon on brand background |
 
-Screenshots must show the real UI of the version being submitted. Don't show anyone's face unless they have agreed to it.
+Screenshots 2 and 3 were captured from the 0.4.0 store build with demo data (name "Sam", seeded XP and activity). Screenshots must show the real UI of the version being submitted. Don't show anyone's face unless they have agreed to it. The Practice page still says "FormCoach POC" in its header; rename it before using it in a screenshot.
 
 ## Permissions justification
 
@@ -92,7 +91,7 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 
 **Privacy policy URL:** https://squat-overflow-pose.fly.dev/privacy. The pose server serves it from `server/static/privacy.html`, because the repo is private. Keep it in sync with the table above.
 
-⚠️ Before the first submission, replace the placeholder contact address (`privacy@example.com`) in `server/static/privacy.html` with a monitored address.
+The contact address in the policy is abdelfatah.ashour@leadliaison.com.
 
 ## Distribution
 
@@ -102,8 +101,8 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 ## Developer info
 
 **Publisher name:** To fill in. This is the Developer Dashboard account that owns the item.
-**Contact email:** To fill in. It is shown publicly, so it must be monitored.
-**Support URL / email:** Same as the contact email until there is a public support page.
+**Contact email:** abdelfatah.ashour@leadliaison.com. It is shown publicly.
+**Support URL / email:** abdelfatah.ashour@leadliaison.com, until there is a public support page.
 
 ## Version history
 

@@ -100,7 +100,7 @@ In **Settings → Environments**, create `production`. Optionally, add yourself 
 The API can't create a store item, so the first version is uploaded by hand:
 1. Register a developer account at https://chrome.google.com/webstore/devconsole (one-time fee).
 2. Run `node scripts/build-extension.mjs`, then click **Add new item** and upload `dist/squat-overflow-<version>.zip`.
-3. Fill in the **Store listing** and **Privacy** tabs from `CHROMEWEBSTORE.md`. Add screenshots. Replace the placeholder contact email in `server/static/privacy.html` first; the policy URL is `https://squat-overflow-pose.fly.dev/privacy`.
+3. Fill in the **Store listing** and **Privacy** tabs from `CHROMEWEBSTORE.md`. Screenshots are in `docs/store/`. The policy URL is `https://squat-overflow-pose.fly.dev/privacy`.
 4. Note the **item ID**: it is the store extension ID. Then:
    - Set `CWS_ITEM_ID` (step 3).
    - Add `chrome-extension://<item-id>` to `FORMCOACH_ALLOWED_ORIGINS` in `server/fly.toml`. Keep the dev ID, comma-separated. Deploy it with the next release.
