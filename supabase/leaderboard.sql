@@ -114,12 +114,17 @@ stable
 security definer
 set search_path = public
 as $$
-  with board as (
-    select p.id, p.name, p.level, p.streak, p.avatar,
-           case when p_period = 'week' then p.week_xp else p.xp end as score
+  with latest as (
+    select distinct on (lower(p.name)) p.id, p.name, p.level, p.streak, p.avatar, p.xp, p.week, p.week_xp
     from players p
     where p.company = lower(p_company)
-      and (p_period <> 'week' or p.week = to_char(now(), 'IYYY-"W"IW'))
+    order by lower(p.name), (p.id = p_player) desc, p.updated_at desc
+  ),
+  board as (
+    select l.id, l.name, l.level, l.streak, l.avatar,
+           case when p_period = 'week' then l.week_xp else l.xp end as score
+    from latest l
+    where p_period <> 'week' or l.week = to_char(now(), 'IYYY-"W"IW')
   ),
   ranked as (
     select (row_number() over (order by b.score desc, b.name))::int as rank,
