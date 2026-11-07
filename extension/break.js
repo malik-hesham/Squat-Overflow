@@ -2,6 +2,7 @@ import { getSettings, getSchedule, getCatalog } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
+import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const YOUTUBE_ID = /^[\w-]{11}$/;
@@ -270,7 +271,30 @@ async function init() {
   els.demo.addEventListener("click", openDemo);
   els.swap.addEventListener("click", swap);
 
+  const manual = location.hash.startsWith("#manual");
+  if (!canSnooze(schedule)) {
+    els.snooze.disabled = els.warnSnooze.disabled = true;
+    els.snooze.textContent = els.warnSnooze.textContent = "Snoozed twice, time to move";
+  }
+  if (!manual && showWarning(schedule)) {
+    showWarningScreen(schedule, settings.intervalMin);
+    return;
+  }
   await startRoutine();
+}
+
+function showWarningScreen(schedule, intervalMin) {
+  els.routine.hidden = true;
+  els.actions.hidden = true;
+  els.warning.hidden = false;
+  const text = `~${warningHours(schedule.skipsInRow, intervalMin)} hours without moving`;
+  els.warningTitle.textContent = text;
+  els.title.textContent = "Time to move";
+  els.step.textContent = `${schedule.skipsInRow} breaks skipped in a row`;
+  document.title = text;
+  els.warnStart.addEventListener("click", startRoutine);
+  els.warnSnooze.addEventListener("click", () => leave("snooze"));
+  els.warnPause.addEventListener("click", () => leave("pause"));
 }
 
 init();

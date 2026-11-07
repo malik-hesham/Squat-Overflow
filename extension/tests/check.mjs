@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "../lib/routine.js";
+import {
+  SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
+} from "../lib/schedule.js";
 
 function check(name, fn) {
   try {
@@ -167,4 +170,82 @@ check("featuredArea rotates weekly over AREAS", () => {
   assert.ok(AREAS.includes(featuredArea(mon)));
   assert.notEqual(featuredArea(mon), featuredArea(mon + 7 * DAY));
   assert.equal(AREAS.length, 7);
+});
+
+const T0 = new Date(2026, 10, 9, 9).getTime();
+const fired = () => onFire(initialSchedule(T0, 60), T0 + H, 60);
+
+check("schedule: initial and onFire keep the grid", () => {
+  assert.equal(initialSchedule(T0, 60).nextAt, T0 + H);
+  assert.equal(fired().nextAt, T0 + 2 * H);
+});
+
+check("done keeps grid", () => {
+  assert.equal(applyAction(fired(), "done", T0 + H + 5 * M, 60).nextAt, T0 + 2 * H);
+});
+
+check("snooze shifts to now+20 and counts", () => {
+  const s = applyAction(fired(), "snooze", T0 + H + M, 60);
+  assert.equal(s.nextAt, T0 + H + 21 * M);
+  assert.equal(s.snoozesInRow, 1);
+  assert.equal(s.shiftedBy, 20);
+});
+
+check("snooze capped at 2", () => {
+  const s1 = applyAction(fired(), "snooze", T0 + H + M, 60);
+  const s2 = applyAction(onFire(s1, s1.nextAt, 60), "snooze", s1.nextAt + M, 60);
+  assert.equal(s2.snoozesInRow, SNOOZE_CAP);
+  assert.equal(canSnooze(s2), false);
+  const s3 = applyAction(s2, "snooze", s2.nextAt + M, 60);
+  assert.equal(s3.nextAt, s2.nextAt);
+  assert.equal(s3.snoozesInRow, 2);
+});
+
+check("skip keeps grid and counts", () => {
+  const s = applyAction({ ...fired(), snoozesInRow: 1 }, "skip", T0 + H + M, 60);
+  assert.equal(s.nextAt, T0 + 2 * H);
+  assert.equal(s.skipsInRow, 1);
+  assert.equal(s.snoozesInRow, 0);
+});
+
+check("done resets skips and snoozes", () => {
+  const s = applyAction({ ...fired(), skipsInRow: 4, snoozesInRow: 2, shiftedBy: 20 }, "done", T0 + H + M, 60);
+  assert.deepEqual([s.skipsInRow, s.snoozesInRow, s.shiftedBy], [0, 0, 0]);
+});
+
+check("close counts as skip once", () => {
+  const s = applyAction({ ...fired(), windowId: 7 }, "close", T0 + H + M, 60);
+  assert.equal(s.skipsInRow, 1);
+  assert.equal(s.windowId, null);
+  assert.equal(applyAction(s, "close", T0 + H + M, 60).skipsInRow, 1);
+});
+
+check("close after done is ignored", () => {
+  const done = applyAction({ ...fired(), windowId: 7 }, "done", T0 + H + M, 60);
+  assert.equal(applyAction(done, "close", T0 + H + 2 * M, 60).skipsInRow, 0);
+});
+
+check("warning after 3 skips; hours rounded to half hours", () => {
+  assert.equal(showWarning({ ...fired(), skipsInRow: 2 }), false);
+  assert.equal(showWarning({ ...fired(), skipsInRow: 3 }), true);
+  assert.equal(warningHours(3, 60), 3);
+  assert.equal(warningHours(3, 45), 2.5);
+  assert.equal(warningHours(3, 30), 1.5);
+});
+
+check("pause 1hr keeps counters", () => {
+  const s = applyAction({ ...fired(), skipsInRow: 3, snoozesInRow: 1 }, "pause", T0 + H + M, 60);
+  assert.equal(s.nextAt, T0 + H + 61 * M);
+  assert.equal(s.pausedUntil, T0 + H + 61 * M);
+  assert.deepEqual([s.skipsInRow, s.snoozesInRow], [3, 1]);
+});
+
+check("rescheduleForInterval", () => {
+  assert.equal(rescheduleForInterval(fired(), T0 + H + 10 * M, 30).nextAt, T0 + H + 40 * M);
+});
+
+check("upcoming after snooze lists shifted times", () => {
+  const now = T0 + H + M;
+  const s = applyAction(fired(), "snooze", now, 60);
+  assert.deepEqual(upcoming(s, 60, 3), [now + 20 * M, now + 80 * M, now + 140 * M]);
 });
