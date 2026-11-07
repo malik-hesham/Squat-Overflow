@@ -158,7 +158,7 @@ async function onSettingsSaved(msg) {
   const [settings, s, profile] = await Promise.all([getSettings(), getSchedule(), getProfile()]);
   submitScore(profile, settings);
   if (!s.nextAt) await saveSchedule({ ...initialSchedule(Date.now(), settings.intervalMin), lastKey: s.lastKey, breakCount: s.breakCount });
-  else if (msg.intervalChanged) await saveSchedule(rescheduleForInterval(s, Date.now(), settings.intervalMin));
+  else if (msg.scheduleChanged) await saveSchedule(rescheduleForInterval(s, Date.now(), settings.intervalMin));
   else await saveSchedule(s);
   return { ok: true };
 }

@@ -122,3 +122,13 @@ export function decideFire(s, now, intervalMin, { idle, meeting, settings }) {
   const schedule = { ...fired, nextAt: slot(fired.nextAt), deferredFrom: null };
   return { kind: idle === "active" ? "open" : "away", schedule };
 }
+
+export function scheduleSettingsChanged(prev, next) {
+  const days = (w) => [...w].sort().join();
+  return (
+    prev.intervalMin !== next.intervalMin ||
+    prev.activeStart !== next.activeStart ||
+    prev.activeEnd !== next.activeEnd ||
+    days(prev.workdays) !== days(next.workdays)
+  );
+}

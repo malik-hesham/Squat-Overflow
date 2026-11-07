@@ -1,5 +1,6 @@
 import { getSettings, saveSettings, getProfile } from "./lib/store.js";
 import { AREAS } from "./lib/routine.js";
+import { scheduleSettingsChanged } from "./lib/schedule.js";
 
 const PRESETS = ["30", "45", "60", "90", "120"];
 const DAYS = [
@@ -74,7 +75,7 @@ async function save() {
   if (problem(next)) return;
   await saveSettings({ ...next, setupDone: true });
   await chrome.runtime
-    .sendMessage({ type: "settings-saved", intervalChanged: next.intervalMin !== initial.intervalMin })
+    .sendMessage({ type: "settings-saved", scheduleChanged: scheduleSettingsChanged(initial, next) })
     .catch(() => {});
   if (initial.mode === "competitive" && next.mode === "personal") {
     await chrome.runtime.sendMessage({ type: "left-board" }).catch(() => {});

@@ -3,7 +3,7 @@ import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js"
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
-  nextActiveSlot, decideFire, isActive,
+  nextActiveSlot, decideFire, isActive, scheduleSettingsChanged,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
@@ -425,6 +425,24 @@ check("award: a weekend break does not reset the streak on Monday", () => {
   const p0 = { ...blankProfile(), streak: 3, lastStreakDay: dayKey(fri) };
   const afterSat = award(p0, full(), sat, WORKDAYS).profile;
   assert.equal(award(afterSat, full(), mon, WORKDAYS).profile.streak, afterSat.streak + 1);
+});
+
+check("scheduleSettingsChanged: interval, hours or workdays changes; blur or mode does not", () => {
+  const base = { intervalMin: 60, activeStart: "09:00", activeEnd: "17:00", workdays: [1, 2, 3, 4, 5], privacy: true, mode: "personal" };
+  assert.equal(scheduleSettingsChanged(base, { ...base }), false);
+  assert.equal(scheduleSettingsChanged(base, { ...base, privacy: false, mode: "competitive" }), false);
+  assert.equal(scheduleSettingsChanged(base, { ...base, workdays: [6] }), true);
+  assert.equal(scheduleSettingsChanged(base, { ...base, activeStart: "12:17" }), true);
+  assert.equal(scheduleSettingsChanged(base, { ...base, activeEnd: "18:00" }), true);
+  assert.equal(scheduleSettingsChanged(base, { ...base, intervalMin: 30 }), true);
+  assert.equal(scheduleSettingsChanged(base, { ...base, workdays: [5, 4, 3, 2, 1] }), false);
+});
+
+check("changing workdays to today reschedules from now, not from the old Monday slot", () => {
+  const sat = at(7, 12, 18);
+  const satOnly = { activeStart: "12:17", activeEnd: "17:00", workdays: [6] };
+  const s = rescheduleForInterval(sched(at(9, 10)), sat, 60);
+  assert.equal(nextActiveSlot(s.nextAt, 60, satOnly), at(7, 13, 18));
 });
 
 const pending = [];
