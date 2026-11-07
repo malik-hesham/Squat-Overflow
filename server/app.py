@@ -82,7 +82,7 @@ def origin_allowed(origin: str | None) -> bool:
 def exercise_catalog() -> list[dict]:
     return [
         {"key": e.key, "label": e.label, "metric": e.metric, "camera": e.camera,
-         "category": e.category, "how_to": e.how_to,
+         "category": e.category, "how_to": e.how_to, "stance": e.stance,
          "demo": DEMOS[e.key].to_json() if e.key in DEMOS else None}
         for e in CATALOG.values()
     ]

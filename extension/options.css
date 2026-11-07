@@ -41,6 +41,28 @@ details {
 .chips input {
   accent-color: var(--accent);
 }
+/* Pain areas: a name and the symptom it's for, two to a row. */
+.chips.areas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.chips.areas label {
+  align-items: flex-start;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.chips.areas input {
+  margin-top: 3px;
+}
+.chips.areas span {
+  display: grid;
+  gap: 2px;
+}
+.chips.areas small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
 .inline,
 .check,
 .field {

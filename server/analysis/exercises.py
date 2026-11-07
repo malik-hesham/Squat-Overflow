@@ -55,6 +55,7 @@ class Exercise:
     min_rep_seconds: float = 0.8
     category: str = "Workout"  # groups the picker in the UI
     how_to: str = ""           # one-line instruction shown in the UI
+    stance: str = "standing"   # "seated" or "standing": standing moves need the whole body in frame
 
     def at_rest(self, v: float) -> bool:
         return v >= self.rest if self.rest_is_high else v <= self.rest
@@ -226,6 +227,27 @@ def head_turn(pose: Pose, _s: str = "") -> float:
     return math.degrees(math.asin(min(1.0, offset / half)))
 
 
+def head_drop(pose: Pose, _s: str = "") -> float:
+    """How far the nose sits below the line between the ears, as an angle (0 = level or above).
+
+    Grows as the chin drops towards the chest. Image-space, like `head_turn`.
+    """
+    el, er, nose = pose.pt2d("left", "ear"), pose.pt2d("right", "ear"), pose.pt2d("left", "nose")
+    half = max(abs(el[0] - er[0]) / 2, 1.0)
+    drop = nose[1] - (el[1] + er[1]) / 2
+    return max(0.0, math.degrees(math.atan2(drop, half)))
+
+
+def head_forward(pose: Pose, s: str) -> float:
+    """Shoulder->ear vs straight up, seen from the side: grows as the head juts forward."""
+    return angle_from_vertical(pose.pt(s, "shoulder"), pose.pt(s, "ear"))
+
+
+def ear_height(pose: Pose, _s: str = "") -> float:
+    """Shoulder->ear vs horizontal, averaged over both sides: shrinks as the shoulders rise."""
+    return sum(angle_from_horizontal(pose.pt(s, "shoulder"), pose.pt(s, "ear")) for s in ("left", "right")) / 2
+
+
 def both_sides(fn: AngleFn) -> AngleFn:
     """Average of left and right: both limbs move together."""
     return lambda pose, _s: (fn(pose, "left") + fn(pose, "right")) / 2
@@ -252,118 +274,158 @@ class Gentle(Exercise):
 
 
 def gentle(key: str, label: str, metric: str, fn: AngleFn, rest: float, target: float, *,
-           category: str, camera: str, joints: tuple[str, ...], how_to: str) -> Gentle:
+           category: str, camera: str, joints: tuple[str, ...], how_to: str,
+           stance: str = "seated") -> Gentle:
     """Front-camera exercises need both sides visible; side-camera ones use the nearer side."""
     return Gentle(
         key=key, label=label, metric=metric, rest=rest, target=target,
         rest_is_high=rest > target, bilateral=camera == "front", joints=joints,
-        camera=camera, category=category, how_to=how_to, angle_fn=fn,
+        camera=camera, category=category, how_to=how_to, stance=stance, angle_fn=fn,
     )
 
 
-NECK, SHOULDERS, UPPER_BACK, ARMS_WRISTS = "Neck", "Shoulders", "Upper back & posture", "Arms & wrists"
-LOWER_BACK, HIPS, LEGS_CIRC = "Lower back & core", "Hips & glutes", "Legs & circulation"
-AREAS: tuple[str, ...] = (NECK, SHOULDERS, UPPER_BACK, ARMS_WRISTS, LOWER_BACK, HIPS, LEGS_CIRC)
+# Pain areas, in the order the settings page lists them. Eyes is opt-in: the
+# weekly featured area rotates over the others only.
+NECK, ROUNDED, UPPER_BACK, ROTATOR = "Neck tension", "Rounded shoulders", "Upper back", "Shoulder & rotator cuff"
+LOWER_BACK, WRIST_HAND, KNEES, EYES = "Lower back", "Wrist & hand", "Knees", "Eyes"
+AREAS: tuple[str, ...] = (NECK, ROUNDED, UPPER_BACK, ROTATOR, LOWER_BACK, WRIST_HAND, KNEES, EYES)
 ARMS = ("shoulder", "elbow", "wrist")
 LEGS = ("hip", "knee", "ankle")
+HAND = ("elbow", "wrist", "index")
+TORSO = ("shoulder", "hip")
 
-# Thresholds are wide on purpose: rest and target sit well inside a comfortable
-# range of motion, so a relaxed rep counts.
+# Five per area. Thresholds are wide on purpose: rest and target sit well
+# inside a comfortable range of motion, so a relaxed rep counts.
 OFFICE_EXERCISES: tuple[Gentle, ...] = (
-    # Neck: a laptop camera that sees your head and shoulders is enough.
+    # Neck tension: stiff neck and headaches from looking down or pushing the head towards the screen.
     gentle("neck_tilt", "Neck side tilt", "Head tilt", head_tilt, 8, 18,
            category=NECK, camera="front", joints=("ear", "shoulder"),
            how_to="Ear towards shoulder, back to centre, then the other side. Each side is a rep."),
     gentle("head_turn", "Look over your shoulder", "Head turn", head_turn, 15, 35,
            category=NECK, camera="front", joints=("nose", "shoulder"),
            how_to="Turn your head slowly to one side, back to centre, then the other side."),
-    # Seated upper body, facing the camera.
-    gentle("overhead_reach", "Overhead reach", "Arm height", both_sides(arm_elevation), 60, 135,
-           category=SHOULDERS, camera="front", joints=ARMS,
-           how_to="Reach both arms up towards the ceiling, then lower them."),
-    gentle("alt_reach", "Alternating sky reach", "Arm height", either_side(arm_elevation, max), 60, 135,
-           category=SHOULDERS, camera="front", joints=ARMS,
-           how_to="Reach one arm up, lower it fully, then the other arm."),
-    gentle("t_raise", "T-raise", "Arm height", both_sides(arm_elevation), 45, 75,
-           category=SHOULDERS, camera="front", joints=ARMS,
-           how_to="Lift both arms out to the sides to shoulder height, then lower them."),
+    gentle("chin_to_chest", "Chin to chest", "Chin drop", head_drop, 25, 40,
+           category=NECK, camera="front", joints=("nose", "ear", "shoulder"),
+           how_to="Sit tall, slowly lower your chin towards your chest, then lift your head back up."),
+    gentle("shoulder_shrug", "Shoulder shrugs", "Ear height", ear_height, 46, 39,
+           category=NECK, camera="front", joints=("ear", "shoulder"),
+           how_to="Lift both shoulders up towards your ears, hold for a moment, then let them drop."),
+    gentle("chin_tuck", "Chin tuck", "Head forward", head_forward, 16, 8,
+           category=NECK, camera="side", joints=("ear", "shoulder"),
+           how_to="Sit tall, let your head glide forward, then pull your chin straight back into a double chin."),
+    # Rounded shoulders: open the chest and pull the shoulders back.
     gentle("cross_swing", "Arm open & cross", "Arm opening", both_sides(arm_across), 140, 75,
-           category=UPPER_BACK, camera="front", joints=ARMS,
+           category=ROUNDED, camera="front", joints=ARMS,
            how_to="Open your arms wide, then hug them across your chest."),
-    gentle("triceps_reach", "Overhead triceps reach", "Elbow angle", both_sides(elbow_angle), 90, 145,
-           category=ARMS_WRISTS, camera="front", joints=ARMS,
-           how_to="Hands behind your head, straighten your arms up, then bend back down."),
-    gentle("air_curl", "Air curls", "Elbow angle", both_sides(elbow_angle), 140, 70,
-           category=ARMS_WRISTS, camera="front", joints=ARMS,
-           how_to="Arms by your sides, curl both hands up to your shoulders, then lower."),
-    gentle("seated_side_bend", "Seated side bend", "Shoulder tilt", shoulder_tilt, 7, 14,
-           category=LOWER_BACK, camera="front", joints=("shoulder",),
-           how_to="Sit tall, lean to one side, back to centre, then the other side."),
-    gentle("wrist_flex", "Wrist flex & extend", "Wrist angle", wrist_angle, 160, 135,
-           category=ARMS_WRISTS, camera="side", joints=("elbow", "wrist", "index"),
-           how_to="Arm out in front, bend the hand up or down, then straighten it."),
+    gentle("wy_raise", "W to Y raise", "Elbow angle", both_sides(elbow_angle), 110, 150,
+           category=ROUNDED, camera="front", joints=ARMS,
+           how_to="Arms in a W with your shoulder blades squeezed, slide them up into a Y, then back to the W."),
+    gentle("shoulder_roll", "Backward shoulder rolls", "Ear height", ear_height, 46, 39,
+           category=ROUNDED, camera="front", joints=("ear", "shoulder"),
+           how_to="Roll both shoulders up towards your ears, back, and down. Each roll is a rep."),
+    gentle("thoracic_extension", "Chair-back extension", "Torso lean", torso_lean, 10, 20,
+           category=ROUNDED, camera="side", joints=TORSO,
+           how_to="Hands behind your head, gently arch your upper back over the top of your chair, then sit tall."),
+    gentle("clasp_opener", "Clasped-hands chest opener", "Arm lift", arm_elevation, 18, 32,
+           category=ROUNDED, camera="side", joints=ARMS, stance="standing",
+           how_to="Clasp your hands behind your back, squeeze your shoulder blades, lift your hands away, then lower."),
+    # Upper back / rhomboids: a burning ache between the shoulder blades.
     gentle("seated_row", "Seated rows", "Elbow angle", elbow_angle, 150, 100,
            category=UPPER_BACK, camera="side", joints=ARMS,
            how_to="Arms straight in front, pull the elbows back and squeeze the shoulder blades."),
+    gentle("t_raise", "T-raise", "Arm height", both_sides(arm_elevation), 45, 75,
+           category=UPPER_BACK, camera="front", joints=ARMS,
+           how_to="Lift both arms out to the sides to shoulder height, squeeze your shoulder blades, then lower."),
     gentle("desk_punch", "Desk punches", "Elbow angle", elbow_angle, 90, 150,
            category=UPPER_BACK, camera="side", joints=ARMS,
            how_to="Fists by your chest, punch straight forward, then pull back."),
-    # Seated legs & core, side-on to the camera.
-    gentle("seated_knee_ext", "Seated leg extension", "Knee angle", either_side(knee_angle, max), 110, 150,
-           category=LEGS_CIRC, camera="side", joints=LEGS,
-           how_to="Sit tall, straighten one leg out in front, lower it, then switch."),
-    gentle("seated_knee_lift", "Seated knee lift", "Hip angle", hip_angle, 85, 70,
-           category=LEGS_CIRC, camera="side", joints=("shoulder", "hip", "knee"),
-           how_to="Sit tall and lift one knee a few inches off the chair, then lower it."),
-    gentle("seated_heel_raise", "Seated heel raise", "Heel lift", heel_lift, 15, 25,
-           category=LEGS_CIRC, camera="side", joints=("ankle", "heel", "toe"),
-           how_to="Feet flat, push up onto the balls of your feet, then lower the heels."),
-    gentle("seated_lean_back", "Seated lean-back", "Torso lean", torso_lean, 12, 25,
-           category=LOWER_BACK, camera="side", joints=("shoulder", "hip"),
-           how_to="Sit tall at the front of the chair, lean back a little with a tight core, return."),
-    # Standing break, next to the desk.
-    gentle("sit_to_stand", "Sit to stand", "Knee angle", knee_angle, 155, 110,
-           category=HIPS, camera="side", joints=LEGS,
-           how_to="Stand up from your chair and sit back down without using your hands."),
-    gentle("mini_squat", "Mini squat", "Knee angle", knee_angle, 160, 135,
-           category=HIPS, camera="side", joints=LEGS,
-           how_to="Hold the desk if you like and bend the knees a little, then stand tall."),
-    gentle("desk_pushup", "Desk push-up", "Elbow angle", elbow_angle, 150, 110,
-           category=UPPER_BACK, camera="side", joints=ARMS,
-           how_to="Hands on the desk edge, lower your chest towards it, then push away."),
-    gentle("chair_dip", "Chair dip", "Elbow angle", elbow_angle, 150, 110,
-           category=ARMS_WRISTS, camera="side", joints=ARMS,
-           how_to="Use a sturdy chair without wheels. Hands on the seat, bend the elbows, push up."),
-    gentle("march", "March in place", "Hip angle", either_side(hip_angle, min), 150, 120,
-           category=LEGS_CIRC, camera="side", joints=("shoulder", "hip", "knee"),
-           how_to="Lift one knee, put it down, then the other knee. Each lift is a rep."),
-    gentle("hamstring_curl", "Standing hamstring curl", "Knee angle", either_side(knee_angle, min), 155, 110,
-           category=LEGS_CIRC, camera="side", joints=LEGS,
-           how_to="Hold the desk, bring one heel towards your seat, lower it, then switch legs."),
-    gentle("side_leg_raise", "Side leg raise", "Leg out", either_side(leg_out, max), 10, 25,
-           category=HIPS, camera="front", joints=("hip", "ankle"),
-           how_to="Hold the desk, lift one leg out to the side, lower it, then switch."),
+    gentle("rhomboid_stretch", "Upper back stretch", "Torso lean", torso_lean, 10, 20,
+           category=UPPER_BACK, camera="side", joints=TORSO,
+           how_to="Clasp your hands in front, push them forward and round your upper back, then sit tall."),
+    gentle("desk_row", "One-arm desk row", "Elbow angle", elbow_angle, 150, 100,
+           category=UPPER_BACK, camera="side", joints=ARMS, stance="standing",
+           how_to="Lean on the desk with your far hand, pull the other elbow back to your ribs, then lower it."),
+    # Shoulder / rotator cuff: pain or clicking when lifting or rotating the arm.
+    gentle("scaption", "Scaption raise", "Arm height", both_sides(arm_elevation), 45, 75,
+           category=ROTATOR, camera="front", joints=ARMS,
+           how_to="Thumbs up, raise both straight arms slightly forward of your sides to shoulder height, then lower."),
+    gentle("front_raise", "Front arm raise", "Arm height", arm_elevation, 40, 75,
+           category=ROTATOR, camera="side", joints=ARMS,
+           how_to="Lift a straight arm forward to shoulder height, then lower it."),
+    gentle("overhead_reach", "Overhead reach", "Arm height", both_sides(arm_elevation), 60, 135,
+           category=ROTATOR, camera="front", joints=ARMS,
+           how_to="Reach both arms up towards the ceiling, then lower them."),
+    gentle("external_rotation", "Elbows-in outward rotation", "Arm opening", both_sides(arm_across), 105, 120,
+           category=ROTATOR, camera="front", joints=ARMS,
+           how_to="Elbows tucked at your sides and bent, rotate both hands out wide, then back in front of you."),
+    gentle("cross_body_stretch", "Cross-body shoulder stretch", "Arm across", either_side(arm_across, min), 70, 35,
+           category=ROTATOR, camera="front", joints=ARMS,
+           how_to="Bring one arm across your chest, hug it in with the other hand, release, then switch arms."),
+    # Lower back: stiffness at the base of the spine after long sitting.
+    gentle("seated_side_bend", "Seated side bend", "Shoulder tilt", shoulder_tilt, 7, 14,
+           category=LOWER_BACK, camera="front", joints=("shoulder",),
+           how_to="Sit tall, lean to one side, back to centre, then the other side."),
+    gentle("knee_to_chest", "Seated knee hug", "Hip angle", either_side(hip_angle, min), 80, 60,
+           category=LOWER_BACK, camera="side", joints=("shoulder", "hip", "knee"),
+           how_to="Sit tall, hug one knee up towards your chest, lower it, then switch legs."),
     gentle("hip_hinge", "Hip hinge", "Torso lean", torso_lean, 20, 45,
-           category=LOWER_BACK, camera="side", joints=("shoulder", "hip"),
+           category=LOWER_BACK, camera="side", joints=TORSO, stance="standing",
            how_to="Soft knees, push your hips back and tip your chest forward, then stand tall."),
     gentle("standing_side_bend", "Standing side bend", "Torso tilt", torso_side_tilt, 6, 15,
-           category=LOWER_BACK, camera="front", joints=("shoulder", "hip"),
+           category=LOWER_BACK, camera="front", joints=TORSO, stance="standing",
            how_to="Stand tall, slide one hand down your leg, back to centre, then the other side."),
-    gentle("calf_raise", "Calf raise", "Heel lift", heel_lift, 15, 25,
-           category=LEGS_CIRC, camera="side", joints=("ankle", "heel", "toe"),
-           how_to="Hold the desk, rise onto your toes, then lower the heels."),
-    gentle("leg_swing", "Front leg swing", "Hip angle", either_side(leg_line_angle, min), 162, 145,
-           category=HIPS, camera="side", joints=("shoulder", "hip", "ankle"),
-           how_to="Hold the desk, swing one straight leg forward and back, then switch legs."),
-    gentle("reverse_lunge", "Reverse lunge", "Knee angle", either_side(knee_angle, min), 155, 115,
-           category=HIPS, camera="side", joints=LEGS,
-           how_to="Step one foot back and bend both knees a little, step back in, then switch."),
-    gentle("step_jack", "Step jacks", "Arm height", both_sides(arm_elevation), 50, 120,
-           category=LEGS_CIRC, camera="front", joints=ARMS,
-           how_to="Step one foot out as both arms swing up, step back in as they come down."),
-    gentle("front_raise", "Front arm raise", "Arm height", arm_elevation, 40, 75,
-           category=SHOULDERS, camera="side", joints=ARMS,
-           how_to="Lift a straight arm forward to shoulder height, then lower it."),
+    gentle("back_extension", "Standing back extension", "Torso lean", torso_lean, 6, 14,
+           category=LOWER_BACK, camera="side", joints=TORSO, stance="standing",
+           how_to="Stand tall with your hands on your lower back, gently lean back, then return."),
+    # Wrist & hand: typing and mouse strain, tingling or numbness in the fingers.
+    gentle("wrist_flex", "Wrist flex & extend", "Wrist angle", wrist_angle, 160, 135,
+           category=WRIST_HAND, camera="side", joints=HAND,
+           how_to="Arm out in front, bend the hand up or down, then straighten it."),
+    gentle("extensor_stretch", "Wrist extensor stretch", "Wrist angle", wrist_angle, 160, 130,
+           category=WRIST_HAND, camera="side", joints=HAND,
+           how_to="Arm straight out, palm down. Gently bend the hand down with your other hand, then release."),
+    gentle("flexor_stretch", "Wrist flexor stretch", "Wrist angle", wrist_angle, 160, 130,
+           category=WRIST_HAND, camera="side", joints=HAND,
+           how_to="Arm straight out, palm up. Gently pull your fingers back with your other hand, then release."),
+    gentle("prayer_stretch", "Prayer stretch", "Wrist angle", both_sides(wrist_angle), 145, 115,
+           category=WRIST_HAND, camera="front", joints=HAND,
+           how_to="Palms together in front of your chest, lower your hands until the wrists stretch, then lift them."),
+    gentle("nerve_glide", "Median nerve glide", "Elbow angle", both_sides(elbow_angle), 100, 150,
+           category=WRIST_HAND, camera="front", joints=ARMS,
+           how_to="Hands by your shoulders, palms up. Straighten both arms out to the sides, palms out, then bend back."),
+    # Knees: stiff or aching knees from sitting with the legs bent for hours.
+    gentle("seated_knee_ext", "Seated leg extension", "Knee angle", either_side(knee_angle, max), 110, 150,
+           category=KNEES, camera="side", joints=LEGS,
+           how_to="Sit tall, straighten one leg out in front, lower it, then switch."),
+    gentle("heel_slide", "Seated heel slide", "Knee angle", either_side(knee_angle, min), 85, 65,
+           category=KNEES, camera="side", joints=LEGS,
+           how_to="Feet flat, slide one foot back under your chair to bend the knee, slide it forward, then switch."),
+    gentle("sit_to_stand", "Sit to stand", "Knee angle", knee_angle, 155, 110,
+           category=KNEES, camera="side", joints=LEGS, stance="standing",
+           how_to="Stand up from your chair and sit back down without using your hands."),
+    gentle("mini_squat", "Mini squat", "Knee angle", knee_angle, 160, 135,
+           category=KNEES, camera="side", joints=LEGS, stance="standing",
+           how_to="Hold the desk if you like and bend the knees a little, then stand tall."),
+    gentle("hamstring_curl", "Standing hamstring curl", "Knee angle", either_side(knee_angle, min), 155, 110,
+           category=KNEES, camera="side", joints=LEGS, stance="standing",
+           how_to="Hold the desk, bring one heel towards your seat, lower it, then switch legs."),
+    # Eyes: the camera can't see where you look, so each move counts the hand
+    # or head movement that goes with it.
+    gentle("palming", "Palming", "Hand height", both_sides(arm_elevation), 60, 120,
+           category=EYES, camera="front", joints=ARMS,
+           how_to="Rub your palms warm, cup them over your closed eyes for a slow breath, then lower your hands."),
+    gentle("temple_massage", "Temple massage", "Hand height", both_sides(arm_elevation), 60, 120,
+           category=EYES, camera="front", joints=ARMS,
+           how_to="Close your eyes, rub small slow circles on your temples with your fingertips, then lower your hands."),
+    gentle("look_far", "Look into the distance", "Head turn", head_turn, 15, 35,
+           category=EYES, camera="front", joints=("nose", "shoulder"),
+           how_to="Turn to something far away, like a window, focus on it for a slow breath, then turn back."),
+    gentle("near_far_focus", "Near-far focus", "Elbow angle", elbow_angle, 145, 90,
+           category=EYES, camera="side", joints=ARMS,
+           how_to="Thumb up at arm's length, keep it sharp as you bring it slowly to your nose, then push it back out."),
+    gentle("eye_track_vertical", "Thumb tracking", "Arm height", arm_elevation, 50, 110,
+           category=EYES, camera="side", joints=ARMS,
+           how_to="Head still, follow your thumb with your eyes as you raise a straight arm up high, then lower it."),
 )
 
 EXERCISES: dict[str, Exercise] = {

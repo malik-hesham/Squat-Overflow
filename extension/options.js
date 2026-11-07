@@ -19,13 +19,23 @@ let lang = "en";
 let session = null;
 let skipped = false;
 
-function chip(container, value, label, checked) {
+function chip(container, value, label, checked, hint = "") {
   const el = document.createElement("label");
   const input = document.createElement("input");
   input.type = "checkbox";
   input.value = value;
   input.checked = checked;
-  el.append(input, ` ${label}`);
+  if (hint) {
+    const text = document.createElement("span");
+    const name = document.createElement("strong");
+    const small = document.createElement("small");
+    name.textContent = label;
+    small.textContent = hint;
+    text.append(name, small);
+    el.append(input, text);
+  } else {
+    el.append(input, ` ${label}`);
+  }
   container.append(el);
 }
 
@@ -195,7 +205,7 @@ async function init() {
 function renderChips(areas, workdays, weekStart) {
   $("areas").replaceChildren();
   $("workdays").replaceChildren();
-  AREAS.forEach((a) => chip($("areas"), a, areaName(lang, a), areas.includes(a)));
+  AREAS.forEach((a) => chip($("areas"), a, areaName(lang, a), areas.includes(a), t(lang, `areaHint.${a}`)));
   weekOrder(weekStart).forEach((d) => chip($("workdays"), d, t(lang, `day.${d}`), workdays.includes(d)));
 }
 

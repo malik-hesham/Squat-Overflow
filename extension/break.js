@@ -1,4 +1,4 @@
-import { getSettings, saveSettings, getSchedule, getCatalog, getProfile, getActivity, readLog } from "./lib/store.js";
+import { getSettings, saveSettings, getSchedule, getCatalog, getProfile, getActivity, readLog, getMemeTurns, setMemeTurns } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
@@ -9,6 +9,7 @@ import { backfillActivity } from "./lib/activity.js";
 import { avatarFitness, fitnessCaption } from "./lib/fitness.js";
 import { initLang, t, exerciseText, areaName, levelName, issueText, nameText } from "./lib/i18n.js";
 import { Avatar } from "./avatar.js";
+import { createMemePlayer, repMarks } from "./lib/memes.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
@@ -20,7 +21,7 @@ const els = Object.fromEntries(
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
     "lastScore", "cue", "howto", "hint", "demoPane", "demoFrame", "swap", "summary", "confetti", "total", "lines", "levelUp",
-    "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "lookBtn", "lookName",
+    "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "memes", "lookBtn", "lookName",
     "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
 );
@@ -38,17 +39,40 @@ const state = {
   positionTimer: 0,
   startingTimer: 0,
   fitness: null,
+  sounds: null, // meme player, see lib/memes.js
+  meme: Promise.resolve(), // the clips queued now; voice cues wait for them
+  speech: Promise.resolve(), // voice cues waiting their turn
+  repMarks: [], // total-rep counts where the rep clips play
+  repMemes: 0, // rep clips played so far
 };
 
 const send = (msg) => chrome.runtime.sendMessage(msg);
 
 function speak(text) {
   if (!state.settings?.voice || !text || !("speechSynthesis" in window)) return;
-  speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 1.1;
   if (state.lang === "ar") u.lang = "ar-SA";
-  speechSynthesis.speak(u);
+  const prev = state.speech;
+  state.speech = (async () => {
+    await prev; // keep cues in the order they were asked for
+    await memesDone(); // and never talk over a meme clip
+    if (!state.settings.voice) return; // switched off while waiting
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  })();
+}
+
+// Resolves once no meme clip is playing or queued, counting clips queued while waiting.
+async function memesDone() {
+  let clips;
+  do await (clips = state.meme);
+  while (clips !== state.meme);
+}
+
+// kind: a MEMES group in lib/memes.js.
+function meme(kind) {
+  if (state.settings?.memes && state.sounds) state.meme = state.sounds.play(kind);
 }
 
 function announce(i) {
@@ -149,6 +173,11 @@ async function onVoiceChange() {
   if (!els.voice.checked && "speechSynthesis" in window) speechSynthesis.cancel();
   else announce(state.i);
   await saveSettings({ voice: els.voice.checked });
+}
+
+async function onMemesChange() {
+  state.settings.memes = els.memes.checked;
+  await saveSettings({ memes: els.memes.checked });
 }
 
 async function closeWindow() {
@@ -267,6 +296,11 @@ function onFrame(msg) {
   const p = state.progress[state.i];
   const was = p.reps;
   p.reps = Math.min((p.base ?? 0) + msg.summary.reps, move.target);
+  // Rep clips are spread over the whole break; on the last rep, the Done clip queues after it.
+  if (state.progress.reduce((n, q) => n + q.reps, 0) >= (state.repMarks[state.repMemes] ?? Infinity)) {
+    state.repMemes++;
+    meme("reps");
+  }
   if (msg.rep_event) {
     const { score, partial } = msg.rep_event;
     p.scores.push(score);
@@ -380,8 +414,10 @@ async function finish() {
   setStarting(false);
   state.client?.stop();
   els.done.disabled = els.snooze.disabled = els.skip.disabled = true;
+  const result = currentResult();
+  meme(result.scored ? "done" : "unscored");
   speak(t(state.lang, "sayDone"));
-  const res = await send({ type: "break-action", action: "done", result: currentResult(), lastKey: state.moves.at(-1)?.key ?? null });
+  const res = await send({ type: "break-action", action: "done", result, lastKey: state.moves.at(-1)?.key ?? null });
   if (res?.ok) showSummary(res);
   else closeWindow();
 }
@@ -417,7 +453,9 @@ function swap(ev) {
   announce(state.i);
 }
 
-async function startRoutine() {
+// `withMeme`: the user asked for this break ("Break now"), so play a clip.
+async function startRoutine(withMeme = false) {
+  if (withMeme) meme("start");
   els.warning.hidden = true;
   els.routine.hidden = false;
   els.actions.hidden = false;
@@ -451,8 +489,9 @@ async function startRoutine() {
 async function init() {
   initTheme();
   state.lang = await initLang();
-  const [settings, schedule] = await Promise.all([getSettings(), getSchedule()]);
+  const [settings, schedule, memeTurns] = await Promise.all([getSettings(), getSchedule(), getMemeTurns()]);
   state.settings = settings;
+  state.sounds = createMemePlayer(memeTurns, setMemeTurns);
   state.fitness = await loadFitness(settings.workdays);
   let catalog = await fetchCatalog(settings.serverUrl);
   if (!catalog.length) catalog = await getCatalog();
@@ -468,6 +507,7 @@ async function init() {
     n: schedule.breakCount,
   });
   state.progress = state.moves.map(() => ({ reps: 0, scores: [] }));
+  state.repMarks = repMarks(state.moves.reduce((n, m) => n + m.target, 0));
   els.target.textContent = BREAK_REPS;
 
   els.done.addEventListener("click", finish);
@@ -477,6 +517,8 @@ async function init() {
   els.swap.addEventListener("click", swap);
   els.voice.checked = settings.voice;
   els.voice.addEventListener("change", onVoiceChange);
+  els.memes.checked = settings.memes;
+  els.memes.addEventListener("change", onMemesChange);
   els.lookBtn.addEventListener("click", () => toggleLooks());
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && !els.lookGrid.hidden) toggleLooks(false);
@@ -493,7 +535,7 @@ async function init() {
     showWarningScreen(schedule, settings.intervalMin);
     return;
   }
-  await startRoutine();
+  await startRoutine(manual);
 }
 
 function showWarningScreen(schedule, intervalMin) {
@@ -506,7 +548,7 @@ function showWarningScreen(schedule, intervalMin) {
   els.area.hidden = true;
   els.step.textContent = t(state.lang, "skippedInRow", { n: schedule.skipsInRow });
   document.title = text;
-  els.warnStart.addEventListener("click", startRoutine);
+  els.warnStart.addEventListener("click", () => startRoutine(true));
   els.warnSnooze.addEventListener("click", () => leave("snooze"));
   els.warnPause.addEventListener("click", () => leave("pause"));
 }

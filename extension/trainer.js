@@ -24,28 +24,28 @@ const PRIVACY_DOWNSCALE = 24; // blur strength: preview is shrunk by this factor
 const MASK_MAX_AGE_MS = 500; // older person masks are distrusted; the whole frame is blurred instead
 
 // Used only on the very first run with the server offline. The server's catalog
-// (the 30 office exercises) is prefetched on page load and cached under CATALOG_KEY.
+// (the 40 office exercises, five per pain area) is prefetched on page load and cached under CATALOG_KEY.
 const FALLBACK_EXERCISES = [
   {
     key: "neck_tilt",
     label: "Neck side tilt",
     metric: "Head tilt",
     camera: "front",
-    category: "Neck",
+    category: "Neck tension",
   },
   {
     key: "head_turn",
     label: "Look over your shoulder",
     metric: "Head turn",
     camera: "front",
-    category: "Neck",
+    category: "Neck tension",
   },
   {
     key: "overhead_reach",
     label: "Overhead reach",
     metric: "Arm height",
     camera: "front",
-    category: "Shoulders",
+    category: "Shoulder & rotator cuff",
   },
 ];
 const CATALOG_KEY = "exerciseCatalog";
@@ -1196,14 +1196,14 @@ function switchExercise(key) {
 // faces you), 6 reps each. Picks rotate with the number of breaks taken.
 // ---------------------------------------------------------------------------
 const BREAK_REPS = 6;
-const BREAK_NECK = ["neck_tilt", "head_turn"];
+const BREAK_NECK = ["neck_tilt", "head_turn", "chin_to_chest", "shoulder_shrug"];
 const BREAK_UPPER = [
   "overhead_reach",
   "t_raise",
   "cross_swing",
-  "air_curl",
-  "alt_reach",
-  "triceps_reach",
+  "wy_raise",
+  "shoulder_roll",
+  "external_rotation",
   "seated_side_bend",
 ];
 const LOG_KEY = "breakLog";

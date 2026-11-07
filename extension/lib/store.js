@@ -1,3 +1,5 @@
+import { currentAreas } from "./routine.js";
+
 export const SETTINGS_DEFAULTS = {
   intervalMin: 60,
   areas: [],
@@ -7,7 +9,8 @@ export const SETTINGS_DEFAULTS = {
   autoPause: true,
   privacy: true,
   privacyStyle: "blur",
-  voice: false,
+  voice: true,
+  memes: true,
   mode: "personal",
   name: "",
   serverUrl: "ws://127.0.0.1:8765/ws",
@@ -23,11 +26,13 @@ const SCHEDULE_KEY = "schedule";
 const LOG_KEY = "breakLog";
 const LOG_MAX = 500;
 const CATALOG_KEY = "exerciseCatalog";
+const MEME_TURNS_KEY = "memeTurns";
 
 const local = chrome.storage.local;
 
 export async function getSettings() {
-  return { ...SETTINGS_DEFAULTS, ...(await local.get(Object.keys(SETTINGS_DEFAULTS))) };
+  const settings = { ...SETTINGS_DEFAULTS, ...(await local.get(Object.keys(SETTINGS_DEFAULTS))) };
+  return { ...settings, areas: currentAreas(settings.areas) };
 }
 
 export function saveSettings(patch) {
@@ -95,4 +100,14 @@ export async function getActivity() {
 
 export function setActivity(activity) {
   return local.set({ activity });
+}
+
+// Where each meme sound group left off ({ group: next clip index }), so breaks take turns.
+export async function getMemeTurns() {
+  const { [MEME_TURNS_KEY]: turns } = await local.get(MEME_TURNS_KEY);
+  return turns && typeof turns === "object" ? turns : {};
+}
+
+export function setMemeTurns(turns) {
+  return local.set({ [MEME_TURNS_KEY]: turns });
 }

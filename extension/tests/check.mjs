@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js";
-import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "../lib/routine.js";
+import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove, currentAreas } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
   nextActiveSlot, decideFire, isActive, scheduleSettingsChanged, weekOrder,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
-import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
+import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction, withPeriods } from "../lib/challenges.js";
 import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
 import { activityLevel, recordActivity, backfillActivity, heatmapWeeks, activityTotals } from "../lib/activity.js";
@@ -15,6 +15,8 @@ import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, lo
 import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
+import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
+import { readdirSync } from "node:fs";
 
 function check(name, fn) {
   try {
@@ -33,21 +35,28 @@ const fri = new Date(2026, 10, 6, 11).getTime();
 const mon = new Date(2026, 10, 9, 11).getTime();
 const WORKDAYS = [1, 2, 3, 4, 5];
 
+// Mirrors the server catalog (server/analysis/exercises.py): five exercises per pain area.
 const AREA_KEYS = {
-  Neck: ["neck_tilt", "head_turn"],
-  Shoulders: ["overhead_reach", "alt_reach", "t_raise", "front_raise"],
-  "Upper back & posture": ["seated_row", "cross_swing", "desk_punch", "desk_pushup"],
-  "Arms & wrists": ["wrist_flex", "air_curl", "triceps_reach", "chair_dip"],
-  "Lower back & core": ["seated_side_bend", "seated_lean_back", "standing_side_bend", "hip_hinge"],
-  "Hips & glutes": ["sit_to_stand", "mini_squat", "side_leg_raise", "reverse_lunge", "leg_swing"],
-  "Legs & circulation": ["seated_knee_ext", "seated_knee_lift", "seated_heel_raise", "calf_raise", "march", "hamstring_curl", "step_jack"],
+  "Neck tension": ["neck_tilt", "head_turn", "chin_to_chest", "shoulder_shrug", "chin_tuck"],
+  "Rounded shoulders": ["cross_swing", "wy_raise", "shoulder_roll", "thoracic_extension", "clasp_opener"],
+  "Upper back": ["seated_row", "t_raise", "desk_punch", "rhomboid_stretch", "desk_row"],
+  "Shoulder & rotator cuff": ["scaption", "front_raise", "overhead_reach", "external_rotation", "cross_body_stretch"],
+  "Lower back": ["seated_side_bend", "knee_to_chest", "hip_hinge", "standing_side_bend", "back_extension"],
+  "Wrist & hand": ["wrist_flex", "extensor_stretch", "flexor_stretch", "prayer_stretch", "nerve_glide"],
+  Knees: ["seated_knee_ext", "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl"],
+  Eyes: ["palming", "temple_massage", "look_far", "near_far_focus", "eye_track_vertical"],
 };
+const SIDE_ON = new Set(["chin_tuck", "thoracic_extension", "clasp_opener", "seated_row", "desk_punch", "rhomboid_stretch", "desk_row",
+  "front_raise", "knee_to_chest", "hip_hinge", "back_extension", "wrist_flex", "extensor_stretch", "flexor_stretch", "seated_knee_ext",
+  "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl", "near_far_focus", "eye_track_vertical"]);
+const STANDING = new Set(["clasp_opener", "desk_row", "hip_hinge", "standing_side_bend", "back_extension", "sit_to_stand", "mini_squat", "hamstring_curl"]);
 const CATALOG = Object.entries(AREA_KEYS).flatMap(([category, keys]) =>
   keys.map((key) => ({
     key,
     label: key,
     category,
-    camera: ["Hips & glutes", "Legs & circulation"].includes(category) ? "side" : "front",
+    camera: SIDE_ON.has(key) ? "side" : "front",
+    stance: STANDING.has(key) ? "standing" : "seated",
     how_to: `do ${key}`,
     demo: null,
   })),
@@ -71,7 +80,7 @@ const full = () => ({
   countedReps: 18,
   targetReps: 18,
   scores: Array(18).fill(100),
-  moves: [{ key: "neck_tilt", area: "Neck", completed: true }],
+  moves: [{ key: "neck_tilt", area: "Neck tension", completed: true }],
 });
 
 check("levels", () => {
@@ -142,47 +151,75 @@ check("award: new ISO week resets weekXp", () => {
 });
 
 check("routine: featured slot first, no dupes, rest from user areas", () => {
-  const moves = buildRoutine(CATALOG, { areas: ["Neck", "Shoulders"], featured: "Hips & glutes", lastKey: null, n: 0 });
+  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], featured: "Knees", lastKey: null, n: 0 });
   assert.equal(moves.length, 3);
-  assert.equal(moves[0].area, "Hips & glutes");
+  assert.equal(moves[0].area, "Knees");
   assert.equal(new Set(moves.map((m) => m.key)).size, 3);
-  assert.ok(moves.slice(1).every((m) => ["Neck", "Shoulders"].includes(m.area)));
+  assert.ok(moves.slice(1).every((m) => ["Neck tension", "Shoulder & rotator cuff"].includes(m.area)));
   assert.ok(moves.every((m) => m.target === BREAK_REPS && m.how_to && m.label));
 });
 
 check("routine: avoids lastKey in slot 1", () => {
-  const opts = { areas: ["Neck"], featured: "Neck", lastKey: null, n: 0 };
+  const opts = { areas: ["Neck tension"], featured: "Neck tension", lastKey: null, n: 0 };
   const first = buildRoutine(CATALOG, opts)[0].key;
   assert.notEqual(buildRoutine(CATALOG, { ...opts, lastKey: first })[0].key, first);
 });
 
 check("routine: all slots from user areas when featured is one of them", () => {
-  const moves = buildRoutine(CATALOG, { areas: ["Neck", "Shoulders"], featured: "Shoulders", lastKey: null, n: 1 });
+  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], featured: "Shoulder & rotator cuff", lastKey: null, n: 1 });
   assert.equal(moves.length, 3);
-  assert.ok(moves.every((m) => ["Neck", "Shoulders"].includes(m.area)));
+  assert.ok(moves.every((m) => ["Neck tension", "Shoulder & rotator cuff"].includes(m.area)));
 });
 
 check("swapMove returns same-area exercise not already in routine; null when area exhausted", () => {
-  const moves = buildRoutine(CATALOG, { areas: ["Neck", "Shoulders"], featured: "Shoulders", lastKey: null, n: 0 });
-  const i = moves.findIndex((m) => m.area === "Shoulders");
+  const moves = buildRoutine(CATALOG, { areas: ["Neck tension", "Shoulder & rotator cuff"], featured: "Shoulder & rotator cuff", lastKey: null, n: 0 });
+  const i = moves.findIndex((m) => m.area === "Shoulder & rotator cuff");
   const swapped = swapMove(CATALOG, moves, i);
-  assert.equal(swapped.area, "Shoulders");
+  assert.equal(swapped.area, "Shoulder & rotator cuff");
   assert.ok(!moves.some((m) => m.key === swapped.key));
-  const neck = buildRoutine(CATALOG, { areas: ["Neck"], featured: "Neck", lastKey: null, n: 0 });
+  const tiny = CATALOG.filter((e) => ["neck_tilt", "head_turn"].includes(e.key));
+  const neck = buildRoutine(tiny, { areas: ["Neck tension"], featured: "Neck tension", lastKey: null, n: 0 });
   assert.equal(neck.length, 2);
-  assert.equal(swapMove(CATALOG, neck, 0), null);
+  assert.equal(swapMove(tiny, neck, 0), null);
 });
 
 check("needsPositioning", () => {
-  const byKey = (k) => buildRoutine(CATALOG, { areas: [CATALOG.find((e) => e.key === k).category], featured: CATALOG.find((e) => e.key === k).category, lastKey: null, n: 0 })[0];
-  assert.equal(needsPositioning(byKey("sit_to_stand")), true);
+  const byKey = (k) => {
+    const only = CATALOG.filter((e) => e.key === k);
+    return buildRoutine(only, { areas: [only[0].category], featured: only[0].category, lastKey: null, n: 0 })[0];
+  };
+  assert.equal(needsPositioning(byKey("sit_to_stand")), true); // side-on
+  assert.equal(needsPositioning(byKey("standing_side_bend")), true); // front, but standing
   assert.equal(needsPositioning(byKey("neck_tilt")), false);
+  assert.equal(needsPositioning(byKey("palming")), false);
+  assert.equal(needsPositioning({ camera: "front", area: "Knees" }), false); // catalog cached before stance existed
 });
 
-check("featuredArea rotates weekly over AREAS", () => {
+check("featuredArea rotates weekly over every area except the opt-in Eyes", () => {
   assert.ok(AREAS.includes(featuredArea(mon)));
   assert.notEqual(featuredArea(mon), featuredArea(mon + 7 * DAY));
-  assert.equal(AREAS.length, 7);
+  assert.equal(AREAS.length, 8);
+  const featured = new Set(Array.from({ length: 52 }, (_, k) => featuredArea(mon + k * 7 * DAY)));
+  assert.deepEqual([...featured].sort(), AREAS.filter((a) => a !== "Eyes").sort());
+});
+
+check("every area has five catalog exercises", () => {
+  assert.deepEqual(Object.keys(AREA_KEYS), AREAS);
+  for (const a of AREAS) assert.equal(CATALOG.filter((e) => e.category === a).length, 5, a);
+});
+
+check("currentAreas maps saved pre-update area names onto the pain areas", () => {
+  assert.deepEqual(currentAreas(["Neck", "Arms & wrists"]), ["Neck tension", "Wrist & hand"]);
+  assert.deepEqual(currentAreas(["Upper back & posture"]), ["Rounded shoulders", "Upper back"]);
+  assert.deepEqual(currentAreas(["Hips & glutes", "Legs & circulation", "Knees"]), ["Lower back", "Knees"]);
+  assert.deepEqual(currentAreas(["Eyes", "Neck tension", "Gone"]), ["Neck tension", "Eyes"]);
+  assert.deepEqual(currentAreas(undefined), []);
+});
+
+check("this week's challenge on a pre-update area name moves to the featured area, keeping progress", () => {
+  const p = { ...blankProfile(), weekly: { week: isoWeek(mon), area: "Neck", count: 4, done: false } };
+  assert.deepEqual(withPeriods(p, mon).weekly, { week: isoWeek(mon), area: featuredArea(mon), count: 4, done: false });
+  assert.equal(p.weekly.area, "Neck");
 });
 
 const T0 = new Date(2026, 10, 9, 9).getTime();
@@ -306,24 +343,24 @@ check("dailyFor: stable, 2-5 distinct pool ids, varies across a week", () => {
 check("variety completes on the 3rd distinct area, only once", () => {
   const t = dayWith("variety");
   let p = blankProfile();
-  let r = updateChallenges(p, brk(["Neck", "Shoulders"]), 80, t);
+  let r = updateChallenges(p, brk(["Neck tension", "Shoulder & rotator cuff"]), 80, t);
   assert.ok(!ids(r).includes("variety"));
-  r = updateChallenges(r.profile, brk(["Neck", "Arms & wrists"]), 80, t + M);
+  r = updateChallenges(r.profile, brk(["Neck tension", "Wrist & hand"]), 80, t + M);
   assert.ok(ids(r).includes("variety"));
   assert.ok(r.newBadges.includes("daily:variety"));
-  r = updateChallenges(r.profile, brk(["Lower back & core"]), 80, t + 2 * M);
+  r = updateChallenges(r.profile, brk(["Lower back"]), 80, t + 2 * M);
   assert.ok(!ids(r).includes("variety"));
 });
 
 check("no_excuses resets after a skip", () => {
   const t = dayWith("no_excuses");
-  let r = updateChallenges(blankProfile(), brk(["Neck"]), 80, t);
-  r = updateChallenges(r.profile, brk(["Neck"]), 80, t + M);
+  let r = updateChallenges(blankProfile(), brk(["Neck tension"]), 80, t);
+  r = updateChallenges(r.profile, brk(["Neck tension"]), 80, t + M);
   let p = noteAction(r.profile, "skip", t + 2 * M);
-  r = updateChallenges(p, brk(["Neck"]), 80, t + 3 * M);
+  r = updateChallenges(p, brk(["Neck tension"]), 80, t + 3 * M);
   assert.ok(!ids(r).includes("no_excuses"));
-  r = updateChallenges(r.profile, brk(["Neck"]), 80, t + 4 * M);
-  r = updateChallenges(r.profile, brk(["Neck"]), 80, t + 5 * M);
+  r = updateChallenges(r.profile, brk(["Neck tension"]), 80, t + 4 * M);
+  r = updateChallenges(r.profile, brk(["Neck tension"]), 80, t + 5 * M);
   assert.ok(ids(r).includes("no_excuses"));
 });
 
@@ -331,25 +368,25 @@ check("early_mover before 10:00 only", () => {
   const t = dayWith("early_mover", 9);
   const at959 = new Date(t).setHours(9, 59);
   const at1000 = new Date(t).setHours(10, 0);
-  assert.ok(ids(updateChallenges(blankProfile(), brk(["Neck"]), 80, at959)).includes("early_mover"));
-  assert.ok(!ids(updateChallenges(blankProfile(), brk(["Neck"]), 80, at1000)).includes("early_mover"));
+  assert.ok(ids(updateChallenges(blankProfile(), brk(["Neck tension"]), 80, at959)).includes("early_mover"));
+  assert.ok(!ids(updateChallenges(blankProfile(), brk(["Neck tension"]), 80, at1000)).includes("early_mover"));
 });
 
 check("clean_form at 90 yes, 89 no", () => {
   const t = dayWith("clean_form");
-  assert.ok(ids(updateChallenges(blankProfile(), brk(["Neck"]), 90, t)).includes("clean_form"));
-  assert.ok(!ids(updateChallenges(blankProfile(), brk(["Neck"]), 89, t)).includes("clean_form"));
+  assert.ok(ids(updateChallenges(blankProfile(), brk(["Neck tension"]), 90, t)).includes("clean_form"));
+  assert.ok(!ids(updateChallenges(blankProfile(), brk(["Neck tension"]), 89, t)).includes("clean_form"));
 });
 
 check("weekly featured area completes at 10 moves with +100 and badge, resets next week", () => {
   const area = featuredArea(mon);
   let r = updateChallenges(blankProfile(), brk(Array(9).fill(area)), 80, mon);
   assert.equal(r.profile.weekly.count, 9);
-  r = updateChallenges(r.profile, brk([area, "Neck"]), 80, mon + M);
+  r = updateChallenges(r.profile, brk([area, "Neck tension"]), 80, mon + M);
   const weekly = r.completed.find((c) => c.id === "weekly");
   assert.equal(weekly.bonus, WEEKLY.bonus);
   assert.ok(r.newBadges.includes(`weekly:${area}`));
-  const next = updateChallenges(r.profile, brk(["Neck"], false), 80, mon + 7 * DAY);
+  const next = updateChallenges(r.profile, brk(["Neck tension"], false), 80, mon + 7 * DAY);
   assert.equal(next.profile.weekly.count, 0);
   assert.equal(next.profile.weekly.area, featuredArea(mon + 7 * DAY));
 });
@@ -574,8 +611,8 @@ check("swapMove cycles through every exercise in the area, skipping ones used el
     }
     return seen;
   };
-  assert.deepEqual(cycle([move("air_curl"), move("neck_tilt"), move("t_raise")], 0, 4), ["triceps_reach", "chair_dip", "wrist_flex", "air_curl"]);
-  assert.deepEqual(cycle([move("air_curl"), move("chair_dip"), move("t_raise")], 0, 3), ["triceps_reach", "wrist_flex", "air_curl"]);
+  assert.deepEqual(cycle([move("wrist_flex"), move("neck_tilt"), move("t_raise")], 0, 5), ["extensor_stretch", "flexor_stretch", "prayer_stretch", "nerve_glide", "wrist_flex"]);
+  assert.deepEqual(cycle([move("wrist_flex"), move("flexor_stretch"), move("t_raise")], 0, 4), ["extensor_stretch", "prayer_stretch", "nerve_glide", "wrist_flex"]);
 });
 
 const CAL_NOW = Date.UTC(2026, 10, 9, 10, 0);
@@ -745,6 +782,59 @@ check("i18n: t() translates, interpolates and falls back to English then the key
   assert.equal(t("xx", "done"), "Done");
   assert.equal(t("ar", "no.such.key"), "no.such.key");
 });
+check("memes: exactly the grouped clips are bundled, each in one group", () => {
+  const used = Object.values(MEMES).flat();
+  assert.equal(new Set(used).size, used.length, "a clip is in two groups");
+  const files = readdirSync(new URL("../sounds/memes/", import.meta.url)).sort();
+  assert.deepEqual(files, used.map(memeFile).map((f) => f.split("/").pop()).sort());
+  assert.equal(files.length, 24 + 25); // every #label from the meme video, every "Sound N" from the sfx one
+  assert.deepEqual(MEMES.start.slice(0, 2), ["meme-04", "meme-01"]);
+  assert.deepEqual(MEMES.start.slice(-25, -23), ["sfx-01", "sfx-02"]);
+  assert.equal(MEMES.start.at(-1), "sfx-25");
+  assert.equal(memeFile("meme-07"), "sounds/memes/meme-07.ogg");
+});
+check("memes: each group takes turns in order, wrapping round, starting over on bad saved turns", () => {
+  const order = (group, turn, n) => Array.from({ length: n }, () => {
+    const r = takeTurn(group, turn);
+    turn = r.next;
+    return r.clip;
+  });
+  const nums = (list) => list.map((c) => Number(c.split("-")[1]));
+  assert.deepEqual(nums(order(MEMES.unscored, 0, 9)), [7, 8, 10, 12, 14, 18, 24, 7, 8]);
+  assert.deepEqual(nums(order(MEMES.done, 1, 3)), [9, 5, 9]);
+  assert.deepEqual(order(MEMES.start, 12, 3), ["meme-23", "sfx-01", "sfx-02"]);
+  assert.deepEqual(order(MEMES.start, MEMES.start.length - 1, 2), ["sfx-25", "meme-04"]);
+  for (const bad of [undefined, -1, 1.5, "2"]) assert.equal(takeTurn(MEMES.done, bad).clip, "meme-05");
+  assert.equal(takeTurn(MEMES.done, 7).clip, "meme-09"); // a group that shrank since the turn was saved
+});
+check("memes: rep clips split the break's total reps evenly", () => {
+  assert.deepEqual(repMarks(18), [9, 18]);
+  assert.deepEqual(repMarks(12), [6, 12]);
+  assert.deepEqual(repMarks(15), [8, 15]);
+  assert.deepEqual(repMarks(18, 3), [6, 12, 18]);
+});
+pending.push(
+  (async () => {
+    const heard = [];
+    const saved = [];
+    const player = createMemePlayer({ done: 1, unscored: 5 }, (t) => saved.push(t), async (clip) => {
+      heard.push(`${clip}:start`);
+      await new Promise((r) => setTimeout(r, clip === "meme-16" ? 20 : 1));
+      heard.push(`${clip}:end`);
+    });
+    player.play("reps");
+    player.play("reps");
+    await player.play("done");
+    await player.play("unscored");
+    await player.play("unscored");
+    // One at a time, in the order asked; turns pick up where earlier breaks left off.
+    assert.deepEqual(heard, [
+      "meme-06:start", "meme-06:end", "meme-16:start", "meme-16:end", "meme-09:start", "meme-09:end",
+      "meme-18:start", "meme-18:end", "meme-24:start", "meme-24:end",
+    ]);
+    assert.deepEqual(saved.at(-1), { done: 0, unscored: 0, reps: 0 });
+  })(),
+);
 check("i18n: every English string has an Arabic translation", () => {
   const ar = new Set(translationKeys("ar"));
   const missing = translationKeys("en").filter((k) => !ar.has(k));
@@ -757,7 +847,7 @@ check("i18n: all exercises, areas, levels, daily challenges and office rep tips 
     assert.notEqual(exerciseText("ar", key, "how_to", "EN"), "EN", key);
     assert.equal(exerciseText("en", key, "label", "EN"), "EN");
   }
-  assert.equal(CATALOG.length, 30);
+  assert.equal(CATALOG.length, 40);
   for (const a of AREAS) {
     assert.notEqual(areaName("ar", a), a);
     assert.equal(areaName("en", a), a);
@@ -774,8 +864,10 @@ check("i18n: all exercises, areas, levels, daily challenges and office rep tips 
   for (const code of ["not_visible", "not_deep_enough", "too_fast"]) assert.notEqual(issueText("ar", code, "EN"), "EN");
   assert.equal(issueText("ar", "unknown_code", "Fallback"), "Fallback");
   assert.equal(issueText("en", "too_fast", "Slow down"), "Slow down");
-  assert.equal(badgeLabel("weekly:Neck"), "🏅 Neck week");
-  assert.equal(badgeLabel("weekly:Neck", "ar"), "🏅 أسبوع الرقبة");
+  assert.equal(badgeLabel("weekly:Neck tension"), "🏅 Neck tension week");
+  assert.equal(badgeLabel("weekly:Neck tension", "ar"), "🏅 أسبوع توتر الرقبة");
+  assert.equal(badgeLabel("weekly:Neck", "ar"), "🏅 أسبوع الرقبة"); // badge earned before the pain areas
+  for (const a of AREAS) assert.notEqual(t("ar", `areaHint.${a}`), t("en", `areaHint.${a}`), a);
 });
 check("i18n: resolveLang and localeFor", () => {
   assert.deepEqual(LANGS, ["auto", "en", "ar"]);
