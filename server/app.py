@@ -47,7 +47,7 @@ from pose_engine import MODEL_PATH, PoseEngine, decode_jpeg, encode_mask, ensure
 MAX_FRAME_BYTES = 2 * 1024 * 1024
 
 # Comma-separated list of exact origins, e.g. "chrome-extension://abcdef...".
-# Unset = accept any Chrome extension. Web pages are always refused, so a site
+# Unset = accept any Chrome or Firefox extension. Web pages are always refused, so a site
 # you visit can't stream frames to (or read results from) this local server.
 ALLOWED_ORIGINS = {o.strip() for o in os.environ.get("FORMCOACH_ALLOWED_ORIGINS", "").split(",") if o.strip()}
 
@@ -73,7 +73,7 @@ def origin_allowed(origin: str | None) -> bool:
         return True
     if ALLOWED_ORIGINS:
         return origin in ALLOWED_ORIGINS
-    return origin.startswith("chrome-extension://")
+    return origin.startswith(("chrome-extension://", "moz-extension://"))
 
 
 def exercise_catalog() -> list[dict]:

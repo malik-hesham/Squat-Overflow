@@ -127,3 +127,8 @@ def test_angle_mode_and_calibration_messages(client):
 
         ws.send_json({"type": "calibrate", "action": "explode"})
         assert ws.receive_json()["type"] == "error"
+
+
+def test_firefox_extension_origin_is_accepted(client):
+    with client.websocket_connect("/ws", headers={"origin": "moz-extension://2b7a1c9e-4f3d-4c55-9a51-3f0d6e8b1a22"}) as ws:
+        assert ws.receive_json()["type"] == "ready"
