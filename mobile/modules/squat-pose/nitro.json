@@ -1,0 +1,18 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["squatpose"],
+  "ios": {
+    "iosModuleName": "SquatPose"
+  },
+  "android": {
+    "androidNamespace": ["squatpose"],
+    "androidCxxLibName": "SquatPose"
+  },
+  "autolinking": {
+    "PoseDetector": {
+      "ios": { "language": "swift", "implementationClassName": "HybridPoseDetector" },
+      "android": { "language": "kotlin", "implementationClassName": "HybridPoseDetector" }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}
