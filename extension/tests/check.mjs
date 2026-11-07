@@ -6,6 +6,7 @@ import {
   nextActiveSlot, decideFire, isActive, scheduleSettingsChanged,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
+import { isSlackWebhook, slackPayload, notifySlack, escapeSlack } from "../lib/slack.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
 import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
@@ -796,3 +797,51 @@ Promise.all(pending).then(
     assert.equal(Avatar.supported(), false);
   });
 }
+
+// ---- Slack break notifications
+const HOOK = "https://hooks.slack.com/services/T000/B000/XXXX";
+check("slack: only real Slack webhook URLs are accepted", () => {
+  assert.equal(isSlackWebhook(HOOK), true);
+  for (const bad of ["", undefined, null, "https://hooks.slack.com/services/", "https://evil.example/services/T/B/X", "http://hooks.slack.com/services/T/B/X"]) {
+    assert.equal(isSlackWebhook(bad), false, String(bad));
+  }
+});
+check("slack: names are escaped so they cannot ping a channel", () => {
+  assert.equal(escapeSlack("<!channel> & <@U1>"), "&lt;!channel&gt; &amp; &lt;@U1&gt;");
+  assert.match(slackPayload({ name: "<!channel>", manual: false }).text, /\*&lt;!channel&gt;\*/);
+});
+check("slack: message wording and the start button", () => {
+  assert.equal(slackPayload({ name: "Sara", manual: false }).text, "🏋️ *Sara*, time to move!");
+  assert.equal(slackPayload({ name: "Sara", manual: true }).text, "🏋️ *Sara* started a break.");
+  assert.equal(slackPayload({ name: " ", manual: false }).text, "🏋️ Time to move!");
+  const url = "https://example.com/start/";
+  const withUrl = slackPayload({ name: "Sara", startUrl: url });
+  assert.equal(withUrl.blocks[1].elements[0].url, url);
+  for (const bad of ["", undefined, "http://example.com/start/", "javascript:alert(1)", "nope"]) {
+    assert.equal(slackPayload({ name: "Sara", startUrl: bad }).blocks.length, 1, String(bad));
+  }
+});
+Promise.all([
+  (async () => {
+    let calls = 0;
+    const ok = async (url, init) => { calls++; ok.last = { url, body: JSON.parse(init.body), method: init.method }; return { ok: true }; };
+    assert.equal(await notifySlack({ webhookUrl: "", name: "S" }, ok), false);
+    assert.equal(await notifySlack({ webhookUrl: "https://evil.example/x", name: "S" }, ok), false);
+    assert.equal(calls, 0, "nothing is sent without a valid webhook");
+    assert.equal(await notifySlack({ webhookUrl: HOOK, startUrl: "https://example.com/start/", name: "Sara", manual: false }, ok), true);
+    assert.equal(calls, 1);
+    assert.equal(ok.last.url, HOOK);
+    assert.equal(ok.last.method, "POST");
+    assert.equal(ok.last.body.blocks[1].elements[0].url, "https://example.com/start/");
+    assert.equal(await notifySlack({ webhookUrl: HOOK, name: "S" }, async () => ({ ok: false, status: 404 })), false);
+    assert.equal(await notifySlack({ webhookUrl: HOOK, name: "S" }, async () => { throw new Error("offline"); }), false);
+    const hang = (url, init) => new Promise((_, rej) => init.signal.addEventListener("abort", () => rej(new Error("aborted"))));
+    assert.equal(await notifySlack({ webhookUrl: HOOK, name: "S" }, hang, 20), false, "a hung request gives up");
+  })(),
+]).then(
+  () => console.log("ok slack async checks"),
+  (err) => {
+    console.log(`FAIL slack async checks\n  ${err.message}`);
+    process.exitCode = 1;
+  },
+);

@@ -43,8 +43,9 @@
     "tabs",
     "identity"
   ],
+  "host_permissions": ["https://hooks.slack.com/*"],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.supabase.co wss://*.trycloudflare.com https://www.googleapis.com https://oauth2.googleapis.com"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.supabase.co wss://*.trycloudflare.com https://www.googleapis.com https://oauth2.googleapis.com https://hooks.slack.com"
   },
   "browser_specific_settings": {
     "gecko": {

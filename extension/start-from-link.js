@@ -5,7 +5,7 @@
 const root = document.documentElement;
 root.dataset.squatOverflow = "starting";
 chrome.runtime
-  .sendMessage({ type: "break-now" })
+  .sendMessage({ type: "break-now", source: "link" })
   .then((res) => {
     root.dataset.squatOverflow = res && res.ok ? "started" : "error";
   })

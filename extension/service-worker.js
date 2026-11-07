@@ -8,6 +8,8 @@ import { recordActivity, backfillActivity } from "./lib/activity.js";
 import { getBusy } from "./lib/calendar-client.js";
 import { busyNow } from "./lib/calendar.js";
 import { t, resolveLang, localeFor } from "./lib/i18n.js";
+import { notifySlack } from "./lib/slack.js";
+import { SLACK_WEBHOOK_URL, START_PAGE_URL } from "./config.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 520, height: 780 };
@@ -68,7 +70,7 @@ async function openBreakWindowId(s) {
   return null;
 }
 
-async function openReminder({ manual }) {
+async function openReminder({ manual, notify = true }) {
   const s = await getSchedule();
   const open = await openBreakWindowId(s);
   if (open != null) {
@@ -82,6 +84,10 @@ async function openReminder({ manual }) {
     ...BREAK_WINDOW,
   });
   await setSchedule(manual ? { ...s, windowId: null, extraWindowId: win.id } : { ...s, windowId: win.id });
+  if (notify) {
+    const { name } = await getSettings();
+    await notifySlack({ webhookUrl: SLACK_WEBHOOK_URL, startUrl: START_PAGE_URL, name, manual });
+  }
 }
 
 const MEETING_HOSTS = [/^meet\.google\.com$/, /(^|\.)zoom\.us$/, /^teams\.microsoft\.com$/, /^teams\.live\.com$/];
@@ -177,7 +183,8 @@ async function onSettingsSaved(msg) {
 }
 
 const HANDLERS = {
-  "break-now": () => openReminder({ manual: true }).then(() => ({ ok: true })),
+  // A break started from the hosted start page must not post to Slack again, or every click would re-announce itself.
+  "break-now": (msg) => openReminder({ manual: true, notify: msg?.source !== "link" }).then(() => ({ ok: true })),
   "break-action": onBreakAction,
   pause: onPause,
   "settings-saved": onSettingsSaved,
