@@ -454,6 +454,11 @@ check("themes: seven pickable themes, auto first, unknown ids fall back to auto"
   assert.equal(themeId(undefined), "auto");
 });
 
+check("fresh schedule without counters can snooze and shows no warning", () => {
+  assert.equal(canSnooze({ windowId: null, lastKey: null, breakCount: 0 }), true);
+  assert.equal(showWarning({ windowId: null, lastKey: null, breakCount: 0 }), false);
+});
+
 const pending = [];
 check("leaderboard unconfigured resolves null/false without throwing", () => {
   pending.push(

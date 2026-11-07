@@ -30,11 +30,11 @@ export function onFire(s, now, intervalMin) {
 }
 
 export function canSnooze(s) {
-  return s.snoozesInRow < SNOOZE_CAP;
+  return (s.snoozesInRow ?? 0) < SNOOZE_CAP;
 }
 
 export function showWarning(s) {
-  return s.skipsInRow >= WARN_SKIPS;
+  return (s.skipsInRow ?? 0) >= WARN_SKIPS;
 }
 
 export function warningHours(skips, intervalMin) {
