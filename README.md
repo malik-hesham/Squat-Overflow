@@ -1,4 +1,4 @@
-# Squat-Overflow: StandUp Break
+# Squat Overflow
 
 A Chrome extension that reminds you to move. When a break is due it opens a 2-minute routine for the muscle areas you picked. Your webcam scores how well you do each exercise, and the score turns into XP, levels, challenges and badges. In Competitive mode your score also appears on a company leaderboard.
 

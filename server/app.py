@@ -36,7 +36,10 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import re
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 
 from analysis import calibration
 from analysis.demos import DEMOS
@@ -209,6 +212,23 @@ async def _handle_text(websocket: WebSocket, conn: Connection, text: str) -> Non
         {"type": "config", "exercise": session.exercise.key, "calibrated": session.thresholds is not None}
     )
 
+
+YOUTUBE_ID = re.compile(r"^[\w-]{11}$")
+
+
+@app.get("/embed/{youtube_id}", response_class=HTMLResponse)
+def embed(youtube_id: str) -> str:
+    if not YOUTUBE_ID.match(youtube_id):
+        raise HTTPException(status_code=404)
+    src = (
+        f"https://www.youtube-nocookie.com/embed/{youtube_id}?autoplay=1&mute=1&loop=1"
+        f"&playlist={youtube_id}&controls=0&modestbranding=1&playsinline=1&rel=0"
+    )
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        "<style>html,body{margin:0;height:100%;overflow:hidden;background:#000}iframe{display:block;border:0;width:100%;height:100%}</style>"
+        f"</head><body><iframe src=\"{src}\" allow=\"autoplay; encrypted-media\" referrerpolicy=\"strict-origin-when-cross-origin\"></iframe></body></html>"
+    )
 
 if __name__ == "__main__":
     import uvicorn

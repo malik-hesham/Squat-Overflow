@@ -11,11 +11,15 @@ create table if not exists public.players (
   updated_at timestamptz not null default now()
 );
 
+alter table public.players add column if not exists avatar text not null default 'bunny';
+
 create index if not exists players_company_xp on public.players (company, xp desc);
 create index if not exists players_company_week on public.players (company, week, week_xp desc);
 
 alter table public.players enable row level security;
 revoke all on public.players from anon, authenticated;
+
+drop function if exists public.submit_score(uuid, text, text, text, int, int, int, int, text, boolean);
 
 create or replace function public.submit_score(
   p_id uuid,
@@ -27,7 +31,8 @@ create or replace function public.submit_score(
   p_streak int,
   p_week_xp int,
   p_week text,
-  p_delete boolean default false
+  p_delete boolean default false,
+  p_avatar text default 'bunny'
 ) returns boolean
 language plpgsql
 security definer
@@ -71,10 +76,13 @@ begin
   if p_week is null or p_week !~ '^\d{4}-W\d{2}$' then
     raise exception 'invalid week';
   end if;
+  if p_avatar is null or p_avatar !~ '^[a-z]{2,20}$' then
+    raise exception 'invalid avatar';
+  end if;
 
   if existing is null then
-    insert into players (id, secret, name, company, xp, level, streak, week_xp, week)
-    values (p_id, p_secret, btrim(p_name), p_company, p_xp, p_level, p_streak, p_week_xp, p_week);
+    insert into players (id, secret, name, company, xp, level, streak, week_xp, week, avatar)
+    values (p_id, p_secret, btrim(p_name), p_company, p_xp, p_level, p_streak, p_week_xp, p_week, p_avatar);
     return true;
   end if;
 
@@ -90,38 +98,46 @@ begin
       streak = p_streak,
       week_xp = p_week_xp,
       week = p_week,
+      avatar = p_avatar,
       updated_at = now()
   where id = p_id;
   return true;
 end;
 $$;
 
+drop function if exists public.leaderboard(text, text, uuid);
+
 create or replace function public.leaderboard(p_company text, p_period text, p_player uuid)
-returns table (rank int, name text, level int, xp int, streak int, is_me boolean)
+returns table (rank int, name text, level int, xp int, streak int, is_me boolean, avatar text)
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  with board as (
-    select p.id, p.name, p.level, p.streak,
-           case when p_period = 'week' then p.week_xp else p.xp end as score
+  with latest as (
+    select distinct on (lower(p.name)) p.id, p.name, p.level, p.streak, p.avatar, p.xp, p.week, p.week_xp
     from players p
     where p.company = lower(p_company)
-      and (p_period <> 'week' or p.week = to_char(now(), 'IYYY-"W"IW'))
+    order by lower(p.name), (p.id = p_player) desc, p.updated_at desc
+  ),
+  board as (
+    select l.id, l.name, l.level, l.streak, l.avatar,
+           case when p_period = 'week' then l.week_xp else l.xp end as score
+    from latest l
+    where p_period <> 'week' or l.week = to_char(now(), 'IYYY-"W"IW')
   ),
   ranked as (
     select (row_number() over (order by b.score desc, b.name))::int as rank,
-           b.name, b.level, b.score as xp, b.streak, b.id = p_player as is_me
+           b.name, b.level, b.score as xp, b.streak, b.id = p_player as is_me, b.avatar
     from board b
   )
-  select r.rank, r.name, r.level, r.xp, r.streak, r.is_me
+  select r.rank, r.name, r.level, r.xp, r.streak, r.is_me, r.avatar
   from ranked r
   where r.rank <= 10 or r.is_me
   order by r.rank;
 $$;
 
-revoke all on function public.submit_score(uuid, text, text, text, int, int, int, int, text, boolean) from public;
-grant execute on function public.submit_score(uuid, text, text, text, int, int, int, int, text, boolean) to anon, authenticated;
+revoke all on function public.submit_score(uuid, text, text, text, int, int, int, int, text, boolean, text) from public;
+grant execute on function public.submit_score(uuid, text, text, text, int, int, int, int, text, boolean, text) to anon, authenticated;
 revoke all on function public.leaderboard(text, text, uuid) from public;
 grant execute on function public.leaderboard(text, text, uuid) to anon, authenticated;

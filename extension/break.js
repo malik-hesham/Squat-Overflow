@@ -1,28 +1,32 @@
-import { getSettings, saveSettings, getSchedule, getCatalog } from "./lib/store.js";
+import { getSettings, saveSettings, getSchedule, getCatalog, getProfile, getActivity, readLog } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 import { badgeLabel } from "./lib/badges.js";
 import { initTheme } from "./lib/themes.js";
+import { backfillActivity } from "./lib/activity.js";
+import { avatarFitness, fitnessCaption } from "./lib/fitness.js";
+import { initLang, t, exerciseText, areaName, levelName, issueText, nameText } from "./lib/i18n.js";
+import { Avatar } from "./avatar.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
 const YOUTUBE_ID = /^[\w-]{11}$/;
-const CAMERA_HINT = "Put the camera side-on, 2–3 m away, with your whole body in frame.";
 
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
-    "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
+    "lastScore", "cue", "howto", "hint", "demoPane", "demoFrame", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "lookBtn", "lookName",
-    "lookGrid", "lookThumb", "area", "moves", "starting", "startingText",
+    "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
 );
 
 const state = {
+  lang: "en",
   settings: null,
   catalog: [],
   moves: [],
@@ -33,6 +37,7 @@ const state = {
   positioning: false,
   positionTimer: 0,
   startingTimer: 0,
+  fitness: null,
 };
 
 const send = (msg) => chrome.runtime.sendMessage(msg);
@@ -42,12 +47,13 @@ function speak(text) {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 1.1;
+  if (state.lang === "ar") u.lang = "ar-SA";
   speechSynthesis.speak(u);
 }
 
 function announce(i) {
   const move = state.moves[i];
-  if (move) speak(`${i ? "Next, " : ""}${move.label}. ${move.target} reps.`);
+  if (move) speak(t(state.lang, i ? "sayNext" : "sayMove", { label: move.label, n: move.target }));
 }
 
 // "camera" (no privacy), "blur", or an Avatar.CHARACTERS key.
@@ -58,7 +64,11 @@ function lookKey() {
 }
 
 function lookOptions() {
-  return [["camera", "Camera"], ["blur", "Blur"], ...Object.entries(Avatar.CHARACTERS).map(([k, c]) => [k, c.label])];
+  return [
+    ["camera", t(state.lang, "camera")],
+    ["blur", t(state.lang, "lookBlur")],
+    ...Object.entries(Avatar.CHARACTERS).map(([k, c]) => [k, nameText(state.lang, `avatar.${k}`, c.label)]),
+  ];
 }
 
 function drawCameraThumb(canvas) {
@@ -77,7 +87,7 @@ function drawCameraThumb(canvas) {
 
 function drawLookThumb(canvas, key) {
   if (key === "camera") drawCameraThumb(canvas);
-  else Avatar.drawThumb(canvas, key);
+  else Avatar.drawThumb(canvas, key, state.fitness);
 }
 
 function renderLooks() {
@@ -108,6 +118,15 @@ function syncLook() {
   for (const input of els.lookGrid.querySelectorAll("input")) input.checked = input.value === key;
   els.lookName.textContent = lookOptions().find(([k]) => k === key)[1];
   drawLookThumb(els.lookThumb, key);
+  const character = Avatar.CHARACTERS[key];
+  els.fitness.hidden = !character || !state.fitness;
+  if (!els.fitness.hidden) els.fitness.textContent = fitnessCaption(state.fitness, character.label);
+}
+
+// How buff or droopy the character looks, from your level and recent breaks.
+async function loadFitness(workdays) {
+  const [profile, activity] = await Promise.all([getProfile(), getActivity()]);
+  return avatarFitness(profile.xp, activity ?? backfillActivity(await readLog()), Date.now(), workdays);
 }
 
 async function onLookChange(ev) {
@@ -165,16 +184,15 @@ function showMove(i) {
   state.i = i;
   const move = state.moves[i];
   state.progress[i].base = state.progress[i].reps;
-  document.title = `${move.area} | ${move.label}`;
+  document.title = `${areaName(state.lang, move.area)} | ${move.label}`;
   els.title.textContent = move.label;
-  els.area.textContent = move.area;
+  els.area.textContent = areaName(state.lang, move.area);
   els.area.hidden = false;
-  els.step.textContent = `Exercise ${i + 1} of ${state.moves.length}`;
+  els.step.textContent = t(state.lang, "exerciseStep", { i: i + 1, n: state.moves.length });
   els.howto.textContent = move.how_to;
   els.hint.hidden = move.camera !== "side";
-  els.hint.textContent = CAMERA_HINT;
-  els.demo.hidden = !(move.demo && YOUTUBE_ID.test(move.demo.youtube_id) && navigator.onLine);
-  if (!els.demo.hidden) els.demo.textContent = `▶ Watch demo (${move.demo.seconds}s)`;
+  els.hint.textContent = t(state.lang, "cameraHint");
+  showDemo(move);
   els.swap.hidden = !swapMove(state.catalog, state.moves, i);
   els.lastScore.hidden = true;
   els.cue.hidden = true;
@@ -208,7 +226,7 @@ function renderMoves() {
     const done = reps >= m.target;
     tab.classList.toggle("done", done);
     tab.setAttribute("aria-current", String(k === state.i));
-    tab.title = `${m.area} | ${m.label}`;
+    tab.title = `${areaName(state.lang, m.area)} | ${m.label}`;
     tab.querySelector(".name").textContent = m.label;
     tab.querySelector(".count").textContent = done ? "✓" : `${reps}/${m.target}`;
   });
@@ -224,10 +242,9 @@ function setStarting(on) {
   clearTimeout(state.startingTimer);
   els.starting.hidden = !on;
   if (!on) return;
-  els.startingText.textContent = "Frames stay on this computer.";
+  els.startingText.textContent = t(state.lang, "framesLocal");
   state.startingTimer = setTimeout(() => {
-    els.startingText.textContent =
-      "Still waiting for a picture. Check that this browser is allowed to use the camera (on a Mac: System Settings › Privacy & Security › Camera).";
+    els.startingText.textContent = t(state.lang, "cameraSlow");
   }, CAMERA_SLOW_MS);
 }
 
@@ -253,12 +270,14 @@ function onFrame(msg) {
   if (msg.rep_event) {
     const { score, partial } = msg.rep_event;
     p.scores.push(score);
-    els.lastScore.textContent = `Form ${score}`;
+    els.lastScore.textContent = t(state.lang, "form", { score });
     els.lastScore.hidden = false;
-    const issue = msg.rep_event.issue_text?.[0];
-    showCue(issue ?? (score >= 85 ? "Great form!" : ""), !issue);
+    const code = msg.rep_event.issues?.[0];
+    const english = msg.rep_event.issue_text?.[0];
+    const issue = english === undefined ? undefined : issueText(state.lang, code, english);
+    showCue(issue ?? (score >= 85 ? t(state.lang, "greatForm") : ""), !issue);
     if (!partial) state.client?.celebrate(!issue);
-    speak(partial ? "Go deeper" : (issue ?? String(p.reps)));
+    speak(partial ? t(state.lang, "goDeeper") : (issue ?? String(p.reps)));
   }
   renderProgress();
   if (was < move.target && p.reps >= move.target) {
@@ -278,11 +297,10 @@ function onStatus(status) {
   setStarting(false);
   els.lookBtn.hidden = els.lookGrid.hidden = true;
   els.fallback.hidden = false;
-  els.fallbackTitle.textContent = status === "offline" ? "Coach offline" : "Camera unavailable";
-  els.fallbackText.textContent =
-    status === "offline"
-      ? "Can't reach the pose server. Follow the instructions below and press Done when finished."
-      : "Camera access is blocked or missing. Follow the instructions below and press Done when finished.";
+  els.demoPane.hidden = true;
+  els.demoFrame.removeAttribute("src");
+  els.fallbackTitle.textContent = t(state.lang, status === "offline" ? "coachOffline" : "cameraUnavailable");
+  els.fallbackText.textContent = t(state.lang, status === "offline" ? "offlineText" : "deniedText");
 }
 
 function confetti() {
@@ -309,8 +327,8 @@ function countUp(el, to) {
 
 function renderLevel(xp) {
   const lv = levelFor(xp);
-  els.levelName.textContent = `Lv ${lv.level} · ${lv.name}`;
-  els.levelXp.textContent = lv.next ? `${xp} / ${lv.next} XP` : `${xp} XP · max level`;
+  els.levelName.textContent = t(state.lang, "level", { n: lv.level, name: levelName(state.lang, lv.level, lv.name) });
+  els.levelXp.textContent = lv.next ? t(state.lang, "xpOf", { xp, next: lv.next }) : t(state.lang, "xpMaxLevel", { xp });
   return lv.progress;
 }
 
@@ -319,18 +337,18 @@ function showSummary({ breakdown, levelUp, newBadges = [], profile }) {
   els.warning.hidden = true;
   els.actions.hidden = true;
   els.summary.hidden = false;
-  document.title = "Break complete";
+  document.title = t(state.lang, "breakComplete");
   els.area.hidden = els.moves.hidden = true;
-  els.title.textContent = "Nice work!";
-  els.step.textContent = "Break complete";
+  els.title.textContent = t(state.lang, "niceWork");
+  els.step.textContent = t(state.lang, "breakComplete");
   const lines = [
-    ["Break", breakdown.breakXp],
-    ["First break of the day", breakdown.firstBreak],
-    ["Streak bonus", breakdown.streak],
-    ...breakdown.challenges.map((c) => [`Challenge: ${c.name}`, c.bonus]),
+    [t(state.lang, "break"), breakdown.breakXp],
+    [t(state.lang, "firstBreak"), breakdown.firstBreak],
+    [t(state.lang, "streakBonus"), breakdown.streak],
+    ...breakdown.challenges.map((c) => [t(state.lang, "challengeLine", { name: challengeName(c, profile) }), c.bonus]),
   ].filter(([, v]) => v > 0);
-  if (!lines.length) lines.push(["No reps counted this time", 0]);
-  for (const id of newBadges) lines.push([`New badge: ${badgeLabel(id)}`, null]);
+  if (!lines.length) lines.push([t(state.lang, "noReps"), 0]);
+  for (const id of newBadges) lines.push([t(state.lang, "newBadge", { name: badgeLabel(id, state.lang) }), null]);
   els.lines.replaceChildren(
     ...lines.map(([label, v]) => {
       const li = document.createElement("li");
@@ -349,7 +367,7 @@ function showSummary({ breakdown, levelUp, newBadges = [], profile }) {
   const progress = renderLevel(profile.xp);
   requestAnimationFrame(() => requestAnimationFrame(() => (els.levelBar.style.width = `${progress * 100}%`)));
   if (levelUp) {
-    els.levelUp.textContent = `You're now a ${levelUp.name}!`;
+    els.levelUp.textContent = t(state.lang, "levelUp", { name: levelName(state.lang, levelUp.to, levelUp.name) });
     els.levelUp.hidden = false;
     confetti();
   }
@@ -362,7 +380,7 @@ async function finish() {
   setStarting(false);
   state.client?.stop();
   els.done.disabled = els.snooze.disabled = els.skip.disabled = true;
-  speak("Break done. Back to work!");
+  speak(t(state.lang, "sayDone"));
   const res = await send({ type: "break-action", action: "done", result: currentResult(), lastKey: state.moves.at(-1)?.key ?? null });
   if (res?.ok) showSummary(res);
   else closeWindow();
@@ -376,10 +394,17 @@ async function leave(action) {
   closeWindow();
 }
 
-async function openDemo() {
-  const demo = state.moves[state.i]?.demo;
-  if (!demo || !YOUTUBE_ID.test(demo.youtube_id)) return;
-  await chrome.windows.create({ url: `https://www.youtube.com/watch?v=${demo.youtube_id}`, type: "popup", width: 480, height: 400 });
+function demoUrl(move) {
+  if (!move.demo || !YOUTUBE_ID.test(move.demo.youtube_id) || !navigator.onLine || !els.fallback.hidden) return null;
+  const origin = new URL(state.settings.serverUrl.replace(/^ws/, "http")).origin;
+  return `${origin}/embed/${move.demo.youtube_id}`;
+}
+
+function showDemo(move) {
+  const url = demoUrl(move);
+  els.demoPane.hidden = !url;
+  if (url && els.demoFrame.getAttribute("src") !== url) els.demoFrame.src = url;
+  if (!url) els.demoFrame.removeAttribute("src");
 }
 
 function swap(ev) {
@@ -398,8 +423,8 @@ async function startRoutine() {
   els.actions.hidden = false;
   if (!state.moves.length) {
     onStatus("offline");
-    els.title.textContent = "Time to move";
-    els.howto.textContent = "Stand up, roll your shoulders, stretch your neck side to side and walk around for two minutes.";
+    els.title.textContent = t(state.lang, "timeToMove");
+    els.howto.textContent = t(state.lang, "manualHowto");
     els.swap.hidden = true;
     return;
   }
@@ -412,6 +437,7 @@ async function startRoutine() {
     privacy: settings.privacy,
     style: settings.privacyStyle,
     avatars: Avatar,
+    fitness: state.fitness,
     onFrame,
     onStatus,
   });
@@ -424,12 +450,18 @@ async function startRoutine() {
 
 async function init() {
   initTheme();
+  state.lang = await initLang();
   const [settings, schedule] = await Promise.all([getSettings(), getSchedule()]);
   state.settings = settings;
+  state.fitness = await loadFitness(settings.workdays);
   let catalog = await fetchCatalog(settings.serverUrl);
   if (!catalog.length) catalog = await getCatalog();
-  state.catalog = catalog;
-  state.moves = buildRoutine(catalog, {
+  state.catalog = catalog.map((e) => ({
+    ...e,
+    label: exerciseText(state.lang, e.key, "label", e.label),
+    how_to: exerciseText(state.lang, e.key, "how_to", e.how_to),
+  }));
+  state.moves = buildRoutine(state.catalog, {
     areas: settings.areas.length ? settings.areas : AREAS.slice(0, 2),
     featured: featuredArea(Date.now()),
     lastKey: schedule.lastKey,
@@ -442,7 +474,6 @@ async function init() {
   els.snooze.addEventListener("click", () => leave("snooze"));
   els.skip.addEventListener("click", () => leave("skip"));
   els.back.addEventListener("click", closeWindow);
-  els.demo.addEventListener("click", openDemo);
   els.swap.addEventListener("click", swap);
   els.voice.checked = settings.voice;
   els.voice.addEventListener("change", onVoiceChange);
@@ -456,7 +487,7 @@ async function init() {
   const manual = location.hash.startsWith("#manual");
   if (!canSnooze(schedule)) {
     els.snooze.disabled = els.warnSnooze.disabled = true;
-    els.snooze.textContent = els.warnSnooze.textContent = "Snoozed twice, time to move";
+    els.snooze.textContent = els.warnSnooze.textContent = t(state.lang, "snoozedTwice");
   }
   if (!manual && showWarning(schedule)) {
     showWarningScreen(schedule, settings.intervalMin);
@@ -469,15 +500,20 @@ function showWarningScreen(schedule, intervalMin) {
   els.routine.hidden = true;
   els.actions.hidden = true;
   els.warning.hidden = false;
-  const text = `~${warningHours(schedule.skipsInRow, intervalMin)} hours without moving`;
+  const text = t(state.lang, "warnTitle", { n: warningHours(schedule.skipsInRow, intervalMin) });
   els.warningTitle.textContent = text;
-  els.title.textContent = "Time to move";
+  els.title.textContent = t(state.lang, "timeToMove");
   els.area.hidden = true;
-  els.step.textContent = `${schedule.skipsInRow} breaks skipped in a row`;
+  els.step.textContent = t(state.lang, "skippedInRow", { n: schedule.skipsInRow });
   document.title = text;
   els.warnStart.addEventListener("click", startRoutine);
   els.warnSnooze.addEventListener("click", () => leave("snooze"));
   els.warnPause.addEventListener("click", () => leave("pause"));
+}
+
+function challengeName(c, profile) {
+  if (c.id === "weekly") return t(state.lang, "areaWeek", { area: areaName(state.lang, profile.weekly?.area ?? "") });
+  return nameText(state.lang, `challenge.${c.id}`, c.name);
 }
 
 init();

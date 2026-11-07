@@ -14,6 +14,9 @@ export const SETTINGS_DEFAULTS = {
   serverUrl: "ws://127.0.0.1:8765/ws",
   setupDone: false,
   theme: "auto",
+  avatar: "bunny",
+  lang: "auto",
+  weekStart: 1,
 };
 
 const PROFILE_KEY = "profile";

@@ -49,7 +49,7 @@ details {
 }
 .field input,
 .inline input {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   padding: 6px 8px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -74,7 +74,7 @@ details {
 }
 .error {
   color: var(--bad);
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .saved {
   color: var(--accent);
@@ -87,7 +87,7 @@ details {
 .theme-card {
   display: grid;
   gap: 8px;
-  text-align: left;
+  text-align: start;
   padding: 10px;
 }
 .theme-card[aria-pressed="true"] {
@@ -103,4 +103,56 @@ details {
   height: 18px;
   border-radius: 50%;
   border: 1px solid var(--border);
+}
+.avatars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+.avatar-opt {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  font-size: 12px;
+}
+.avatar-opt canvas {
+  width: 56px;
+  height: 70px;
+  border-radius: 10px;
+}
+.avatar-opt[aria-checked="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.cal-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.cal-status {
+  color: var(--accent);
+  font-weight: 600;
+}
+.inline select {
+  margin-inline-start: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+.when-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 24px;
 }

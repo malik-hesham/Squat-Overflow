@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>StandUp Break</title>
+    <title>Squat Overflow</title>
     <link rel="stylesheet" href="theme.css" />
     <link rel="stylesheet" href="break.css" />
   </head>
@@ -10,50 +10,55 @@
     <header>
       <div class="row">
         <span class="step-wrap">
-          <span id="step" class="muted">Break</span>
+          <span id="step" class="muted" data-i18n="break">Break</span>
         </span>
         <span id="xpTicker" class="xp-ticker">+0 XP</span>
       </div>
       <span id="area" class="chip" hidden></span>
-      <h1 id="title">Loading…</h1>
+      <h1 id="title" data-i18n="loading">Loading…</h1>
       <div class="bar"><span id="bar"></span></div>
-      <nav id="moves" class="moves" aria-label="Exercises"></nav>
+      <nav id="moves" class="moves" aria-label="Exercises" data-i18n-aria="exercises"></nav>
     </header>
 
     <section id="warning" class="panel warning" hidden>
       <div class="big">⚠️</div>
       <h2 id="warningTitle">~3 hours without moving</h2>
-      <p class="muted">You've skipped your last few breaks. Your neck, back and shoulders have been in the same position the whole time. Two minutes now makes a real difference.</p>
+      <p class="muted" data-i18n="warnBody">You've skipped your last few breaks. Your neck, back and shoulders have been in the same position the whole time. Two minutes now makes a real difference.</p>
       <div class="actions">
-        <button id="warnStart" class="primary">Start a break now</button>
-        <button id="warnSnooze">Snooze 20 min</button>
-        <button id="warnPause">Pause 1 hr</button>
+        <button id="warnStart" class="primary" data-i18n="warnStart">Start a break now</button>
+        <button id="warnSnooze" data-i18n="snooze">Snooze 20 min</button>
+        <button id="warnPause" data-i18n="pause">Pause 1 hr</button>
       </div>
     </section>
 
     <main id="routine">
-      <div class="stage">
-        <video id="video" playsinline muted hidden></video>
-        <canvas id="canvas"></canvas>
-        <div id="position" class="overlay" hidden>
-          <strong>Get in position</strong>
-          <span id="positionText">Stand up, turn sideways, step back until your feet are in frame</span>
+      <div class="media">
+        <div class="stage">
+          <video id="video" playsinline muted hidden></video>
+          <canvas id="canvas"></canvas>
+          <div id="position" class="overlay" hidden>
+            <strong data-i18n="getInPosition">Get in position</strong>
+            <span id="positionText" data-i18n="positionText">Stand up, turn sideways, step back until your feet are in frame</span>
+          </div>
+          <div id="starting" class="overlay starting" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <strong data-i18n="startingCamera">Starting camera…</strong>
+            <span id="startingText" class="muted">Frames stay on this computer.</span>
+          </div>
+          <div id="fallback" class="overlay fallback" hidden>
+            <strong id="fallbackTitle" data-i18n="cameraUnavailable">Camera unavailable</strong>
+            <span id="fallbackText" data-i18n="fallbackText">Follow the instructions below and press Done when finished. No XP this time.</span>
+          </div>
+          <div class="hud">
+            <span class="reps" dir="ltr"><b id="reps">0</b> / <span id="target">6</span></span>
+            <span id="lastScore" class="score" hidden></span>
+          </div>
+          <div id="cue" class="cue" hidden></div>
+          <div id="lookGrid" class="look-grid" role="radiogroup" aria-label="Camera look" data-i18n-aria="cameraLook" hidden></div>
         </div>
-        <div id="starting" class="overlay starting" hidden>
-          <span class="spinner" aria-hidden="true"></span>
-          <strong>Starting camera…</strong>
-          <span id="startingText" class="muted">Frames stay on this computer.</span>
+        <div id="demoPane" class="demo-pane" hidden>
+          <iframe id="demoFrame" title="Exercise demo" data-i18n-title="demoTitle" allow="autoplay; encrypted-media"></iframe>
         </div>
-        <div id="fallback" class="overlay fallback" hidden>
-          <strong id="fallbackTitle">Camera unavailable</strong>
-          <span id="fallbackText">Follow the instructions below and press Done when finished. No XP this time.</span>
-        </div>
-        <div class="hud">
-          <span class="reps"><b id="reps">0</b> / <span id="target">6</span></span>
-          <span id="lastScore" class="score" hidden></span>
-        </div>
-        <div id="cue" class="cue" hidden></div>
-        <div id="lookGrid" class="look-grid" role="radiogroup" aria-label="Camera look" hidden></div>
       </div>
 
       <div class="guide">
@@ -62,8 +67,7 @@
           <p id="hint" class="muted small" hidden></p>
         </div>
         <div class="guide-actions">
-          <button id="demo" class="small" hidden>▶ Demo</button>
-          <button id="swap" class="small" title="Show me a different exercise">↻ Swap</button>
+          <button id="swap" class="small" title="Show me a different exercise" data-i18n-title="swapTitle" data-i18n="swap">↻ Swap</button>
         </div>
       </div>
 
@@ -71,19 +75,20 @@
         <label class="pill">
           <input type="checkbox" id="voice" role="switch" />
           <span class="switch" aria-hidden="true"></span>
-          Voice cues
+          <span data-i18n="voiceCues">Voice cues</span>
         </label>
         <button id="lookBtn" class="pill" aria-expanded="false" aria-controls="lookGrid">
           <canvas id="lookThumb" width="36" height="48" aria-hidden="true"></canvas>
-          Look: <b id="lookName">Blur</b>
+          <span data-i18n="look">Look:</span> <b id="lookName">Blur</b>
           <span class="caret" aria-hidden="true">▾</span>
         </button>
       </div>
+      <p id="fitness" class="muted small fitness" hidden></p>
     </main>
 
     <section id="summary" class="panel" hidden>
       <div id="confetti" class="confetti" aria-hidden="true"></div>
-      <p class="muted">Break complete</p>
+      <p class="muted" data-i18n="breakComplete">Break complete</p>
       <div class="total">+<span id="total">0</span> XP</div>
       <ul id="lines" class="lines"></ul>
       <p id="levelUp" class="level-up" hidden></p>
@@ -91,16 +96,15 @@
         <div class="row"><b id="levelName"></b><span id="levelXp" class="muted"></span></div>
         <div class="bar"><span id="levelBar"></span></div>
       </div>
-      <button id="back" class="primary">Back to work</button>
+      <button id="back" class="primary" data-i18n="backToWork">Back to work</button>
     </section>
 
     <footer id="actions">
-      <button id="done" class="primary">Done</button>
-      <button id="snooze">Snooze 20 min</button>
-      <button id="skip">Skip</button>
+      <button id="done" class="primary" data-i18n="done">Done</button>
+      <button id="snooze" data-i18n="snooze">Snooze 20 min</button>
+      <button id="skip" data-i18n="skip">Skip</button>
     </footer>
 
-    <script src="avatar.js"></script>
     <script type="module" src="break.js"></script>
   </body>
 </html>

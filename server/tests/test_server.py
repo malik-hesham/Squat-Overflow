@@ -161,3 +161,14 @@ def test_explicit_allowed_origins_replace_loopback_default(monkeypatch):
     assert origin_allowed("https://coach.example")
     assert not origin_allowed("http://127.0.0.1:47821")
     assert not origin_allowed("chrome-extension://abcdefghijklmnopabcdefghijklmnop")
+def test_embed_page_wraps_a_valid_youtube_id(client):
+    res = client.get("/embed/gBL3gYNtun0")
+    assert res.status_code == 200
+    assert "text/html" in res.headers["content-type"]
+    assert "https://www.youtube-nocookie.com/embed/gBL3gYNtun0?" in res.text
+    assert "loop=1" in res.text and "mute=1" in res.text and "autoplay=1" in res.text
+
+
+def test_embed_page_rejects_bad_ids(client):
+    assert client.get("/embed/not-an-id").status_code == 404
+    assert client.get("/embed/%3Cscript%3E12").status_code == 404

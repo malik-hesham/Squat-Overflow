@@ -1,18 +1,12 @@
 import { getSettings, saveSettings, getProfile } from "./lib/store.js";
+import { Avatar } from "./avatar.js";
 import { AREAS } from "./lib/routine.js";
-import { scheduleSettingsChanged } from "./lib/schedule.js";
+import { scheduleSettingsChanged, weekOrder } from "./lib/schedule.js";
 import { THEMES, themeId, applyTheme, initTheme } from "./lib/themes.js";
+import { LANGS, initLang, applyLang, resolveLang, t, areaName, nameText } from "./lib/i18n.js";
+import { calendarState, connectCalendar, disconnectCalendar } from "./lib/calendar-client.js";
 
 const PRESETS = ["30", "45", "60", "90", "120"];
-const DAYS = [
-  [1, "Mon"],
-  [2, "Tue"],
-  [3, "Wed"],
-  [4, "Thu"],
-  [5, "Fri"],
-  [6, "Sat"],
-  [0, "Sun"],
-];
 const COMPANY_RE = /^[a-z0-9.-]+\.[a-z]{2,}$/;
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +14,7 @@ const radios = (name) => [...document.querySelectorAll(`input[name="${name}"]`)]
 const checkedValue = (name) => radios(name).find((r) => r.checked)?.value;
 
 let initial = null;
+let lang = "en";
 
 function chip(container, value, label, checked) {
   const el = document.createElement("label");
@@ -40,6 +35,7 @@ function read() {
     activeStart: $("activeStart").value,
     activeEnd: $("activeEnd").value,
     workdays: [...$("workdays").querySelectorAll("input:checked")].map((i) => Number(i.value)),
+    weekStart: Number($("weekStart").value),
     autoPause: $("autoPause").checked,
     privacy: $("privacy").checked,
     mode,
@@ -50,21 +46,22 @@ function read() {
 }
 
 function problem(s) {
-  if (!Number.isInteger(s.intervalMin) || s.intervalMin < 1 || s.intervalMin > 240) return "Pick an interval between 1 and 240 minutes.";
-  if (!s.areas.length) return "Pick at least one area.";
-  if (!s.workdays.length) return "Pick at least one workday.";
-  if (!s.activeStart || !s.activeEnd || s.activeStart >= s.activeEnd) return "Active hours must start before they end.";
+  if (!Number.isInteger(s.intervalMin) || s.intervalMin < 1 || s.intervalMin > 240) return t(lang, "errInterval");
+  if (!s.areas.length) return t(lang, "errAreas");
+  if (!s.workdays.length) return t(lang, "errWorkdays");
+  if (!s.activeStart || !s.activeEnd || s.activeStart >= s.activeEnd) return t(lang, "errHours");
   if (s.mode === "competitive") {
-    if (!s.name || s.name.length > 40) return "Enter a display name (up to 40 characters).";
-    if (!COMPANY_RE.test(s.company)) return "Enter your company's email domain, e.g. leadliaison.com.";
+    if (!s.name || s.name.length > 40) return t(lang, "errName");
+    if (!COMPANY_RE.test(s.company)) return t(lang, "errCompany");
   }
-  if (!/^wss?:\/\//.test(s.serverUrl)) return "Pose server URL must start with ws:// or wss://.";
+  if (s.company && !COMPANY_RE.test(s.company)) return t(lang, "errCompany");
+  if (!/^wss?:\/\//.test(s.serverUrl)) return t(lang, "errServer");
   return "";
 }
 
 function refresh() {
   $("customWrap").hidden = checkedValue("interval") !== "custom";
-  $("competitive").hidden = checkedValue("mode") !== "competitive";
+  $("modeHint").textContent = t(lang, checkedValue("mode") === "competitive" ? "modeCompetitiveHint" : "modePersonalHint");
   const err = problem(read());
   $("error").textContent = initial.setupDone ? err : "";
   $("save").disabled = Boolean(err);
@@ -89,9 +86,36 @@ async function save() {
 
 function render() {
   const first = !initial.setupDone;
-  $("heading").textContent = first ? "Welcome to StandUp Break" : "StandUp Break settings";
+  $("heading").textContent = t(lang, first ? "welcome" : "settingsTitle");
   $("intro").hidden = !first;
-  $("save").textContent = first ? "Get started" : "Save";
+  $("save").textContent = t(lang, first ? "getStarted" : "save");
+}
+
+function avatarKey(key) {
+  return Object.hasOwn(Avatar.CHARACTERS, key) ? key : "bunny";
+}
+
+function renderAvatars(current) {
+  $("avatars").replaceChildren(
+    ...Object.entries(Avatar.CHARACTERS).map(([key, ch]) => {
+      const opt = document.createElement("button");
+      opt.type = "button";
+      opt.className = "avatar-opt";
+      opt.setAttribute("role", "radio");
+      opt.setAttribute("aria-checked", String(key === current));
+      const thumb = document.createElement("canvas");
+      thumb.width = 112;
+      thumb.height = 140;
+      thumb.setAttribute("aria-hidden", "true");
+      Avatar.drawThumb(thumb, key);
+      opt.append(thumb, nameText(lang, `avatar.${key}`, ch.label));
+      opt.addEventListener("click", async () => {
+        renderAvatars(key);
+        await saveSettings({ avatar: key });
+      });
+      return opt;
+    }),
+  );
 }
 
 function renderThemes(current) {
@@ -110,7 +134,7 @@ function renderThemes(current) {
           return dot;
         }),
       );
-      card.append(dots, t.name);
+      card.append(dots, nameText(lang, `theme.${t.id}`, t.name));
       card.addEventListener("click", async () => {
         applyTheme(t.id);
         renderThemes(t.id);
@@ -123,14 +147,20 @@ function renderThemes(current) {
 
 async function init() {
   initTheme();
+  lang = await initLang(relabel);
   initial = await getSettings();
   renderThemes(themeId(initial.theme));
+  renderAvatars(avatarKey(initial.avatar));
   await getProfile();
   const preset = PRESETS.includes(String(initial.intervalMin)) ? String(initial.intervalMin) : "custom";
   radios("interval").forEach((r) => (r.checked = r.value === preset));
   $("customMin").value = initial.intervalMin;
-  AREAS.forEach((a) => chip($("areas"), a, a, initial.areas.includes(a)));
-  DAYS.forEach(([d, label]) => chip($("workdays"), d, label, initial.workdays.includes(d)));
+  $("weekStart").value = String(initial.weekStart);
+  renderChips(initial.areas, initial.workdays, initial.weekStart);
+  $("weekStart").addEventListener("change", () => {
+    const form = read();
+    renderChips(form.areas, form.workdays, form.weekStart);
+  });
   $("activeStart").value = initial.activeStart;
   $("activeEnd").value = initial.activeEnd;
   $("autoPause").checked = initial.autoPause;
@@ -139,11 +169,58 @@ async function init() {
   $("name").value = initial.name;
   $("company").value = initial.company;
   $("serverUrl").value = initial.serverUrl;
+  radios("lang").forEach((r) => (r.checked = r.value === (LANGS.includes(initial.lang) ? initial.lang : "auto")));
+  $("langs").addEventListener("change", (ev) => saveSettings({ lang: ev.target.value }));
   render();
   document.querySelector("main").addEventListener("input", refresh);
   document.querySelector("main").addEventListener("change", refresh);
   $("save").addEventListener("click", save);
   refresh();
+  renderCalendar();
+  $("calBtn").addEventListener("click", toggleCalendar);
+}
+
+function renderChips(areas, workdays, weekStart) {
+  $("areas").replaceChildren();
+  $("workdays").replaceChildren();
+  AREAS.forEach((a) => chip($("areas"), a, areaName(lang, a), areas.includes(a)));
+  weekOrder(weekStart).forEach((d) => chip($("workdays"), d, t(lang, `day.${d}`), workdays.includes(d)));
+}
+
+async function renderCalendar(error = false) {
+  const cal = await calendarState();
+  const key = cal ? "calDisconnect" : "calConnect";
+  $("calLabel").dataset.i18n = key;
+  $("calLabel").textContent = t(lang, key);
+  $("calStatus").hidden = !cal && !error;
+  $("calStatus").textContent = error ? t(lang, "calFailed") : `✓ ${t(lang, "calConnected")}`;
+  $("calStatus").style.color = error ? "var(--bad)" : "";
+}
+
+async function toggleCalendar() {
+  $("calBtn").disabled = true;
+  let error = false;
+  try {
+    if (await calendarState()) await disconnectCalendar();
+    else await connectCalendar();
+  } catch {
+    error = true;
+  }
+  $("calBtn").disabled = false;
+  await renderCalendar(error);
+}
+
+async function relabel(setting) {
+  const form = read();
+  const saved = await getSettings();
+  lang = resolveLang(setting, navigator.language);
+  applyLang(lang);
+  renderThemes(themeId(saved.theme));
+  renderAvatars(avatarKey(saved.avatar));
+  renderChips(form.areas, form.workdays, form.weekStart);
+  render();
+  refresh();
+  renderCalendar();
 }
 
 init();

@@ -3,13 +3,17 @@ import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js"
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
-  nextActiveSlot, decideFire, isActive, scheduleSettingsChanged,
+  nextActiveSlot, decideFire, isActive, scheduleSettingsChanged, weekOrder,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
 import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
 import { activityLevel, recordActivity, backfillActivity, heatmapWeeks, activityTotals } from "../lib/activity.js";
+import { avatarFitness, missedWorkdays, fitnessCaption } from "../lib/fitness.js";
+import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, localeFor, nameText, translationKeys } from "../lib/i18n.js";
+import { badgeLabel } from "../lib/badges.js";
+import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 
 function check(name, fn) {
   try {
@@ -93,7 +97,9 @@ check("isoWeek and dayKey", () => {
 });
 
 check("award: first scored break of day gets bonuses, streak continues from previous workday", () => {
-  const p0 = { ...blankProfile(), xp: 95, streak: 2, lastStreakDay: dayKey(fri) };
+  const ids = dailyFor(mon);
+  const quiet = { daily: { day: dayKey(mon), ids, areas: [], breaks: 0, run: 0, done: ids }, weekly: { week: isoWeek(mon), area: featuredArea(mon), count: 10, done: true } };
+  const p0 = { ...blankProfile(), ...quiet, xp: 95, streak: 2, lastStreakDay: dayKey(fri) };
   const { profile, breakdown, levelUp } = award(p0, full(), mon, WORKDAYS);
   assert.equal(profile.streak, 3);
   assert.deepEqual([breakdown.breakXp, breakdown.firstBreak, breakdown.streak], [10, 5, 3]);
@@ -258,11 +264,13 @@ check("upcoming after snooze lists shifted times", () => {
 
 check("leaderboard payload maps fields, lowercases company, zeroes stale week", () => {
   const profile = { ...blankProfile(), playerId: "id1", secret: "sec", xp: 260, streak: 4, weekXp: 40, week: "2026-W45" };
-  const settings = { name: "Malik", company: "LeadLiaison.COM" };
+  const settings = { name: "Malik", company: "LeadLiaison.COM", avatar: "penguin" };
   assert.deepEqual(toPayload(profile, settings, false, fri), {
     p_id: "id1", p_secret: "sec", p_name: "Malik", p_company: "leadliaison.com", p_xp: 260, p_level: 3,
-    p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false,
+    p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false, p_avatar: "penguin",
   });
+  assert.equal(toPayload(profile, { ...settings, avatar: "<script>" }, false, fri).p_avatar, "bunny");
+  assert.equal(toPayload(profile, { name: "M", company: "x.com" }, false, fri).p_avatar, "bunny");
   const stale = toPayload(profile, settings, true, mon);
   assert.equal(stale.p_week, "2026-W46");
   assert.equal(stale.p_week_xp, 0);
@@ -285,10 +293,11 @@ const brk = (areas, completed = true) => ({
 });
 const ids = (r) => r.completed.map((c) => c.id);
 
-check("dailyFor: stable, 3 distinct pool ids, varies across a week", () => {
+check("dailyFor: stable, 2-5 distinct pool ids, varies across a week", () => {
   const a = dailyFor(mon);
   assert.deepEqual(a, dailyFor(mon + H));
-  assert.equal(new Set(a).size, 3);
+  assert.ok(a.length >= 2 && a.length <= 5);
+  assert.equal(new Set(a).size, a.length);
   assert.ok(a.every((id) => DAILY_POOL.some((c) => c.id === id)));
   const seen = new Set(Array.from({ length: 7 }, (_, k) => dailyFor(mon + k * DAY).join()));
   assert.ok(seen.size > 1);
@@ -502,6 +511,47 @@ check("activity: totals over the visible weeks", () => {
   assert.deepEqual(activityTotals(a, wed, 20), { breaks: 5, xp: 47, activeDays: 2 });
 });
 
+check("fitness: buff grows with level, 0 at Desk Potato, 1 at the top level", () => {
+  assert.equal(avatarFitness(0, null, mon, WORKDAYS).buff, 0);
+  assert.equal(avatarFitness(900, null, mon, WORKDAYS).buff, 4 / 7);
+  assert.equal(avatarFitness(99_999, null, mon, WORKDAYS).buff, 1);
+});
+
+check("fitness: missed workdays count back from yesterday, skip weekends, stop at the last break", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  assert.equal(missedWorkdays({ "2026-11-06": { breaks: 2, xp: 20 } }, wed, WORKDAYS), 2);
+  assert.equal(missedWorkdays({ "2026-11-06": { breaks: 2, xp: 20 } }, mon, WORKDAYS), 0);
+  assert.equal(missedWorkdays({ "2026-11-10": { breaks: 0, xp: 0 }, "2026-11-06": { breaks: 1, xp: 9 } }, wed, WORKDAYS), 2);
+});
+
+check("fitness: a break today perks it straight back up; a new user starts perky", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  assert.equal(missedWorkdays({ "2026-11-11": { breaks: 1, xp: 9 }, "2026-10-01": { breaks: 1, xp: 9 } }, wed, WORKDAYS), 0);
+  assert.equal(missedWorkdays(null, wed, WORKDAYS), 0);
+  assert.equal(missedWorkdays({}, wed, WORKDAYS), 0);
+  // Days before the first recorded break don't count against you.
+  assert.equal(missedWorkdays({ "2026-11-09": { breaks: 1, xp: 9 } }, new Date(2026, 10, 12, 9).getTime(), WORKDAYS), 2);
+});
+
+check("fitness: a full work week without a break is as droopy as it gets", () => {
+  const f = avatarFitness(500, { "2026-10-30": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(f.missed, 5);
+  assert.equal(f.droop, 1);
+  const longer = avatarFitness(500, { "2026-10-20": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(longer.droop, 1);
+  const two = avatarFitness(500, { "2026-11-04": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(two.droop, 2 / 5);
+});
+
+check("fitness: caption roasts droop first, then brags about buff", () => {
+  assert.match(fitnessCaption({ buff: 1, missed: 5 }, "Penguin"), /penguin/i);
+  assert.match(fitnessCaption({ buff: 1, missed: 5 }, "Penguin"), /chair/i);
+  assert.match(fitnessCaption({ buff: 0, missed: 2 }, "Bunny"), /2 workdays/);
+  assert.match(fitnessCaption({ buff: 0, missed: 1 }, "Bunny"), /yesterday/);
+  assert.match(fitnessCaption({ buff: 1, missed: 0 }, "Bunny"), /peak/i);
+  assert.match(fitnessCaption({ buff: 0, missed: 0 }, "Bunny"), /level up/i);
+});
+
 check("nextOpenMove: next unfinished exercise after the current one, wrapping, -1 when all done", () => {
   const moves = [{ target: 6 }, { target: 6 }, { target: 6 }];
   const prog = (...reps) => reps.map((r) => ({ reps: r }));
@@ -528,6 +578,82 @@ check("swapMove cycles through every exercise in the area, skipping ones used el
   assert.deepEqual(cycle([move("air_curl"), move("chair_dip"), move("t_raise")], 0, 3), ["triceps_reach", "wrist_flex", "air_curl"]);
 });
 
+const CAL_NOW = Date.UTC(2026, 10, 9, 10, 0);
+
+check("calendar: auth URL asks Google for free/busy only", () => {
+  const url = new URL(buildAuthUrl("cid.apps.googleusercontent.com", "https://abc.chromiumapp.org/", true));
+  assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
+  assert.equal(url.searchParams.get("client_id"), "cid.apps.googleusercontent.com");
+  assert.equal(url.searchParams.get("response_type"), "token");
+  assert.equal(url.searchParams.get("redirect_uri"), "https://abc.chromiumapp.org/");
+  assert.equal(url.searchParams.get("scope"), CALENDAR_SCOPE);
+  assert.equal(CALENDAR_SCOPE, "https://www.googleapis.com/auth/calendar.freebusy");
+  assert.equal(url.searchParams.get("prompt"), "consent");
+  assert.equal(new URL(buildAuthUrl("c", "https://r/", false)).searchParams.get("prompt"), "none");
+});
+
+check("calendar: parses the token from the redirect, rejects errors", () => {
+  const ok = parseAuthResponse("https://abc.chromiumapp.org/#access_token=ya29.x&token_type=Bearer&expires_in=3599&scope=s", CAL_NOW);
+  assert.deepEqual(ok, { token: "ya29.x", expiresAt: CAL_NOW + 3599 * 1000 });
+  assert.equal(parseAuthResponse("https://abc.chromiumapp.org/#error=access_denied", CAL_NOW), null);
+  assert.equal(parseAuthResponse("https://abc.chromiumapp.org/", CAL_NOW), null);
+});
+
+check("calendar: busy blocks parsed and sorted from the free/busy response", () => {
+  const body = { calendars: { primary: { busy: [
+    { start: "2026-11-09T12:00:00Z", end: "2026-11-09T12:30:00Z" },
+    { start: "2026-11-09T09:45:00Z", end: "2026-11-09T10:20:00Z" },
+  ] } } };
+  assert.deepEqual(parseBusy(body), [
+    { start: Date.UTC(2026, 10, 9, 9, 45), end: Date.UTC(2026, 10, 9, 10, 20) },
+    { start: Date.UTC(2026, 10, 9, 12, 0), end: Date.UTC(2026, 10, 9, 12, 30) },
+  ]);
+  assert.deepEqual(parseBusy({}), []);
+});
+
+check("calendar: in a meeting now, and the next meeting after now", () => {
+  const busy = [{ start: CAL_NOW - 15 * M, end: CAL_NOW + 20 * M }, { start: CAL_NOW + 2 * 60 * M, end: CAL_NOW + 150 * M }];
+  assert.deepEqual(busyNow(busy, CAL_NOW), busy[0]);
+  assert.equal(busyNow(busy, CAL_NOW + 30 * M), null);
+  assert.deepEqual(nextMeeting(busy, CAL_NOW), busy[1]);
+  assert.equal(nextMeeting(busy, CAL_NOW + 3 * 60 * M), null);
+});
+
+check("dailyFor: the number of challenges changes from day to day within 2-5", () => {
+  const counts = new Set(Array.from({ length: 60 }, (_, k) => dailyFor(mon + k * DAY).length));
+  assert.ok([...counts].every((n) => n >= 2 && n <= 5));
+  assert.ok(counts.size >= 3);
+});
+
+check("agenda: current meeting, upcoming blocks, break-sized gaps, tomorrow label, ended meetings dropped", () => {
+  const t = (h, m = 0, d = 9) => new Date(2026, 10, d, h, m).getTime();
+  const now = t(13, 40);
+  const busy = [
+    { start: t(12, 0), end: t(12, 30) },
+    { start: t(13, 30), end: t(14, 0) },
+    { start: t(14, 30), end: t(15, 0) },
+    { start: t(15, 5), end: t(15, 30) },
+    { start: t(10, 0, 10), end: t(11, 0, 10) },
+  ];
+  assert.deepEqual(agenda(busy, now), [
+    { type: "meeting", start: t(13, 30), end: t(14, 0), now: true, tomorrow: false },
+    { type: "gap", minutes: 30 },
+    { type: "meeting", start: t(14, 30), end: t(15, 0), now: false, tomorrow: false },
+    { type: "meeting", start: t(15, 5), end: t(15, 30), now: false, tomorrow: false },
+    { type: "meeting", start: t(10, 0, 10), end: t(11, 0, 10), now: false, tomorrow: true },
+  ]);
+  assert.equal(agenda(busy, now, 2).filter((x) => x.type === "meeting").length, 2);
+  assert.deepEqual(agenda([], now), []);
+  const later = [{ start: now + 23 * 60 * M, end: now + 27 * 60 * M }, { start: now + 25 * 60 * M, end: now + 26 * 60 * M }];
+  assert.deepEqual(agenda(later, now).map((x) => x.end), [now + 27 * 60 * M]);
+});
+
+check("weekOrder: seven days starting from the chosen first day", () => {
+  assert.deepEqual(weekOrder(6), [6, 0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(weekOrder(0), [0, 1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(weekOrder(1), [1, 2, 3, 4, 5, 6, 0]);
+});
+
 const pending = [];
 check("leaderboard unconfigured resolves null/false without throwing", () => {
   pending.push(
@@ -550,6 +676,59 @@ pending.push(
     },
   ),
 );
+check("i18n: t() translates, interpolates and falls back to English then the key", () => {
+  assert.equal(t("en", "nextAt", { time: "10:30", n: 5 }), "Next break at 10:30 · in 5 min");
+  assert.equal(t("ar", "nextAt", { time: "10:30", n: 5 }), "الاستراحة القادمة 10:30 · بعد 5 دقيقة");
+  assert.equal(t("ar", "exerciseStep", { i: 1, n: 3 }), "التمرين 1 من 3");
+  assert.equal(t("en", "level", { n: 2 }), "Lv 2 · {name}");
+  assert.equal(t("xx", "done"), "Done");
+  assert.equal(t("ar", "no.such.key"), "no.such.key");
+});
+check("i18n: every English string has an Arabic translation", () => {
+  const ar = new Set(translationKeys("ar"));
+  const missing = translationKeys("en").filter((k) => !ar.has(k));
+  assert.deepEqual(missing, []);
+  assert.deepEqual(translationKeys("en").filter((k) => t("ar", k) === t("en", k)), ["xpOf"]);
+});
+check("i18n: all exercises, areas, levels, daily challenges and office rep tips translated", () => {
+  for (const key of CATALOG.map((e) => e.key)) {
+    assert.notEqual(exerciseText("ar", key, "label", "EN"), "EN", key);
+    assert.notEqual(exerciseText("ar", key, "how_to", "EN"), "EN", key);
+    assert.equal(exerciseText("en", key, "label", "EN"), "EN");
+  }
+  assert.equal(CATALOG.length, 30);
+  for (const a of AREAS) {
+    assert.notEqual(areaName("ar", a), a);
+    assert.equal(areaName("en", a), a);
+  }
+  for (const lv of LEVELS) {
+    assert.notEqual(levelName("ar", lv.level, lv.name), lv.name);
+    assert.equal(levelName("en", lv.level, lv.name), lv.name);
+  }
+  for (const c of DAILY_POOL) {
+    assert.notEqual(nameText("ar", `challenge.${c.id}`, c.name), c.name);
+    assert.equal(badgeLabel(`daily:${c.id}`), badgeLabel(`daily:${c.id}`, "en"));
+  }
+  for (const th of THEMES) assert.notEqual(nameText("ar", `theme.${th.id}`, th.name), th.name);
+  for (const code of ["not_visible", "not_deep_enough", "too_fast"]) assert.notEqual(issueText("ar", code, "EN"), "EN");
+  assert.equal(issueText("ar", "unknown_code", "Fallback"), "Fallback");
+  assert.equal(issueText("en", "too_fast", "Slow down"), "Slow down");
+  assert.equal(badgeLabel("weekly:Neck"), "🏅 Neck week");
+  assert.equal(badgeLabel("weekly:Neck", "ar"), "🏅 أسبوع الرقبة");
+});
+check("i18n: resolveLang and localeFor", () => {
+  assert.deepEqual(LANGS, ["auto", "en", "ar"]);
+  assert.equal(resolveLang("ar", "en-US"), "ar");
+  assert.equal(resolveLang("en", "ar-EG"), "en");
+  assert.equal(resolveLang("auto", "ar-EG"), "ar");
+  assert.equal(resolveLang("auto", "AR"), "ar");
+  assert.equal(resolveLang("auto", "en-GB"), "en");
+  assert.equal(resolveLang(undefined, undefined), "en");
+  assert.equal(resolveLang("fr", "de"), "en");
+  assert.equal(localeFor("ar"), "ar-u-nu-latn");
+  assert.equal(localeFor("en"), undefined);
+  assert.equal(new Date(2026, 10, 9, 10, 5).toLocaleTimeString(localeFor("ar"), { hour: "2-digit", minute: "2-digit" }).replace(/[^0-9:]/g, ""), "10:05");
+});
 Promise.all(pending).then(
   () => console.log("ok leaderboard async checks"),
   (err) => {
@@ -557,3 +736,92 @@ Promise.all(pending).then(
     process.exitCode = 1;
   },
 );
+
+// ---- Avatar characters: every one poses its 3D figure through squats, issues,
+// reps, buff and droop with nothing broken or non-finite. WebGL isn't
+// available in Node, so this drives the physics and scene graph; rendering is
+// checked in the browser.
+{
+  const THREE = await import("../lib/vendor/three.js");
+  const { Avatar } = await import("../avatar.js");
+  // A standing pose (normalised camera coords) that sinks into a squat by `k` (0..1), arms rising.
+  const pose = (k) => {
+    const lms = Array.from({ length: 33 }, () => [0.5, 0.5, 0]);
+    const at = (i, x, y) => (lms[i] = [x, y + k * 0.12 * (y < 0.7 ? 1 : 0), 1]);
+    [[0, 0.5, 0.17], [2, 0.53, 0.155], [5, 0.47, 0.155], [7, 0.555, 0.165], [8, 0.445, 0.165], [11, 0.6, 0.31], [12, 0.4, 0.31],
+      [13, 0.66, 0.45], [14, 0.34, 0.45], [15, 0.68 - k * 0.1, 0.58 - k * 0.3], [16, 0.32 + k * 0.1, 0.58 - k * 0.3], [23, 0.56, 0.58],
+      [24, 0.44, 0.58], [25, 0.6, 0.73], [26, 0.4, 0.73], [27, 0.575, 0.88], [28, 0.425, 0.88], [31, 0.6, 0.92], [32, 0.4, 0.92]]
+      .forEach(([i, x, y]) => at(i, x, y));
+    return lms;
+  };
+  const finiteScene = (scene) => {
+    const bad = [];
+    scene.updateMatrixWorld(true);
+    scene.traverse((o) => {
+      if (o.visible && !o.matrixWorld.elements.every(Number.isFinite)) bad.push(o.type);
+    });
+    return bad;
+  };
+  const keys = Object.keys(Avatar.CHARACTERS);
+  check("avatars: eight original characters, each with a label", () => {
+    assert.deepEqual(keys, ["slothbear", "bunny", "penguin", "dragon", "critter", "platypus", "monster", "robot"]);
+    for (const k of keys) assert.ok(Avatar.CHARACTERS[k].label, `${k} has no label`);
+  });
+  check("avatars: an unknown key falls back to a real character", () => {
+    assert.ok(keys.includes(Avatar.create("surfer").key));
+  });
+  for (const key of keys) {
+    check(`avatars: ${key} poses through squats, issues, reps, buff and droop with finite transforms`, () => {
+      for (const fitness of [{}, { buff: 1 }, { droop: 1 }]) {
+        const a = Avatar.create(key, fitness);
+        assert.equal(a.key, key);
+        let meshes = 0;
+        a.scene.traverse((o) => (meshes += o.isMesh ? 1 : 0));
+        assert.ok(meshes > 20, `only ${meshes} meshes`);
+        for (let f = 0; f < 90; f++) {
+          const p = a.update(pose((Math.sin(f / 8) + 1) / 2), 640, 480, { issues: f % 30 > 20, now: f * 33 });
+          if (f > 2) assert.ok(p, "no pose from a full body");
+          if (f % 25 === 0) a.celebrate(f % 50 === 0);
+          assert.deepEqual(finiteScene(a.scene), [], `non-finite transform at frame ${f}`);
+        }
+        a.update(null, 640, 480, { now: 99 * 33 });
+        a.dispose();
+      }
+    });
+  }
+  check("avatars: the heart and star celebration particles fly as 3D meshes", () => {
+    const a = Avatar.create("bunny");
+    for (let f = 0; f < 5; f++) a.update(pose(0), 640, 480, { now: f * 33 });
+    a.celebrate(true);
+    a.update(pose(0), 640, 480, { now: 6 * 33 });
+    let shown = 0;
+    a.scene.traverse((o) => (shown += o.visible && o.geometry?.type === "ExtrudeGeometry" ? 1 : 0));
+    assert.ok(shown >= 16, `only ${shown} particles visible`);
+    assert.ok(THREE.ExtrudeGeometry);
+  });
+  check("avatars: zoomed out, a person filling the camera frame fits in view, feet on the floor", () => {
+    // Head near the top edge, feet near the bottom: a close, full-frame camera shot.
+    const lms = pose(0).map(([x, y, v]) => [0.5 + (x - 0.5) * 1.15, 0.12 + (y - 0.17) * 1.1, v]);
+    for (const key of keys) {
+      const a = Avatar.create(key);
+      let p = null;
+      for (let f = 0; f < 30; f++) p = a.update(lms, 640, 480, { now: f * 33 });
+      // The figure's real top, ears, hats, horns and antennas included (world y is up).
+      a.scene.updateMatrixWorld(true);
+      let maxY = -Infinity;
+      a.scene.traverse((o) => {
+        if (!o.isMesh || !o.visible) return;
+        for (let q = o.parent; q; q = q.parent) if (!q.visible) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        maxY = Math.max(maxY, o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).max.y);
+      });
+      const top = -maxY;
+      const ankles = Math.max(...p.legs.map((l) => l[2].y));
+      assert.ok(top >= 0, `${key} is cut off at the top (${top.toFixed(0)}px)`);
+      assert.ok(ankles > 480 * 0.78 && ankles < 480 * 0.95, `${key}'s feet at ${ankles.toFixed(0)}px, not on the floor`);
+    }
+  });
+  check("avatars: no WebGL means unsupported, so the blur mask stands in", () => {
+    assert.equal(Avatar.supported(), false);
+  });
+}

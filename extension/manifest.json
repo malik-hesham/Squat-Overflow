@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "StandUp Break",
+  "name": "Squat Overflow",
   "version": "0.3.0",
   "description": "Movement reminders with camera-coached 2-minute breaks, form-based XP, levels and a company leaderboard.",
   "action": {
-    "default_title": "StandUp Break",
+    "default_title": "Squat Overflow",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
@@ -33,15 +33,17 @@
     "storage",
     "alarms",
     "idle",
-    "tabs"
+    "tabs",
+    "identity"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.supabase.co wss://*.trycloudflare.com"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.supabase.co wss://*.trycloudflare.com https://www.googleapis.com https://oauth2.googleapis.com"
   },
   "browser_specific_settings": {
     "gecko": {
       "id": "standup-break@squatoverflow",
       "strict_min_version": "128.0"
     }
-  }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAous/taEMr07lrhF6A4w99Kp5OE7CUMO7hzME8Eg91GKbzUyRIkZN+1B+BLQOYXx8GU2SEq9DIblwj+Lct04c17TwtetX83Zf13qI9VpE4ICSDlzrxJn6L3PcxVVMpcs2FWI+kgzaU5KJQIXSYwfEkUeoM/CRv72kAIqDx6nvmLxk0Js85xiqo/1pCpGTNssqopZ2jSWvaP3wcCvw67ioUl0TL5VyjWmdIJHH6GYpUZkGANJhOfV2fhIlKbu+1fyheUOWguK9vrRR2vNRON8cwgZ4GABmY3ascpAZSzyFJUJqIO8sECiQveZcYpAL4lPwqtUMmjgc6cT//y17/I8QrQIDAQAB"
 }
