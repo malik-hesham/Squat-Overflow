@@ -2,6 +2,8 @@
 
 A Chrome extension that reminds you to move. When a break is due it opens a 2-minute routine for the muscle areas you picked. Your webcam scores how well you do each exercise, and the score turns into XP, levels, challenges and badges. In Competitive mode your score also appears on a company leaderboard.
 
+VS Code user? See [vscode-extension/README.md](vscode-extension/README.md).
+
 ## Run the demo
 
 1. **Pose server** (Python 3.10–3.12):
@@ -15,6 +17,8 @@ A Chrome extension that reminds you to move. When a break is due it opens a 2-mi
 4. **Try it**: click the toolbar icon, then **Break now**. To see automatic reminders, set a custom interval of 1 minute and include today in your workdays.
 
 ## Colleagues sharing one pose server (optional)
+
+By default the pose server accepts the browser extensions and pages served from 127.0.0.1 or localhost (used by the VS Code extension), and refuses other web pages.
 
 On the machine running the server:
 

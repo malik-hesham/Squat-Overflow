@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app import app
+import app as app_module
+from app import app, origin_allowed
 from pose_engine import MODEL_PATH
 
 pytestmark = pytest.mark.skipif(not MODEL_PATH.exists(), reason="pose model not downloaded")
@@ -132,3 +133,31 @@ def test_angle_mode_and_calibration_messages(client):
 def test_firefox_extension_origin_is_accepted(client):
     with client.websocket_connect("/ws", headers={"origin": "moz-extension://2b7a1c9e-4f3d-4c55-9a51-3f0d6e8b1a22"}) as ws:
         assert ws.receive_json()["type"] == "ready"
+
+
+@pytest.mark.parametrize("origin", ["http://127.0.0.1:47821", "http://localhost:3000"])
+def test_loopback_origin_is_accepted(client, origin):
+    with client.websocket_connect("/ws", headers={"origin": origin}) as ws:
+        assert ws.receive_json()["type"] == "ready"
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://127.0.0.1.evil.com",
+        "http://localhost.evil.com:80",
+        "https://127.0.0.1:47821",
+        "http://127.0.0.1",
+    ],
+)
+def test_lookalike_loopback_origin_is_rejected(client, origin):
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws", headers={"origin": origin}) as ws:
+            ws.receive_json()
+
+
+def test_explicit_allowed_origins_replace_loopback_default(monkeypatch):
+    monkeypatch.setattr(app_module, "ALLOWED_ORIGINS", {"https://coach.example"})
+    assert origin_allowed("https://coach.example")
+    assert not origin_allowed("http://127.0.0.1:47821")
+    assert not origin_allowed("chrome-extension://abcdefghijklmnopabcdefghijklmnop")
