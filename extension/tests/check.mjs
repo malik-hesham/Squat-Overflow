@@ -419,6 +419,13 @@ check("decideFire: last slot of the day rolls to next morning", () => {
   assert.equal(r.schedule.nextAt, at(16, 10));
 });
 
+check("award: a weekend break does not reset the streak on Monday", () => {
+  const sat = new Date(2026, 10, 7, 11).getTime();
+  const p0 = { ...blankProfile(), streak: 3, lastStreakDay: dayKey(fri) };
+  const afterSat = award(p0, full(), sat, WORKDAYS).profile;
+  assert.equal(award(afterSat, full(), mon, WORKDAYS).profile.streak, afterSat.streak + 1);
+});
+
 const pending = [];
 check("leaderboard unconfigured resolves null/false without throwing", () => {
   pending.push(

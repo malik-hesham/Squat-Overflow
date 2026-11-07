@@ -83,7 +83,7 @@ export function award(profile, result, now, workdays) {
 
   breakdown.breakXp = breakXp(result);
   if (breakdown.breakXp > 0 && p.lastStreakDay !== today) {
-    p.streak = p.lastStreakDay && p.lastStreakDay === previousWorkday(now, workdays) ? p.streak + 1 : 1;
+    p.streak = p.lastStreakDay && p.lastStreakDay >= previousWorkday(now, workdays) ? p.streak + 1 : 1;
     p.lastStreakDay = today;
     breakdown.firstBreak = XP.firstBreak;
     breakdown.streak = Math.min(p.streak * XP.streakPerDay, XP.streakMax);
