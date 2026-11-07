@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow_ref }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  server:
+    name: Pose server tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            server/requirements.txt
+            server/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  extension:
+    name: Extension tests and store zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node extension/tests/check.mjs
+      - run: node scripts/build-extension.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: extension-zip
+          path: dist/*.zip
+          if-no-files-found: error
+
+  docker:
+    name: Pose server image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build --build-arg VERSION=ci -t squat-overflow-pose server
+      - name: MediaPipe loads inside the image
+        run: docker run --rm squat-overflow-pose python -c "from pose_engine import MODEL_PATH, PoseEngine; PoseEngine(MODEL_PATH).close(); print('pose engine ok')"
+      - name: Server answers /health and /privacy
+        run: |
+          docker run -d --name pose -p 8080:8080 squat-overflow-pose
+          for _ in $(seq 1 30); do curl -fsS localhost:8080/health -o health.json && break; sleep 1; done
+          python3 -c "import json; b = json.load(open('health.json')); assert b['ok'] and b['version'] == 'ci', b.get('version'); print(len(b['exercises']), 'exercises')"
+          curl -fsS localhost:8080/privacy | grep -q "privacy policy"
+      - if: failure()
+        run: docker logs pose || true
+
+  supabase:
+    name: Database migrations apply
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.122.1
+      # Starts a throwaway local Postgres and applies every file in supabase/migrations/.
+      - run: supabase db start
+      - name: Leaderboard functions exist
+        run: |
+          docker exec "$(docker ps --filter name=supabase_db --format '{{.Names}}' | head -1)" \
+            psql -U postgres -tAc "select count(*) from pg_proc where proname in ('submit_score', 'leaderboard') and pronamespace = 'public'::regnamespace" \
+            | grep -qx 2
+      - if: always()
+        run: supabase stop --no-backup || true
