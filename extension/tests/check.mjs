@@ -645,6 +645,28 @@ Promise.all(pending).then(
     assert.ok(shown >= 16, `only ${shown} particles visible`);
     assert.ok(THREE.ExtrudeGeometry);
   });
+  check("avatars: zoomed out, a person filling the camera frame fits in view, feet on the floor", () => {
+    // Head near the top edge, feet near the bottom: a close, full-frame camera shot.
+    const lms = pose(0).map(([x, y, v]) => [0.5 + (x - 0.5) * 1.15, 0.12 + (y - 0.17) * 1.1, v]);
+    for (const key of keys) {
+      const a = Avatar.create(key);
+      let p = null;
+      for (let f = 0; f < 30; f++) p = a.update(lms, 640, 480, { now: f * 33 });
+      // The figure's real top, ears, hats, horns and antennas included (world y is up).
+      a.scene.updateMatrixWorld(true);
+      let maxY = -Infinity;
+      a.scene.traverse((o) => {
+        if (!o.isMesh || !o.visible) return;
+        for (let q = o.parent; q; q = q.parent) if (!q.visible) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        maxY = Math.max(maxY, o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).max.y);
+      });
+      const top = -maxY;
+      const ankles = Math.max(...p.legs.map((l) => l[2].y));
+      assert.ok(top >= 0, `${key} is cut off at the top (${top.toFixed(0)}px)`);
+      assert.ok(ankles > 480 * 0.78 && ankles < 480 * 0.95, `${key}'s feet at ${ankles.toFixed(0)}px, not on the floor`);
+    }
+  });
   check("avatars: no WebGL means unsupported, so the blur mask stands in", () => {
     assert.equal(Avatar.supported(), false);
   });

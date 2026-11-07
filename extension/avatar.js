@@ -14,6 +14,12 @@ import { STANDING, add, clamp, createRig, hash, rot } from "./lib/avatar-rig.js"
 import { GEO, faceMaterials, isShared, makeMaterials, mesh } from "./lib/avatar-kit.js";
 
 const ISSUE_COLOR = "#ffb547";
+// The character is drawn zoomed out from the camera picture, towards the
+// backdrop's floor line: its big head (and ears, hats, horns, antennas) then
+// fits above someone who fills the frame, and their feet stay on the floor.
+const ZOOM = 0.64;
+const FLOOR = 0.8; // the backdrop's floor line, as a fraction of the height
+const zoomOut = (lms) => lms?.map((lm) => (lm ? [0.5 + (lm[0] - 0.5) * ZOOM, FLOOR + (lm[1] - FLOOR) * ZOOM, ...lm.slice(2)] : lm));
 const HALO = "rgba(190, 210, 255, 0.3)";
 
 // Labels for the picker; the keys are what settings store.
@@ -223,7 +229,7 @@ export function create(requested, fitness = {}) {
       const dt = lastNow ? clamp((now - lastNow) / 1000, 0, 0.25) : 0;
       lastNow = now;
       lastDt = dt;
-      rig.setTargets(lms, w, h);
+      rig.setTargets(zoomOut(lms), w, h);
       const p = rig.advance(dt, h);
       pose(p, issues);
       return p;
@@ -238,7 +244,7 @@ export function create(requested, fitness = {}) {
     },
     // Draw a still pose with the loose parts already settled (picker thumbnails).
     still(ctx, lms, w, h) {
-      const p = rig.settle(lms, w, h);
+      const p = rig.settle(zoomOut(lms), w, h);
       pose(p, false);
       if (p) render(ctx, p, w, h, false, 2);
     },
@@ -265,7 +271,7 @@ function twinkle(g, c, s, color) {
 
 // A soft-lit little room: a gradient wall with faint stars and a floor grid.
 export function drawBackdrop(g, w, h) {
-  const floorY = h * 0.8;
+  const floorY = h * FLOOR;
   const wall = g.createLinearGradient(0, 0, 0, floorY);
   wall.addColorStop(0, "#2c3755");
   wall.addColorStop(1, "#1e2539");
@@ -304,9 +310,6 @@ export function drawBackdrop(g, w, h) {
   g.stroke();
 }
 
-// The standing pose shrunk towards the floor, so big heads, ears and hats fit a thumbnail.
-const THUMB_POSE = STANDING.map(([x, y, v]) => [0.5 + (x - 0.5) * 0.78, 0.94 - (0.94 - y) * 0.78, v]);
-
 // Picker thumbnail for a character key, or "blur" for the blurred-camera look.
 // `fitness` shows the character as buff or droopy as the user has made it.
 export function drawThumb(canvas, key, fitness) {
@@ -321,7 +324,7 @@ export function drawThumb(canvas, key, fitness) {
     fg.fillStyle = bg;
     fg.fillRect(0, 0, w, h);
     const a = create("bunny");
-    a.still(fg, THUMB_POSE, w, h);
+    a.still(fg, STANDING, w, h);
     a.dispose();
     g.save();
     g.filter = `blur(${Math.max(3, w / 18)}px)`;
@@ -331,7 +334,7 @@ export function drawThumb(canvas, key, fitness) {
   }
   drawBackdrop(g, w, h);
   const a = create(key, fitness);
-  a.still(g, THUMB_POSE, w, h);
+  a.still(g, STANDING, w, h);
   a.dispose();
 }
 

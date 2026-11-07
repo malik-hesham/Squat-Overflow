@@ -242,8 +242,9 @@ export const CHARACTERS = {
       const { head } = pose;
       for (const s of [-1, 1]) {
         const base = add(head.c, rot(head.up, s * 0.38), head.r * 0.8);
-        const d = rot(head.up, s * 0.22);
-        rig.stepChain(`ear${s}`, 5, base, [d, d, d, d], head.r * 0.5, 0.06, g, 0.975, dt);
+        // Floppy: each segment leans further out, so the ears arc over to the sides.
+        const dirs = [0.4, 0.68, 0.98, 1.28].map((a) => rot(head.up, s * a));
+        rig.stepChain(`ear${s}`, 5, base, dirs, head.r * 0.34, 0.06, g, 0.975, dt);
       }
     },
     build(root, mats, { buff, rig }) {
