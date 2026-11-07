@@ -98,9 +98,14 @@
         <label class="toggle"><input type="checkbox" id="angle3d"> 3D angles (any camera angle)</label>
         <p class="hint">Measures real joint angles from MediaPipe's 3D world landmarks, so a knee
           bending towards the camera still reads right. The chart shows 2D and 3D side by side.</p>
-        <label class="toggle"><input type="checkbox" id="privacy"> Sensitive mode (blur me on screen)</label>
-        <p class="hint">Blurs you in the camera preview. Pose tracking still works, and frames never
-          leave this computer.</p>
+        <label class="toggle"><input type="checkbox" id="privacy"> Sensitive mode (hide me on screen)</label>
+        <fieldset class="styles" id="privacyStyles" hidden>
+          <legend>Hide me with</legend>
+          <div class="style-grid" id="styleGrid"></div>
+        </fieldset>
+        <p class="hint" id="privacyHint">Hides you in the camera preview: blur you, or swap you for a
+          character that copies your moves. Pose tracking still works, and frames never leave this
+          computer.</p>
       </div>
 
       <div class="card">
@@ -179,6 +184,7 @@
     </div>
   </dialog>
 
+  <script src="avatar.js"></script>
   <script src="trainer.js"></script>
 </body>
 </html>
