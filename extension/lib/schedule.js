@@ -132,3 +132,7 @@ export function scheduleSettingsChanged(prev, next) {
     days(prev.workdays) !== days(next.workdays)
   );
 }
+
+export function weekOrder(weekStart) {
+  return Array.from({ length: 7 }, (_, k) => (weekStart + k) % 7);
+}

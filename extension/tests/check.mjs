@@ -3,7 +3,7 @@ import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js"
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
-  nextActiveSlot, decideFire, isActive, scheduleSettingsChanged,
+  nextActiveSlot, decideFire, isActive, scheduleSettingsChanged, weekOrder,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../lib/challenges.js";
@@ -646,6 +646,12 @@ check("agenda: current meeting, upcoming blocks, break-sized gaps, tomorrow labe
   assert.deepEqual(agenda([], now), []);
   const later = [{ start: now + 23 * 60 * M, end: now + 27 * 60 * M }, { start: now + 25 * 60 * M, end: now + 26 * 60 * M }];
   assert.deepEqual(agenda(later, now).map((x) => x.end), [now + 27 * 60 * M]);
+});
+
+check("weekOrder: seven days starting from the chosen first day", () => {
+  assert.deepEqual(weekOrder(6), [6, 0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(weekOrder(0), [0, 1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(weekOrder(1), [1, 2, 3, 4, 5, 6, 0]);
 });
 
 const pending = [];

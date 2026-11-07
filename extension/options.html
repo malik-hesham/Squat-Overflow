@@ -42,7 +42,16 @@
 
       <section>
         <h2 data-i18n="when">When?</h2>
-        <label class="inline"><span data-i18n="from">From</span> <input type="time" id="activeStart" /> <span data-i18n="to">to</span> <input type="time" id="activeEnd" /></label>
+        <div class="when-row">
+          <label class="inline"><span data-i18n="from">From</span> <input type="time" id="activeStart" /> <span data-i18n="to">to</span> <input type="time" id="activeEnd" /></label>
+          <label class="inline"><span data-i18n="weekStarts">Week starts on</span>
+            <select id="weekStart">
+              <option value="6" data-i18n="weekday.6">Saturday</option>
+              <option value="0" data-i18n="weekday.0">Sunday</option>
+              <option value="1" data-i18n="weekday.1">Monday</option>
+            </select>
+          </label>
+        </div>
         <div class="chips" id="workdays"></div>
         <label class="check"><input type="checkbox" id="autoPause" /> <span data-i18n="autoPause">Don't interrupt meetings or fullscreen</span></label>
       </section>

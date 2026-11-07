@@ -1,7 +1,7 @@
 import { getSettings, saveSettings, getProfile } from "./lib/store.js";
 import { Avatar } from "./avatar.js";
 import { AREAS } from "./lib/routine.js";
-import { scheduleSettingsChanged } from "./lib/schedule.js";
+import { scheduleSettingsChanged, weekOrder } from "./lib/schedule.js";
 import { THEMES, themeId, applyTheme, initTheme } from "./lib/themes.js";
 import { LANGS, initLang, applyLang, resolveLang, t, areaName, nameText } from "./lib/i18n.js";
 import { calendarState, connectCalendar, disconnectCalendar } from "./lib/calendar-client.js";
@@ -35,6 +35,7 @@ function read() {
     areas: [...$("areas").querySelectorAll("input:checked")].map((i) => i.value),
     activeStart: $("activeStart").value,
     activeEnd: $("activeEnd").value,
+    weekStart: Number($("weekStart").value),
     workdays: [...$("workdays").querySelectorAll("input:checked")].map((i) => Number(i.value)),
     autoPause: $("autoPause").checked,
     privacy: $("privacy").checked,
@@ -154,7 +155,12 @@ async function init() {
   const preset = PRESETS.includes(String(initial.intervalMin)) ? String(initial.intervalMin) : "custom";
   radios("interval").forEach((r) => (r.checked = r.value === preset));
   $("customMin").value = initial.intervalMin;
-  renderChips(initial.areas, initial.workdays);
+  $("weekStart").value = String(initial.weekStart);
+  renderChips(initial.areas, initial.workdays, initial.weekStart);
+  $("weekStart").addEventListener("change", () => {
+    const form = read();
+    renderChips(form.areas, form.workdays, form.weekStart);
+  });
   $("activeStart").value = initial.activeStart;
   $("activeEnd").value = initial.activeEnd;
   $("autoPause").checked = initial.autoPause;
@@ -174,11 +180,11 @@ async function init() {
   $("calBtn").addEventListener("click", toggleCalendar);
 }
 
-function renderChips(areas, workdays) {
+function renderChips(areas, workdays, weekStart) {
   $("areas").replaceChildren();
   $("workdays").replaceChildren();
   AREAS.forEach((a) => chip($("areas"), a, areaName(lang, a), areas.includes(a)));
-  DAYS.forEach((d) => chip($("workdays"), d, t(lang, `day.${d}`), workdays.includes(d)));
+  weekOrder(weekStart).forEach((d) => chip($("workdays"), d, t(lang, `day.${d}`), workdays.includes(d)));
 }
 
 async function renderCalendar(error = false) {
@@ -211,7 +217,7 @@ async function relabel(setting) {
   applyLang(lang);
   renderThemes(themeId(saved.theme));
   renderAvatars(avatarKey(saved.avatar));
-  renderChips(form.areas, form.workdays);
+  renderChips(form.areas, form.workdays, form.weekStart);
   render();
   refresh();
   renderCalendar();

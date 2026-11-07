@@ -16,6 +16,7 @@ export const SETTINGS_DEFAULTS = {
   theme: "auto",
   avatar: "bunny",
   lang: "auto",
+  weekStart: 1,
 };
 
 const PROFILE_KEY = "profile";

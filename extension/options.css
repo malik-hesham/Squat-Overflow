@@ -141,3 +141,18 @@ details {
   color: var(--accent);
   font-weight: 600;
 }
+.inline select {
+  margin-inline-start: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+.when-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 24px;
+}
