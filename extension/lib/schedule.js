@@ -136,3 +136,10 @@ export function scheduleSettingsChanged(prev, next) {
 export function weekOrder(weekStart) {
   return Array.from({ length: 7 }, (_, k) => (weekStart + k) % 7);
 }
+
+export function countdownText(msLeft) {
+  if (msLeft <= 0) return "move";
+  if (msLeft < 60_000) return `${Math.ceil(msLeft / 1000)}s`;
+  const minutes = Math.ceil(msLeft / 60_000);
+  return minutes >= 100 ? `${Math.round(minutes / 60)}h` : `${minutes}m`;
+}

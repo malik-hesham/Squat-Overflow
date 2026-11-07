@@ -1,6 +1,6 @@
 import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog, readLog, getActivity, setActivity } from "./lib/store.js";
 import { award } from "./lib/xp.js";
-import { initialSchedule, applyAction, rescheduleForInterval, decideFire, nextActiveSlot, IDLE_SEC } from "./lib/schedule.js";
+import { initialSchedule, applyAction, rescheduleForInterval, decideFire, nextActiveSlot, IDLE_SEC, countdownText } from "./lib/schedule.js";
 import { submitScore } from "./lib/leaderboard.js";
 import { noteAction } from "./lib/challenges.js";
 import { createSerial } from "./lib/serial.js";
@@ -13,6 +13,7 @@ const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 980, height: 760 };
 const ALARM = "next-break";
 const BADGE_TICK = "badge-tick";
+const COUNTDOWN = "countdown";
 const serial = createSerial();
 
 async function isBreakWindow(id) {
@@ -31,14 +32,32 @@ async function updateBadge() {
     await chrome.action.setBadgeText({ text: "" });
     return;
   }
-  const left = Math.max(0, Math.ceil((s.nextAt - Date.now()) / 60_000));
-  await chrome.action.setBadgeBackgroundColor({ color: left <= 0 ? "#ff6b6b" : "#3ddc97" });
-  await chrome.action.setBadgeText({ text: left <= 0 ? "move" : left >= 100 ? `${Math.round(left / 60)}h` : `${left}m` });
+  const msLeft = s.nextAt - Date.now();
+  const left = Math.max(0, Math.ceil(msLeft / 60_000));
+  await chrome.action.setBadgeBackgroundColor({ color: msLeft <= 0 ? "#ff6b6b" : msLeft < 60_000 ? "#ffb547" : "#3ddc97" });
+  await chrome.action.setBadgeText({ text: countdownText(msLeft) });
   const lang = resolveLang(settings.lang, navigator.language);
   const when = new Date(s.nextAt);
   const at = when.toLocaleTimeString(localeFor(lang), { hour: "2-digit", minute: "2-digit" });
   const day = when.toDateString() === new Date().toDateString() ? "" : `${when.toLocaleDateString(localeFor(lang), { weekday: "short" })} `;
-  await chrome.action.setTitle({ title: left < 60 ? t(lang, "tipIn", { n: left }) : t(lang, "tipAt", { when: `${day}${at}` }) });
+  const tip = msLeft > 0 && msLeft < 60_000 ? t(lang, "tipInSecs", { n: Math.ceil(msLeft / 1000) }) : left < 60 ? t(lang, "tipIn", { n: left }) : t(lang, "tipAt", { when: `${day}${at}` });
+  await chrome.action.setTitle({ title: tip });
+  if (msLeft > 0 && msLeft <= 60_000) startCountdown();
+}
+
+let countdownTimer = 0;
+
+function startCountdown() {
+  if (countdownTimer) return;
+  countdownTimer = setInterval(async () => {
+    const s = await getSchedule();
+    const msLeft = (s.nextAt ?? 0) - Date.now();
+    if (msLeft <= 0 || msLeft > 60_000) {
+      clearInterval(countdownTimer);
+      countdownTimer = 0;
+    }
+    await updateBadge();
+  }, 1000);
 }
 
 async function saveSchedule(schedule) {
@@ -46,6 +65,7 @@ async function saveSchedule(schedule) {
   const s = schedule.nextAt ? { ...schedule, nextAt: nextActiveSlot(schedule.nextAt, settings.intervalMin, settings) } : schedule;
   await setSchedule(s);
   if (s.nextAt) await chrome.alarms.create(ALARM, { when: s.nextAt });
+  if (s.nextAt && s.nextAt - Date.now() > 90_000) await chrome.alarms.create(COUNTDOWN, { when: s.nextAt - 60_000 });
   await updateBadge();
 }
 
@@ -195,7 +215,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM) serial(onNextBreak);
-  else if (alarm.name === BADGE_TICK) updateBadge();
+  else if (alarm.name === BADGE_TICK || alarm.name === COUNTDOWN) updateBadge();
 });
 
 chrome.windows.onRemoved.addListener((id) =>

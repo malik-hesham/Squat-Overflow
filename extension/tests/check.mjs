@@ -3,7 +3,7 @@ import { LEVELS, levelFor, breakXp, award, dayKey, isoWeek } from "../lib/xp.js"
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove, currentAreas } from "../lib/routine.js";
 import {
   SNOOZE_CAP, initialSchedule, onFire, applyAction, canSnooze, showWarning, warningHours, upcoming, rescheduleForInterval,
-  nextActiveSlot, decideFire, isActive, scheduleSettingsChanged, weekOrder,
+  nextActiveSlot, decideFire, isActive, scheduleSettingsChanged, weekOrder, countdownText,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction, withPeriods } from "../lib/challenges.js";
@@ -732,6 +732,17 @@ check("auth: Supabase token response maps to the stored session", () => {
     user: { id: "u1", email: "malik@leadliaison.com", name: "Malik Hesham", picture: "https://pic" },
   });
   assert.equal(toSession({ ...body, user: { id: "u1", email: "e@x.com" } }, CAL_NOW).user.name, "");
+});
+
+check("countdownText: seconds in the last minute, minutes below 100, hours above, move at zero", () => {
+  assert.equal(countdownText(45_000), "45s");
+  assert.equal(countdownText(59_400), "60s");
+  assert.equal(countdownText(60_000), "1m");
+  assert.equal(countdownText(61_000), "2m");
+  assert.equal(countdownText(99 * 60_000), "99m");
+  assert.equal(countdownText(150 * 60_000), "3h");
+  assert.equal(countdownText(0), "move");
+  assert.equal(countdownText(-5_000), "move");
 });
 
 const pending = [];

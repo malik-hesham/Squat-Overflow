@@ -18,6 +18,14 @@ const $ = (id) => document.getElementById(id);
 const hhmm = (at) => new Date(at).toLocaleTimeString(localeFor(lang), { hour: "2-digit", minute: "2-digit" });
 
 let paused = false;
+let countdownAt = 0;
+
+function renderCountdown() {
+  const msLeft = Math.max(0, countdownAt - Date.now());
+  $("nextText").textContent = msLeft < 60_000
+    ? t(lang, "nextAtSecs", { time: hhmm(countdownAt), n: Math.ceil(msLeft / 1000) })
+    : t(lang, "nextAt", { time: hhmm(countdownAt), n: Math.ceil(msLeft / 60_000) });
+}
 
 async function render() {
   const [settings, profile, s, log] = await Promise.all([getSettings(), getProfile(), getSchedule(), readLog()]);
@@ -39,8 +47,8 @@ async function render() {
     const day = new Date(s.nextAt).toLocaleDateString(localeFor(lang), { weekday: "short" });
     $("nextText").textContent = t(lang, "outsideHours", { day, time: hhmm(s.nextAt) });
   } else if (s.nextAt) {
-    const mins = Math.max(0, Math.ceil((s.nextAt - now) / 60_000));
-    $("nextText").textContent = t(lang, "nextAt", { time: hhmm(s.nextAt), n: mins });
+    countdownAt = s.nextAt;
+    renderCountdown();
   } else {
     $("nextText").textContent = t(lang, "notScheduled");
   }
@@ -222,6 +230,7 @@ document.querySelectorAll(".tab").forEach((t) =>
 initTheme();
 chrome.storage.onChanged.addListener(render);
 setInterval(render, 30_000);
+setInterval(() => countdownAt && countdownAt - Date.now() < 61_000 && renderCountdown(), 1000);
 render();
 renderBoard();
 
