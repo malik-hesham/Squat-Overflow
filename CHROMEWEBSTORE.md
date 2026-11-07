@@ -22,7 +22,7 @@ Counts your reps and scores your form live with your webcam, with a short demo c
 Turns breaks into progress: XP for every break, 8 levels, daily and weekly challenges, badges, streaks and an activity heatmap.
 Keeps you private: show yourself blurred or as a 3D character instead of on camera.
 Practice mode: try any exercise on its own, outside a scheduled break.
-Optional Competitive mode adds a company leaderboard, so colleagues on the same email domain can see each other's level and XP.
+Optional Competitive mode: sign in with your Google work account to join a leaderboard with colleagues on the same company email domain.
 Available in English and Arabic, with six color themes.
 
 HOW TO USE IT
@@ -31,7 +31,7 @@ HOW TO USE IT
 3. Click the toolbar icon any time to see your level, upcoming break and leaderboard, or to start a break now.
 
 PRIVACY
-Camera frames are sent over an encrypted connection to the Squat Overflow pose server only during a break. They are analysed in memory and never stored. Everything else stays on your computer. In Competitive mode only your chosen name, company domain, XP, level, streak and avatar are shared to the leaderboard. Full policy: https://squat-overflow-pose.fly.dev/privacy
+Camera frames are sent over an encrypted connection to the Squat Overflow pose server only during a break. They are analysed in memory and never stored. Everything else stays on your computer. Google sign-in is optional. In Competitive mode only your chosen name, company domain, XP, level, streak and avatar are shared to the leaderboard. Full policy: https://squat-overflow-pose.fly.dev/privacy
 ```
 
 **Category:** Productivity. "Health & Fitness" is not an extension category.
@@ -61,9 +61,9 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 | `alarms` | permissions | Opens the break window when the next break is due, and refreshes the countdown on the toolbar badge every minute. |
 | `idle` | permissions | Skips a reminder when the computer is idle or locked, so a break isn't counted while the user is away. |
 | `tabs` | permissions | Reads the address of tabs that are playing sound, to detect a Google Meet, Zoom or Teams call and hold the reminder until it ends. Also finds and focuses the extension's own break window. Addresses are checked on the device and never sent anywhere. |
-| `identity` | permissions | Optional "Connect Google Calendar" sign-in. Reads free/busy times (read-only `calendar.freebusy` scope) so reminders avoid meetings. No event titles or details are read. |
+| `identity` | permissions | Optional "Continue with Google" sign-in (`openid email profile`), which verifies the work email used to join the company leaderboard in Competitive mode. Also optional Google Calendar access: free/busy times only (read-only `calendar.freebusy` scope), so reminders avoid meetings. No event titles or details are read. |
 | Camera (browser prompt, no manifest permission) | n/a | The break window and Practice page ask for the webcam to count reps and score form. |
-| Remote connections (CSP `connect-src`) | n/a | `wss://squat-overflow-pose.fly.dev`: the pose server that analyses camera frames. `https://*.supabase.co`: leaderboard (Competitive mode only). `googleapis.com`: Calendar free/busy. Localhost and `*.trycloudflare.com`: self-hosted pose servers set in Advanced settings. No `host_permissions` are requested. |
+| Remote connections (CSP `connect-src`) | n/a | `wss://squat-overflow-pose.fly.dev`: the pose server that analyses camera frames. `https://*.supabase.co`: account sign-in and leaderboard. `googleapis.com`: Calendar free/busy. Localhost and `*.trycloudflare.com`: self-hosted pose servers set in Advanced settings. No `host_permissions` are requested. |
 
 ## Privacy and data use
 
@@ -73,10 +73,10 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 
 | Data type | Collected? | Off device? | Purpose | Shared with third parties? |
 |-----------|-----------|-------------|---------|---------------------------|
-| Personally identifiable info | Yes | Yes | (1) Webcam images of the user during a break, sent to the pose server for real-time pose detection and discarded immediately, never stored. (2) Display name and company email domain, sent to the leaderboard in Competitive mode only. | No. The service providers that host them (Fly.io, Supabase) only process them for these features. |
+| Personally identifiable info | Yes | Yes | (1) Webcam images of the user during a break, sent to the pose server for real-time pose detection and discarded immediately, never stored. (2) After optional Google sign-in: the account's email, name and picture, kept by the account service (Supabase Auth). (3) In Competitive mode: display name, plus the company domain taken from the verified email, on the leaderboard. | No. The service providers that host them (Fly.io, Supabase) only process them for these features. |
 | Health info | No | | XP and form scores are game points, not health data, and form scores never leave the device. | |
 | Financial info | No | | | |
-| Authentication info | Yes | Only to Google | The Google Calendar access token is stored on the device and sent only to Google to read free/busy times. Revoked on disconnect. | No |
+| Authentication info | Yes | Yes | The Google sign-in token is exchanged once with the account service (Supabase Auth) for a session. The session is stored on the device and sent to Supabase with leaderboard requests. The Google Calendar access token is stored on the device and sent only to Google; it is revoked on disconnect. | No |
 | Personal communications | No | | | |
 | Location | No | | | |
 | Web history | No | | Tab addresses are checked on the device to detect meeting sites; nothing is stored or sent. | |
@@ -115,7 +115,7 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 
 ### Known issues and limitations
 - The store assigns its own extension ID, which differs from the unpacked dev ID (`lpkaoaegdjhciohkfidnmabjigidofnd`). Moving from an unpacked install to the store install starts with fresh local progress.
-- The Google OAuth client must list the store ID's redirect URI, `https://<store-id>.chromiumapp.org/`, or Calendar sign-in fails. If the app is used outside the team, the `calendar.freebusy` scope may need Google's OAuth consent-screen verification.
+- The Google OAuth client must list the store ID's redirect URI, `https://<store-id>.chromiumapp.org/`, or Google sign-in and Calendar fail. If the app is used outside the team, the `calendar.freebusy` scope may need Google's OAuth consent-screen verification.
 - The pose server must allow the store origin. Add `chrome-extension://<store-id>` to `FORMCOACH_ALLOWED_ORIGINS` in `server/fly.toml`.
 
 ### Rejection history

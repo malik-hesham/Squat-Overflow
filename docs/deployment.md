@@ -76,12 +76,11 @@ You need admin access to the GitHub repo and owner access to the Fly, Supabase, 
 
 ### 2. Supabase (leaderboard)
 1. Create an access token at https://supabase.com/dashboard/account/tokens and look up the database password (Project Settings → Database).
-2. Production already has the leaderboard schema, pasted in by hand before migrations existed. Mark the first migration as applied so the first release doesn't re-run it:
+2. Production got the leaderboard schema by hand, pasted into the SQL Editor before migrations existed. **Don't** mark `20261107000000_leaderboard.sql` as applied. Let the first release run it: every statement is safe to re-run, and the run brings production up to the repo's schema even if a hand-pasted change was missed (such as the Google sign-in change to `submit_score`/`leaderboard`). It runs in one transaction. To preview it:
    ```bash
    npx supabase@2.122.1 link --project-ref hysvvrdopodlqvuxnvco
-   npx supabase@2.122.1 migration repair --status applied 20261107000000
+   npx supabase@2.122.1 db push --dry-run
    ```
-   Re-running it would also be harmless, because the SQL is idempotent.
 3. Check that `major_version` in `supabase/config.toml` matches `SHOW server_version;` in the SQL Editor.
 
 ### 3. GitHub
