@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FormCoach Trainer</title>
+  <link rel="stylesheet" href="trainer.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon-32.png" alt="" width="24" height="24">
+      <span>FormCoach</span><span class="tag">POC</span>
+    </div>
+    <div class="conn" id="conn" data-state="idle">
+      <span class="dot"></span><span id="connText">Not connected</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage-wrap">
+      <div class="banner routine" id="routine" hidden>
+        <div class="banner-main">
+          <span class="banner-tag" id="routineStep">Desk break · 1/3</span>
+          <strong id="routineName">Neck side tilt</strong>
+          <span class="banner-count" id="routineCount">0 / 6</span>
+        </div>
+        <div class="progress"><i id="routineBar"></i></div>
+        <div class="banner-actions">
+          <button id="routineSkip" class="ghost" type="button">Skip move</button>
+          <button id="routineEnd" class="ghost" type="button">End break</button>
+        </div>
+      </div>
+      <div class="banner calib-banner" id="calibBanner" hidden>
+        <div class="banner-main">
+          <span class="banner-tag">Calibrating</span>
+          <strong id="calibBannerText">Do 3 comfortable reps</strong>
+          <span class="dots" id="calibDots"></span>
+        </div>
+        <div class="banner-actions">
+          <button id="calibCancel" class="ghost" type="button">Cancel</button>
+        </div>
+      </div>
+      <div class="stage" id="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="placeholder" id="placeholder">
+          <p class="ph-title">Camera is off</p>
+          <p class="ph-sub">Pick an exercise and press <strong>Start</strong>. Frames are analysed by the
+            Python server on this computer and never leave it.</p>
+        </div>
+        <div class="hud" id="hud" hidden>
+          <div class="hud-reps"><span id="hudReps">0</span><small>reps</small></div>
+          <div class="hud-angle"><span id="hudAngle">–</span><small id="hudMetric">angle</small></div>
+          <div class="hud-privacy" id="hudPrivacy" hidden>Blur on</div>
+          <div class="hud-stage" id="hudStage">waiting</div>
+        </div>
+        <ul class="cues" id="cues" aria-live="polite"></ul>
+        <div class="flash" id="flash"></div>
+      </div>
+      <div class="chart-card">
+        <div class="card-head">
+          <h2 id="chartTitle">Joint angle</h2>
+          <span class="legend" id="chartLegend" hidden>
+            <span class="key key-main" id="legendMain">3D</span>
+            <span class="key key-alt" id="legendAlt">2D</span>
+          </span>
+          <span class="muted" id="perf"></span>
+        </div>
+        <canvas id="chart" height="140"></canvas>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="card">
+        <label class="field">
+          <span>Exercise</span>
+          <select id="exercise"></select>
+        </label>
+        <p class="hint how-to" id="howTo"></p>
+        <div class="demo" id="demo" hidden>
+          <button id="demoBtn" class="link" type="button">▶ Watch demo</button>
+          <p class="hint" id="demoCredit"></p>
+        </div>
+        <p class="hint" id="cameraHint"></p>
+        <div class="calib">
+          <p class="hint" id="calibText">Using default thresholds.</p>
+          <div class="row">
+            <button id="calibBtn" class="ghost" type="button" disabled>Calibrate to me (3 reps)</button>
+            <button id="calibReset" class="link" type="button" hidden>Use defaults</button>
+          </div>
+        </div>
+        <div class="row">
+          <button id="startBtn" class="primary">Start</button>
+          <button id="resetBtn" class="ghost" disabled>New set</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="voice"> Voice cues</label>
+        <label class="toggle"><input type="checkbox" id="angle3d"> 3D angles (any camera angle)</label>
+        <p class="hint">Measures real joint angles from MediaPipe's 3D world landmarks, so a knee
+          bending towards the camera still reads right. The chart shows 2D and 3D side by side.</p>
+        <label class="toggle"><input type="checkbox" id="privacy"> Sensitive mode (hide me on screen)</label>
+        <fieldset class="styles" id="privacyStyles" hidden>
+          <legend>Hide me with</legend>
+          <div class="style-grid" id="styleGrid"></div>
+        </fieldset>
+        <p class="hint" id="privacyHint">Hides you in the camera preview: blur you, or swap you for a
+          character that copies your moves. Pose tracking still works, and frames never leave this
+          computer.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>This set</h2>
+          <button id="shareBtn" class="link" type="button" disabled>Share card</button>
+        </div>
+        <dl class="stats">
+          <div><dt>Reps</dt><dd id="sReps">0</dd></div>
+          <div><dt>Clean</dt><dd id="sGood">0</dd></div>
+          <div><dt>Partial</dt><dd id="sPartial">0</dd></div>
+          <div><dt>Avg tempo</dt><dd id="sTempo">–</dd></div>
+          <div><dt>Avg range</dt><dd id="sRom">–</dd></div>
+          <div><dt>Form score</dt><dd id="sScore">–</dd></div>
+        </dl>
+        <div id="topIssues"></div>
+      </div>
+
+      <div class="card grow">
+        <div class="card-head">
+          <h2>Rep log</h2>
+          <button id="exportBtn" class="link" disabled>Export CSV</button>
+        </div>
+        <ol class="replog" id="repLog"></ol>
+        <p class="muted empty" id="repEmpty">Completed reps will appear here.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Desk break coach</h2>
+          <span class="muted" id="breakNext"></span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="breakEnabled"> Remind me to move</label>
+        <label class="field">
+          <span>Remind me after</span>
+          <select id="breakInterval">
+            <option value="1">1 min at the keyboard (demo)</option>
+            <option value="20">20 min at the keyboard</option>
+            <option value="30">30 min at the keyboard</option>
+            <option value="45">45 min at the keyboard</option>
+            <option value="50">50 min at the keyboard</option>
+            <option value="60">60 min at the keyboard</option>
+            <option value="90">90 min at the keyboard</option>
+          </select>
+        </label>
+        <p class="hint">Runs in the background while Chrome is open. Stepping away for 5 minutes
+          counts as a break. The reminder opens a 2-minute, 3-move routine you can do seated.</p>
+        <p class="hint how-to" id="breakToday"></p>
+        <div class="row">
+          <button id="breakNow" type="button">Take a break now</button>
+          <button id="breakTest" class="ghost" type="button">Test reminder</button>
+        </div>
+      </div>
+
+      <details class="card">
+        <summary>Server</summary>
+        <label class="field">
+          <span>WebSocket URL</span>
+          <input id="serverUrl" type="text" spellcheck="false">
+        </label>
+        <p class="hint">Start it with <code>python app.py</code> in the <code>server</code> folder.</p>
+      </details>
+    </aside>
+  </main>
+
+  <dialog class="card-dialog" id="cardDialog" aria-labelledby="cardDialogTitle">
+    <div class="dialog-head">
+      <h2 id="cardDialogTitle">Your session card</h2>
+      <button id="cardClose" class="link" type="button" aria-label="Close">Close</button>
+    </div>
+    <img id="cardImg" alt="Session summary card">
+    <p class="hint">No camera image is on the card: the figure is drawn from your best rep's pose.</p>
+    <div class="row">
+      <button id="cardDownload" class="primary" type="button">Download PNG</button>
+      <button id="cardCopy" type="button">Copy image</button>
+    </div>
+  </dialog>
+
+  <script src="avatar.js"></script>
+  <script src="trainer.js"></script>
+</body>
+</html>

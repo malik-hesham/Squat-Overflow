@@ -1,4 +1,4 @@
-"""Short demo videos (under 20 s) for each exercise, shown in the break window on request.
+"""Short demo videos (under 20 s) for each exercise, shown in the trainer on request.
 
 Picked from YouTube per exercise: public, embeddable, not age-restricted and
 shorter than 20 seconds, preferring physio / rehab clinics, exercise libraries
