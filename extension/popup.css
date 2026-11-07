@@ -76,7 +76,7 @@ body {
 }
 .board-rows li {
   display: grid;
-  grid-template-columns: 26px 1fr auto;
+  grid-template-columns: 26px 28px 1fr auto;
   gap: 6px;
   padding: 5px 6px;
   border-radius: 8px;
@@ -96,28 +96,8 @@ body {
   font-weight: 400;
 }
 .board-rows .pts {
-  text-align: right;
+  text-align: end;
   font-size: 12px;
-}
-.challenge-rows {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-.challenge-rows li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
-  font-size: 13px;
-}
-.challenge-rows li.done {
-  color: var(--accent);
-}
-.challenge-rows .bar {
-  grid-column: 1 / -1;
-  height: 5px;
 }
 .badges {
   display: flex;
@@ -140,7 +120,8 @@ body {
 }
 .heat-months {
   grid-template-columns: repeat(20, 11px);
-  margin: 8px 0 2px 31px;
+  margin: 8px 0 2px;
+  margin-inline-start: 31px;
   height: 12px;
   font-size: 9px;
   color: var(--muted);
@@ -200,6 +181,105 @@ body {
   font-size: 11px;
   color: var(--muted);
 }
-.actions #breakNow {
+.me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.me canvas {
+  width: 36px;
+  height: 45px;
+  border-radius: 8px;
+  flex: none;
+}
+.me-text {
+  flex: 1;
+  min-width: 0;
+}
+.me-name {
+  display: block;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-rows canvas {
+  width: 28px;
+  height: 35px;
+  border-radius: 6px;
+}
+.challenge-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+.tile {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 7px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 11px;
+  overflow: hidden;
+}
+.tile.done {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+.tile.wide {
   grid-column: 1 / -1;
+  aspect-ratio: auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.tile-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.tile-name {
+  font-weight: 600;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tile.wide .tile-name {
+  flex: 1;
+}
+.tile-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tile-foot b {
+  color: var(--gold);
+}
+.tile .bar {
+  height: 4px;
+}
+.tile.wide .bar {
+  width: 70px;
+  flex: none;
+}
+.tile-check {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 6px;
+  color: var(--accent);
+  font-weight: 800;
+}
+.tile-foot span,
+.tile-foot b {
+  direction: ltr;
+  unicode-bidi: isolate;
 }

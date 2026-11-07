@@ -11,7 +11,8 @@ export const DAILY_POOL = [
 
 export const WEEKLY = { target: 10, bonus: 100 };
 
-const DAILY_COUNT = 3;
+const DAILY_MIN = 2;
+const DAILY_MAX = 5;
 const EARLY_HOUR = 10;
 
 function hash(text) {
@@ -21,8 +22,10 @@ function hash(text) {
 }
 
 export function dailyFor(now) {
-  const offset = hash(dayKey(now)) % DAILY_POOL.length;
-  return Array.from({ length: DAILY_COUNT }, (_, k) => DAILY_POOL[(offset + k) % DAILY_POOL.length].id);
+  const day = dayKey(now);
+  const offset = hash(day) % DAILY_POOL.length;
+  const count = DAILY_MIN + (hash(`${day}:count`) % (DAILY_MAX - DAILY_MIN + 1));
+  return Array.from({ length: count }, (_, k) => DAILY_POOL[(offset + k) % DAILY_POOL.length].id);
 }
 
 export function withPeriods(profile, now) {

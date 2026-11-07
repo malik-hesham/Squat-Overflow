@@ -48,9 +48,13 @@ export function buildRoutine(catalog, { areas, featured, lastKey, n }) {
 }
 
 export function swapMove(catalog, moves, i) {
-  const area = moves[i].area;
-  const e = catalog.find((x) => x.category === area && !moves.some((m) => m.key === x.key));
-  return e ? toMove(e) : null;
+  const list = catalog.filter((x) => x.category === moves[i].area);
+  const start = list.findIndex((x) => x.key === moves[i].key);
+  for (let step = 1; step < list.length; step++) {
+    const e = list[(start + step + list.length) % list.length];
+    if (!moves.some((m, k) => k !== i && m.key === e.key)) return toMove(e);
+  }
+  return null;
 }
 
 export function needsPositioning(move) {

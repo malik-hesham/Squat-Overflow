@@ -11,6 +11,9 @@ import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
 import { activityLevel, recordActivity, backfillActivity, heatmapWeeks, activityTotals } from "../lib/activity.js";
 import { avatarFitness, missedWorkdays, fitnessCaption } from "../lib/fitness.js";
+import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, localeFor, nameText, translationKeys } from "../lib/i18n.js";
+import { badgeLabel } from "../lib/badges.js";
+import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy } from "../lib/calendar.js";
 
 function check(name, fn) {
   try {
@@ -94,7 +97,9 @@ check("isoWeek and dayKey", () => {
 });
 
 check("award: first scored break of day gets bonuses, streak continues from previous workday", () => {
-  const p0 = { ...blankProfile(), xp: 95, streak: 2, lastStreakDay: dayKey(fri) };
+  const ids = dailyFor(mon);
+  const quiet = { daily: { day: dayKey(mon), ids, areas: [], breaks: 0, run: 0, done: ids }, weekly: { week: isoWeek(mon), area: featuredArea(mon), count: 10, done: true } };
+  const p0 = { ...blankProfile(), ...quiet, xp: 95, streak: 2, lastStreakDay: dayKey(fri) };
   const { profile, breakdown, levelUp } = award(p0, full(), mon, WORKDAYS);
   assert.equal(profile.streak, 3);
   assert.deepEqual([breakdown.breakXp, breakdown.firstBreak, breakdown.streak], [10, 5, 3]);
@@ -259,11 +264,13 @@ check("upcoming after snooze lists shifted times", () => {
 
 check("leaderboard payload maps fields, lowercases company, zeroes stale week", () => {
   const profile = { ...blankProfile(), playerId: "id1", secret: "sec", xp: 260, streak: 4, weekXp: 40, week: "2026-W45" };
-  const settings = { name: "Malik", company: "LeadLiaison.COM" };
+  const settings = { name: "Malik", company: "LeadLiaison.COM", avatar: "penguin" };
   assert.deepEqual(toPayload(profile, settings, false, fri), {
     p_id: "id1", p_secret: "sec", p_name: "Malik", p_company: "leadliaison.com", p_xp: 260, p_level: 3,
-    p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false,
+    p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false, p_avatar: "penguin",
   });
+  assert.equal(toPayload(profile, { ...settings, avatar: "<script>" }, false, fri).p_avatar, "bunny");
+  assert.equal(toPayload(profile, { name: "M", company: "x.com" }, false, fri).p_avatar, "bunny");
   const stale = toPayload(profile, settings, true, mon);
   assert.equal(stale.p_week, "2026-W46");
   assert.equal(stale.p_week_xp, 0);
@@ -286,10 +293,11 @@ const brk = (areas, completed = true) => ({
 });
 const ids = (r) => r.completed.map((c) => c.id);
 
-check("dailyFor: stable, 3 distinct pool ids, varies across a week", () => {
+check("dailyFor: stable, 2-5 distinct pool ids, varies across a week", () => {
   const a = dailyFor(mon);
   assert.deepEqual(a, dailyFor(mon + H));
-  assert.equal(new Set(a).size, 3);
+  assert.ok(a.length >= 2 && a.length <= 5);
+  assert.equal(new Set(a).size, a.length);
   assert.ok(a.every((id) => DAILY_POOL.some((c) => c.id === id)));
   const seen = new Set(Array.from({ length: 7 }, (_, k) => dailyFor(mon + k * DAY).join()));
   assert.ok(seen.size > 1);
@@ -553,6 +561,70 @@ check("nextOpenMove: next unfinished exercise after the current one, wrapping, -
   assert.equal(nextOpenMove(moves, prog(6, 6, 6), 1), -1);
 });
 
+check("swapMove cycles through every exercise in the area, skipping ones used elsewhere", () => {
+  const byKey = (k) => CATALOG.find((e) => e.key === k);
+  const move = (k) => ({ key: k, label: k, area: byKey(k).category, camera: byKey(k).camera, how_to: "", demo: null, target: BREAK_REPS });
+  const cycle = (moves, i, n) => {
+    const seen = [];
+    let ms = moves;
+    for (let s = 0; s < n; s++) {
+      const next = swapMove(CATALOG, ms, i);
+      seen.push(next.key);
+      ms = ms.map((m, k) => (k === i ? next : m));
+    }
+    return seen;
+  };
+  assert.deepEqual(cycle([move("air_curl"), move("neck_tilt"), move("t_raise")], 0, 4), ["triceps_reach", "chair_dip", "wrist_flex", "air_curl"]);
+  assert.deepEqual(cycle([move("air_curl"), move("chair_dip"), move("t_raise")], 0, 3), ["triceps_reach", "wrist_flex", "air_curl"]);
+});
+
+const CAL_NOW = Date.UTC(2026, 10, 9, 10, 0);
+
+check("calendar: auth URL asks Google for free/busy only", () => {
+  const url = new URL(buildAuthUrl("cid.apps.googleusercontent.com", "https://abc.chromiumapp.org/", true));
+  assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
+  assert.equal(url.searchParams.get("client_id"), "cid.apps.googleusercontent.com");
+  assert.equal(url.searchParams.get("response_type"), "token");
+  assert.equal(url.searchParams.get("redirect_uri"), "https://abc.chromiumapp.org/");
+  assert.equal(url.searchParams.get("scope"), CALENDAR_SCOPE);
+  assert.equal(CALENDAR_SCOPE, "https://www.googleapis.com/auth/calendar.freebusy");
+  assert.equal(url.searchParams.get("prompt"), "consent");
+  assert.equal(new URL(buildAuthUrl("c", "https://r/", false)).searchParams.get("prompt"), "none");
+});
+
+check("calendar: parses the token from the redirect, rejects errors", () => {
+  const ok = parseAuthResponse("https://abc.chromiumapp.org/#access_token=ya29.x&token_type=Bearer&expires_in=3599&scope=s", CAL_NOW);
+  assert.deepEqual(ok, { token: "ya29.x", expiresAt: CAL_NOW + 3599 * 1000 });
+  assert.equal(parseAuthResponse("https://abc.chromiumapp.org/#error=access_denied", CAL_NOW), null);
+  assert.equal(parseAuthResponse("https://abc.chromiumapp.org/", CAL_NOW), null);
+});
+
+check("calendar: busy blocks parsed and sorted from the free/busy response", () => {
+  const body = { calendars: { primary: { busy: [
+    { start: "2026-11-09T12:00:00Z", end: "2026-11-09T12:30:00Z" },
+    { start: "2026-11-09T09:45:00Z", end: "2026-11-09T10:20:00Z" },
+  ] } } };
+  assert.deepEqual(parseBusy(body), [
+    { start: Date.UTC(2026, 10, 9, 9, 45), end: Date.UTC(2026, 10, 9, 10, 20) },
+    { start: Date.UTC(2026, 10, 9, 12, 0), end: Date.UTC(2026, 10, 9, 12, 30) },
+  ]);
+  assert.deepEqual(parseBusy({}), []);
+});
+
+check("calendar: in a meeting now, and the next meeting after now", () => {
+  const busy = [{ start: CAL_NOW - 15 * M, end: CAL_NOW + 20 * M }, { start: CAL_NOW + 2 * 60 * M, end: CAL_NOW + 150 * M }];
+  assert.deepEqual(busyNow(busy, CAL_NOW), busy[0]);
+  assert.equal(busyNow(busy, CAL_NOW + 30 * M), null);
+  assert.deepEqual(nextMeeting(busy, CAL_NOW), busy[1]);
+  assert.equal(nextMeeting(busy, CAL_NOW + 3 * 60 * M), null);
+});
+
+check("dailyFor: the number of challenges changes from day to day within 2-5", () => {
+  const counts = new Set(Array.from({ length: 60 }, (_, k) => dailyFor(mon + k * DAY).length));
+  assert.ok([...counts].every((n) => n >= 2 && n <= 5));
+  assert.ok(counts.size >= 3);
+});
+
 const pending = [];
 check("leaderboard unconfigured resolves null/false without throwing", () => {
   pending.push(
@@ -575,6 +647,59 @@ pending.push(
     },
   ),
 );
+check("i18n: t() translates, interpolates and falls back to English then the key", () => {
+  assert.equal(t("en", "nextAt", { time: "10:30", n: 5 }), "Next break at 10:30 · in 5 min");
+  assert.equal(t("ar", "nextAt", { time: "10:30", n: 5 }), "الاستراحة القادمة 10:30 · بعد 5 دقيقة");
+  assert.equal(t("ar", "exerciseStep", { i: 1, n: 3 }), "التمرين 1 من 3");
+  assert.equal(t("en", "level", { n: 2 }), "Lv 2 · {name}");
+  assert.equal(t("xx", "done"), "Done");
+  assert.equal(t("ar", "no.such.key"), "no.such.key");
+});
+check("i18n: every English string has an Arabic translation", () => {
+  const ar = new Set(translationKeys("ar"));
+  const missing = translationKeys("en").filter((k) => !ar.has(k));
+  assert.deepEqual(missing, []);
+  assert.deepEqual(translationKeys("en").filter((k) => t("ar", k) === t("en", k)), ["xpOf"]);
+});
+check("i18n: all exercises, areas, levels, daily challenges and office rep tips translated", () => {
+  for (const key of CATALOG.map((e) => e.key)) {
+    assert.notEqual(exerciseText("ar", key, "label", "EN"), "EN", key);
+    assert.notEqual(exerciseText("ar", key, "how_to", "EN"), "EN", key);
+    assert.equal(exerciseText("en", key, "label", "EN"), "EN");
+  }
+  assert.equal(CATALOG.length, 30);
+  for (const a of AREAS) {
+    assert.notEqual(areaName("ar", a), a);
+    assert.equal(areaName("en", a), a);
+  }
+  for (const lv of LEVELS) {
+    assert.notEqual(levelName("ar", lv.level, lv.name), lv.name);
+    assert.equal(levelName("en", lv.level, lv.name), lv.name);
+  }
+  for (const c of DAILY_POOL) {
+    assert.notEqual(nameText("ar", `challenge.${c.id}`, c.name), c.name);
+    assert.equal(badgeLabel(`daily:${c.id}`), badgeLabel(`daily:${c.id}`, "en"));
+  }
+  for (const th of THEMES) assert.notEqual(nameText("ar", `theme.${th.id}`, th.name), th.name);
+  for (const code of ["not_visible", "not_deep_enough", "too_fast"]) assert.notEqual(issueText("ar", code, "EN"), "EN");
+  assert.equal(issueText("ar", "unknown_code", "Fallback"), "Fallback");
+  assert.equal(issueText("en", "too_fast", "Slow down"), "Slow down");
+  assert.equal(badgeLabel("weekly:Neck"), "🏅 Neck week");
+  assert.equal(badgeLabel("weekly:Neck", "ar"), "🏅 أسبوع الرقبة");
+});
+check("i18n: resolveLang and localeFor", () => {
+  assert.deepEqual(LANGS, ["auto", "en", "ar"]);
+  assert.equal(resolveLang("ar", "en-US"), "ar");
+  assert.equal(resolveLang("en", "ar-EG"), "en");
+  assert.equal(resolveLang("auto", "ar-EG"), "ar");
+  assert.equal(resolveLang("auto", "AR"), "ar");
+  assert.equal(resolveLang("auto", "en-GB"), "en");
+  assert.equal(resolveLang(undefined, undefined), "en");
+  assert.equal(resolveLang("fr", "de"), "en");
+  assert.equal(localeFor("ar"), "ar-u-nu-latn");
+  assert.equal(localeFor("en"), undefined);
+  assert.equal(new Date(2026, 10, 9, 10, 5).toLocaleTimeString(localeFor("ar"), { hour: "2-digit", minute: "2-digit" }).replace(/[^0-9:]/g, ""), "10:05");
+});
 Promise.all(pending).then(
   () => console.log("ok leaderboard async checks"),
   (err) => {

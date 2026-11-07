@@ -2,74 +2,102 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>StandUp Break settings</title>
+    <title data-i18n="settingsTitle">Squat Overflow settings</title>
     <link rel="stylesheet" href="theme.css" />
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main>
-      <h1 id="heading">Welcome to StandUp Break</h1>
-      <p class="muted" id="intro">Short, camera-coached movement breaks that earn you XP. Set it up once, then get back to work.</p>
+      <h1 id="heading" data-i18n="welcome">Welcome to Squat Overflow</h1>
+      <p class="muted" id="intro" data-i18n="intro">Short, camera-coached movement breaks that earn you XP. Set it up once, then get back to work.</p>
 
       <section>
-        <h2>How often?</h2>
+        <h2 data-i18n="profile">Profile</h2>
+        <div class="profile">
+          <div class="avatars" id="avatars" role="radiogroup" aria-label="Avatar" data-i18n-aria="avatar"></div>
+          <label class="field"><span data-i18n="displayName">Display name</span> <input type="text" id="name" maxlength="40" placeholder="e.g. Malik" data-i18n-placeholder="namePlaceholder" /></label>
+        </div>
+      </section>
+
+      <section>
+        <h2 data-i18n="howOften">How often?</h2>
         <div class="chips" id="intervals">
-          <label><input type="radio" name="interval" value="30" /> 30 min</label>
-          <label><input type="radio" name="interval" value="45" /> 45 min</label>
-          <label><input type="radio" name="interval" value="60" /> 1 hr</label>
-          <label><input type="radio" name="interval" value="90" /> 90 min</label>
-          <label><input type="radio" name="interval" value="120" /> 2 hr</label>
-          <label><input type="radio" name="interval" value="custom" /> Custom</label>
+          <label><input type="radio" name="interval" value="30" /> <span data-i18n="min30">30 min</span></label>
+          <label><input type="radio" name="interval" value="45" /> <span data-i18n="min45">45 min</span></label>
+          <label><input type="radio" name="interval" value="60" /> <span data-i18n="hr1">1 hr</span></label>
+          <label><input type="radio" name="interval" value="90" /> <span data-i18n="min90">90 min</span></label>
+          <label><input type="radio" name="interval" value="120" /> <span data-i18n="hr2">2 hr</span></label>
+          <label><input type="radio" name="interval" value="custom" /> <span data-i18n="custom">Custom</span></label>
         </div>
         <label class="inline" id="customWrap" hidden>
-          Every <input type="number" id="customMin" min="1" max="240" step="1" /> minutes
+          <span data-i18n="every">Every</span> <input type="number" id="customMin" min="1" max="240" step="1" /> <span data-i18n="minutes">minutes</span>
         </label>
       </section>
 
       <section>
-        <h2>Where do you feel it?</h2>
-        <p class="muted">Pick at least one area. Breaks focus on these.</p>
+        <h2 data-i18n="whereFeel">Where do you feel it?</h2>
+        <p class="muted" data-i18n="pickAreas">Pick at least one area. Breaks focus on these.</p>
         <div class="chips" id="areas"></div>
       </section>
 
       <section>
-        <h2>When?</h2>
-        <label class="inline">From <input type="time" id="activeStart" /> to <input type="time" id="activeEnd" /></label>
+        <h2 data-i18n="when">When?</h2>
+        <label class="inline"><span data-i18n="from">From</span> <input type="time" id="activeStart" /> <span data-i18n="to">to</span> <input type="time" id="activeEnd" /></label>
         <div class="chips" id="workdays"></div>
-        <label class="check"><input type="checkbox" id="autoPause" /> Don't interrupt meetings or fullscreen</label>
+        <label class="check"><input type="checkbox" id="autoPause" /> <span data-i18n="autoPause">Don't interrupt meetings or fullscreen</span></label>
       </section>
 
       <section>
-        <h2>Camera</h2>
-        <label class="check"><input type="checkbox" id="privacy" /> Hide me in the camera preview (blur or a character, picked during a break)</label>
-        <p class="notice">Your camera is used only to count reps and is never recorded. Only your name, XP, level and streak are shared, and only in Competitive mode.</p>
+        <h2 data-i18n="calendar">Google Calendar</h2>
+        <div class="cal-row">
+          <button id="calBtn" type="button" class="cal-btn">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3" fill="#fff" stroke="#4285f4" stroke-width="2"/><path d="M3 10h18" stroke="#4285f4" stroke-width="2"/><path d="M8 3v4M16 3v4" stroke="#ea4335" stroke-width="2" stroke-linecap="round"/><text x="12" y="19" font-size="7.5" font-weight="700" text-anchor="middle" fill="#34a853" font-family="sans-serif">31</text></svg>
+            <span id="calLabel" data-i18n="calConnect">Connect Google Calendar</span>
+          </button>
+          <span id="calStatus" class="cal-status" hidden></span>
+        </div>
+        <p class="notice" data-i18n="calNote">Breaks wait until your meetings end. Only busy and free times are read, never event titles or details.</p>
       </section>
 
       <section>
-        <h2>Play mode</h2>
+        <h2 data-i18n="camera">Camera</h2>
+        <label class="check"><input type="checkbox" id="privacy" /> <span data-i18n="privacy">Hide me in the camera preview (blur or a character, picked during a break)</span></label>
+        <p class="notice" data-i18n="notice">Your camera is used only to count reps and is never recorded. Only your name, XP, level and streak are shared, and only in Competitive mode.</p>
+      </section>
+
+      <section>
+        <h2 data-i18n="playMode">Play mode</h2>
         <div class="chips">
-          <label><input type="radio" name="mode" value="personal" /> Personal</label>
-          <label><input type="radio" name="mode" value="competitive" /> Competitive</label>
+          <label><input type="radio" name="mode" value="personal" /> <span data-i18n="personal">Personal</span></label>
+          <label><input type="radio" name="mode" value="competitive" /> <span data-i18n="competitive">Competitive</span></label>
         </div>
         <div id="competitive" hidden>
-          <label class="field">Display name <input type="text" id="name" maxlength="40" placeholder="e.g. Malik" /></label>
-          <label class="field">Company domain <input type="text" id="company" maxlength="100" placeholder="e.g. leadliaison.com" /></label>
+          <label class="field"><span data-i18n="companyDomain">Company domain</span> <input type="text" id="company" maxlength="100" placeholder="e.g. leadliaison.com" data-i18n-placeholder="companyPlaceholder" /></label>
         </div>
       </section>
 
       <section>
-        <h2>Theme</h2>
+        <h2 data-i18n="theme">Theme</h2>
         <div class="themes" id="themes"></div>
       </section>
 
+      <section>
+        <h2 data-i18n="language">Language</h2>
+        <div class="chips" id="langs">
+          <label><input type="radio" name="lang" value="auto" /> <span data-i18n="lang.auto">Auto</span></label>
+          <label><input type="radio" name="lang" value="en" /> <span lang="en">English</span></label>
+          <label><input type="radio" name="lang" value="ar" /> <span lang="ar">العربية</span></label>
+        </div>
+      </section>
+
       <details>
-        <summary>Advanced</summary>
-        <label class="field">Pose server URL <input type="text" id="serverUrl" /></label>
+        <summary data-i18n="advanced">Advanced</summary>
+        <label class="field"><span data-i18n="serverUrl">Pose server URL</span> <input type="text" id="serverUrl" /></label>
       </details>
 
       <div class="footer">
         <span id="error" class="error"></span>
-        <span id="saved" class="saved" hidden>Saved ✓</span>
+        <span id="saved" class="saved" hidden data-i18n="saved">Saved ✓</span>
         <button id="save" class="primary">Get started</button>
       </div>
     </main>

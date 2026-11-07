@@ -2,6 +2,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "../config.js";
 import { levelFor, isoWeek } from "./xp.js";
 
 const DEFAULT_CFG = { url: SUPABASE_URL, key: SUPABASE_KEY };
+const AVATAR_RE = /^[a-z]{2,20}$/;
 
 async function rpc(fn, body, cfg) {
   const res = await fetch(`${cfg.url}/rest/v1/rpc/${fn}`, {
@@ -27,6 +28,7 @@ export function toPayload(profile, settings, remove, now = Date.now()) {
     p_week_xp: current ? profile.weekXp : 0,
     p_week: week,
     p_delete: remove,
+    p_avatar: AVATAR_RE.test(settings.avatar ?? "") ? settings.avatar : "bunny",
   };
 }
 

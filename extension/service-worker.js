@@ -5,6 +5,9 @@ import { submitScore } from "./lib/leaderboard.js";
 import { noteAction } from "./lib/challenges.js";
 import { createSerial } from "./lib/serial.js";
 import { recordActivity, backfillActivity } from "./lib/activity.js";
+import { getBusy } from "./lib/calendar-client.js";
+import { busyNow } from "./lib/calendar.js";
+import { t, resolveLang, localeFor } from "./lib/i18n.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 520, height: 780 };
@@ -31,7 +34,11 @@ async function updateBadge() {
   const left = Math.max(0, Math.ceil((s.nextAt - Date.now()) / 60_000));
   await chrome.action.setBadgeBackgroundColor({ color: left <= 0 ? "#ff6b6b" : "#3ddc97" });
   await chrome.action.setBadgeText({ text: left <= 0 ? "move" : left >= 100 ? `${Math.round(left / 60)}h` : `${left}m` });
-  await chrome.action.setTitle({ title: `StandUp Break: next break in ${left} min` });
+  const lang = resolveLang(settings.lang, navigator.language);
+  const when = new Date(s.nextAt);
+  const at = when.toLocaleTimeString(localeFor(lang), { hour: "2-digit", minute: "2-digit" });
+  const day = when.toDateString() === new Date().toDateString() ? "" : `${when.toLocaleDateString(localeFor(lang), { weekday: "short" })} `;
+  await chrome.action.setTitle({ title: left < 60 ? t(lang, "tipIn", { n: left }) : t(lang, "tipAt", { when: `${day}${at}` }) });
 }
 
 async function saveSchedule(schedule) {
@@ -97,8 +104,11 @@ async function onNextBreak() {
   const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
   if (!settings.setupDone) return;
   const now = Date.now();
-  const [idle, meeting] = await Promise.all([chrome.idle.queryState(IDLE_SEC), inMeeting()]);
-  const { kind, schedule } = decideFire(s, now, settings.intervalMin, { idle, meeting, settings });
+  const [idle, meeting, busy] = await Promise.all([chrome.idle.queryState(IDLE_SEC), inMeeting(), getBusy(now)]);
+  const block = busyNow(busy, now);
+  const decision = decideFire(s, now, settings.intervalMin, { idle, meeting: meeting || Boolean(block), settings });
+  const { kind } = decision;
+  const schedule = kind === "defer" && block ? { ...decision.schedule, nextAt: Math.max(decision.schedule.nextAt, block.end + 60_000) } : decision.schedule;
   await saveSchedule(schedule);
   if (kind !== "open" || (await openBreakWindowId(s)) != null) return;
   await openReminder({ manual: false });
@@ -210,3 +220,6 @@ chrome.runtime.onStartup.addListener(() =>
   }),
 );
 serial(ensureAlarm);
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && "lang" in changes) updateBadge();
+});

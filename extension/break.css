@@ -222,7 +222,7 @@ footer {
   color: var(--text);
 }
 .level {
-  text-align: left;
+  text-align: start;
   margin-bottom: 16px;
 }
 .level .row {
@@ -317,7 +317,7 @@ footer {
   content: "";
   position: absolute;
   top: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 12px;
   height: 12px;
   border-radius: 50%;
@@ -334,7 +334,7 @@ footer {
   transform: translateX(12px);
 }
 #lookBtn {
-  padding-left: 6px;
+  padding-inline-start: 6px;
 }
 #lookThumb {
   width: 18px;
@@ -436,4 +436,13 @@ footer {
 .moves button.done .count {
   color: var(--accent);
   font-weight: 700;
+}
+[dir="rtl"] .pill:has(input:checked) .switch::after {
+  transform: translateX(-12px);
+}
+.xp-ticker,
+.total,
+.lines li b {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
