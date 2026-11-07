@@ -10,6 +10,7 @@ import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../l
 import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
 import { activityLevel, recordActivity, backfillActivity, heatmapWeeks, activityTotals } from "../lib/activity.js";
+import { avatarFitness, missedWorkdays, fitnessCaption } from "../lib/fitness.js";
 import { LANGS, resolveLang, t, exerciseText, areaName, levelName, issueText, localeFor, nameText, translationKeys } from "../lib/i18n.js";
 import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
@@ -510,6 +511,47 @@ check("activity: totals over the visible weeks", () => {
   assert.deepEqual(activityTotals(a, wed, 20), { breaks: 5, xp: 47, activeDays: 2 });
 });
 
+check("fitness: buff grows with level, 0 at Desk Potato, 1 at the top level", () => {
+  assert.equal(avatarFitness(0, null, mon, WORKDAYS).buff, 0);
+  assert.equal(avatarFitness(900, null, mon, WORKDAYS).buff, 4 / 7);
+  assert.equal(avatarFitness(99_999, null, mon, WORKDAYS).buff, 1);
+});
+
+check("fitness: missed workdays count back from yesterday, skip weekends, stop at the last break", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  assert.equal(missedWorkdays({ "2026-11-06": { breaks: 2, xp: 20 } }, wed, WORKDAYS), 2);
+  assert.equal(missedWorkdays({ "2026-11-06": { breaks: 2, xp: 20 } }, mon, WORKDAYS), 0);
+  assert.equal(missedWorkdays({ "2026-11-10": { breaks: 0, xp: 0 }, "2026-11-06": { breaks: 1, xp: 9 } }, wed, WORKDAYS), 2);
+});
+
+check("fitness: a break today perks it straight back up; a new user starts perky", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  assert.equal(missedWorkdays({ "2026-11-11": { breaks: 1, xp: 9 }, "2026-10-01": { breaks: 1, xp: 9 } }, wed, WORKDAYS), 0);
+  assert.equal(missedWorkdays(null, wed, WORKDAYS), 0);
+  assert.equal(missedWorkdays({}, wed, WORKDAYS), 0);
+  // Days before the first recorded break don't count against you.
+  assert.equal(missedWorkdays({ "2026-11-09": { breaks: 1, xp: 9 } }, new Date(2026, 10, 12, 9).getTime(), WORKDAYS), 2);
+});
+
+check("fitness: a full work week without a break is as droopy as it gets", () => {
+  const f = avatarFitness(500, { "2026-10-30": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(f.missed, 5);
+  assert.equal(f.droop, 1);
+  const longer = avatarFitness(500, { "2026-10-20": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(longer.droop, 1);
+  const two = avatarFitness(500, { "2026-11-04": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(two.droop, 2 / 5);
+});
+
+check("fitness: caption roasts droop first, then brags about buff", () => {
+  assert.match(fitnessCaption({ buff: 1, missed: 5 }, "Penguin"), /penguin/i);
+  assert.match(fitnessCaption({ buff: 1, missed: 5 }, "Penguin"), /chair/i);
+  assert.match(fitnessCaption({ buff: 0, missed: 2 }, "Bunny"), /2 workdays/);
+  assert.match(fitnessCaption({ buff: 0, missed: 1 }, "Bunny"), /yesterday/);
+  assert.match(fitnessCaption({ buff: 1, missed: 0 }, "Bunny"), /peak/i);
+  assert.match(fitnessCaption({ buff: 0, missed: 0 }, "Bunny"), /level up/i);
+});
+
 check("nextOpenMove: next unfinished exercise after the current one, wrapping, -1 when all done", () => {
   const moves = [{ target: 6 }, { target: 6 }, { target: 6 }];
   const prog = (...reps) => reps.map((r) => ({ reps: r }));
@@ -688,3 +730,92 @@ Promise.all(pending).then(
     process.exitCode = 1;
   },
 );
+
+// ---- Avatar characters: every one poses its 3D figure through squats, issues,
+// reps, buff and droop with nothing broken or non-finite. WebGL isn't
+// available in Node, so this drives the physics and scene graph; rendering is
+// checked in the browser.
+{
+  const THREE = await import("../lib/vendor/three.js");
+  const { Avatar } = await import("../avatar.js");
+  // A standing pose (normalised camera coords) that sinks into a squat by `k` (0..1), arms rising.
+  const pose = (k) => {
+    const lms = Array.from({ length: 33 }, () => [0.5, 0.5, 0]);
+    const at = (i, x, y) => (lms[i] = [x, y + k * 0.12 * (y < 0.7 ? 1 : 0), 1]);
+    [[0, 0.5, 0.17], [2, 0.53, 0.155], [5, 0.47, 0.155], [7, 0.555, 0.165], [8, 0.445, 0.165], [11, 0.6, 0.31], [12, 0.4, 0.31],
+      [13, 0.66, 0.45], [14, 0.34, 0.45], [15, 0.68 - k * 0.1, 0.58 - k * 0.3], [16, 0.32 + k * 0.1, 0.58 - k * 0.3], [23, 0.56, 0.58],
+      [24, 0.44, 0.58], [25, 0.6, 0.73], [26, 0.4, 0.73], [27, 0.575, 0.88], [28, 0.425, 0.88], [31, 0.6, 0.92], [32, 0.4, 0.92]]
+      .forEach(([i, x, y]) => at(i, x, y));
+    return lms;
+  };
+  const finiteScene = (scene) => {
+    const bad = [];
+    scene.updateMatrixWorld(true);
+    scene.traverse((o) => {
+      if (o.visible && !o.matrixWorld.elements.every(Number.isFinite)) bad.push(o.type);
+    });
+    return bad;
+  };
+  const keys = Object.keys(Avatar.CHARACTERS);
+  check("avatars: eight original characters, each with a label", () => {
+    assert.deepEqual(keys, ["slothbear", "bunny", "penguin", "dragon", "critter", "platypus", "monster", "robot"]);
+    for (const k of keys) assert.ok(Avatar.CHARACTERS[k].label, `${k} has no label`);
+  });
+  check("avatars: an unknown key falls back to a real character", () => {
+    assert.ok(keys.includes(Avatar.create("surfer").key));
+  });
+  for (const key of keys) {
+    check(`avatars: ${key} poses through squats, issues, reps, buff and droop with finite transforms`, () => {
+      for (const fitness of [{}, { buff: 1 }, { droop: 1 }]) {
+        const a = Avatar.create(key, fitness);
+        assert.equal(a.key, key);
+        let meshes = 0;
+        a.scene.traverse((o) => (meshes += o.isMesh ? 1 : 0));
+        assert.ok(meshes > 20, `only ${meshes} meshes`);
+        for (let f = 0; f < 90; f++) {
+          const p = a.update(pose((Math.sin(f / 8) + 1) / 2), 640, 480, { issues: f % 30 > 20, now: f * 33 });
+          if (f > 2) assert.ok(p, "no pose from a full body");
+          if (f % 25 === 0) a.celebrate(f % 50 === 0);
+          assert.deepEqual(finiteScene(a.scene), [], `non-finite transform at frame ${f}`);
+        }
+        a.update(null, 640, 480, { now: 99 * 33 });
+        a.dispose();
+      }
+    });
+  }
+  check("avatars: the heart and star celebration particles fly as 3D meshes", () => {
+    const a = Avatar.create("bunny");
+    for (let f = 0; f < 5; f++) a.update(pose(0), 640, 480, { now: f * 33 });
+    a.celebrate(true);
+    a.update(pose(0), 640, 480, { now: 6 * 33 });
+    let shown = 0;
+    a.scene.traverse((o) => (shown += o.visible && o.geometry?.type === "ExtrudeGeometry" ? 1 : 0));
+    assert.ok(shown >= 16, `only ${shown} particles visible`);
+    assert.ok(THREE.ExtrudeGeometry);
+  });
+  check("avatars: zoomed out, a person filling the camera frame fits in view, feet on the floor", () => {
+    // Head near the top edge, feet near the bottom: a close, full-frame camera shot.
+    const lms = pose(0).map(([x, y, v]) => [0.5 + (x - 0.5) * 1.15, 0.12 + (y - 0.17) * 1.1, v]);
+    for (const key of keys) {
+      const a = Avatar.create(key);
+      let p = null;
+      for (let f = 0; f < 30; f++) p = a.update(lms, 640, 480, { now: f * 33 });
+      // The figure's real top, ears, hats, horns and antennas included (world y is up).
+      a.scene.updateMatrixWorld(true);
+      let maxY = -Infinity;
+      a.scene.traverse((o) => {
+        if (!o.isMesh || !o.visible) return;
+        for (let q = o.parent; q; q = q.parent) if (!q.visible) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        maxY = Math.max(maxY, o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).max.y);
+      });
+      const top = -maxY;
+      const ankles = Math.max(...p.legs.map((l) => l[2].y));
+      assert.ok(top >= 0, `${key} is cut off at the top (${top.toFixed(0)}px)`);
+      assert.ok(ankles > 480 * 0.78 && ankles < 480 * 0.95, `${key}'s feet at ${ankles.toFixed(0)}px, not on the floor`);
+    }
+  });
+  check("avatars: no WebGL means unsupported, so the blur mask stands in", () => {
+    assert.equal(Avatar.supported(), false);
+  });
+}

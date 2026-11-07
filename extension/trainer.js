@@ -655,9 +655,10 @@ function drawPrivate(ctx, video, w, h) {
 // Instead of blurring, the preview can show a drawn character that copies the
 // pose (avatar.js). No camera pixels are drawn at all, so the server's person
 // mask isn't needed and isn't requested.
+// A 3D character needs WebGL; without it the blurred view stands in.
 function privacyStyle() {
   const s = state.settings.privacyStyle;
-  return s in Avatar.CHARACTERS ? s : "blur";
+  return s in Avatar.CHARACTERS && Avatar.supported() ? s : "blur";
 }
 
 function wantsMask() {
@@ -666,7 +667,10 @@ function wantsMask() {
 
 function drawAvatar(ctx, w, h, msg) {
   const key = privacyStyle();
-  if (state.avatar?.key !== key) state.avatar = Avatar.create(key);
+  if (state.avatar?.key !== key) {
+    state.avatar?.dispose(); // free the old character's GPU buffers
+    state.avatar = Avatar.create(key);
+  }
   Avatar.drawBackdrop(ctx, w, h);
   state.avatar.draw(ctx, msg?.landmarks ?? null, w, h, {
     issues: (msg?.feedback?.length ?? 0) > 0,
@@ -999,6 +1003,7 @@ async function start() {
 
 function stopStream() {
   clearMask();
+  state.avatar?.dispose();
   state.avatar = null; // the next set starts from a fresh pose
   state.stream?.getTracks().forEach((t) => t.stop());
   state.stream = null;

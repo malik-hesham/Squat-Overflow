@@ -1,11 +1,14 @@
-import { getSettings, saveSettings, getSchedule, getCatalog } from "./lib/store.js";
+import { getSettings, saveSettings, getSchedule, getCatalog, getProfile, getActivity, readLog } from "./lib/store.js";
 import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, featuredArea, nextOpenMove } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
 import { badgeLabel } from "./lib/badges.js";
 import { initTheme } from "./lib/themes.js";
+import { backfillActivity } from "./lib/activity.js";
+import { avatarFitness, fitnessCaption } from "./lib/fitness.js";
 import { initLang, t, exerciseText, areaName, levelName, issueText, nameText } from "./lib/i18n.js";
+import { Avatar } from "./avatar.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
@@ -18,7 +21,7 @@ const els = Object.fromEntries(
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
     "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "lookBtn", "lookName",
-    "lookGrid", "lookThumb", "area", "moves", "starting", "startingText",
+    "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
 );
 
@@ -34,6 +37,7 @@ const state = {
   positioning: false,
   positionTimer: 0,
   startingTimer: 0,
+  fitness: null,
 };
 
 const send = (msg) => chrome.runtime.sendMessage(msg);
@@ -83,7 +87,7 @@ function drawCameraThumb(canvas) {
 
 function drawLookThumb(canvas, key) {
   if (key === "camera") drawCameraThumb(canvas);
-  else Avatar.drawThumb(canvas, key);
+  else Avatar.drawThumb(canvas, key, state.fitness);
 }
 
 function renderLooks() {
@@ -114,6 +118,15 @@ function syncLook() {
   for (const input of els.lookGrid.querySelectorAll("input")) input.checked = input.value === key;
   els.lookName.textContent = lookOptions().find(([k]) => k === key)[1];
   drawLookThumb(els.lookThumb, key);
+  const character = Avatar.CHARACTERS[key];
+  els.fitness.hidden = !character || !state.fitness;
+  if (!els.fitness.hidden) els.fitness.textContent = fitnessCaption(state.fitness, character.label);
+}
+
+// How buff or droopy the character looks, from your level and recent breaks.
+async function loadFitness(workdays) {
+  const [profile, activity] = await Promise.all([getProfile(), getActivity()]);
+  return avatarFitness(profile.xp, activity ?? backfillActivity(await readLog()), Date.now(), workdays);
 }
 
 async function onLookChange(ev) {
@@ -416,6 +429,7 @@ async function startRoutine() {
     privacy: settings.privacy,
     style: settings.privacyStyle,
     avatars: Avatar,
+    fitness: state.fitness,
     onFrame,
     onStatus,
   });
@@ -431,6 +445,7 @@ async function init() {
   state.lang = await initLang();
   const [settings, schedule] = await Promise.all([getSettings(), getSchedule()]);
   state.settings = settings;
+  state.fitness = await loadFitness(settings.workdays);
   let catalog = await fetchCatalog(settings.serverUrl);
   if (!catalog.length) catalog = await getCatalog();
   state.catalog = catalog.map((e) => ({

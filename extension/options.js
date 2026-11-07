@@ -1,4 +1,5 @@
 import { getSettings, saveSettings, getProfile } from "./lib/store.js";
+import { Avatar } from "./avatar.js";
 import { AREAS } from "./lib/routine.js";
 import { scheduleSettingsChanged } from "./lib/schedule.js";
 import { THEMES, themeId, applyTheme, initTheme } from "./lib/themes.js";
