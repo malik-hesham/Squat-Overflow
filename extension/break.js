@@ -187,26 +187,31 @@ function showMove(i) {
 }
 
 function renderMoves() {
-  els.moves.replaceChildren(
-    ...state.moves.map((m, k) => {
-      const tab = document.createElement("button");
-      const reps = state.progress[k].reps;
-      const done = reps >= m.target;
-      tab.type = "button";
-      tab.className = done ? "done" : "";
-      tab.setAttribute("aria-current", String(k === state.i));
-      tab.title = `${m.area} | ${m.label}`;
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = m.label;
-      const count = document.createElement("span");
-      count.className = "count";
-      count.textContent = done ? "✓" : `${reps}/${m.target}`;
-      tab.append(name, count);
-      tab.addEventListener("click", () => selectMove(k));
-      return tab;
-    }),
-  );
+  if (els.moves.children.length !== state.moves.length) {
+    els.moves.replaceChildren(
+      ...state.moves.map((_, k) => {
+        const tab = document.createElement("button");
+        tab.type = "button";
+        const name = document.createElement("span");
+        name.className = "name";
+        const count = document.createElement("span");
+        count.className = "count";
+        tab.append(name, count);
+        tab.addEventListener("click", () => selectMove(k));
+        return tab;
+      }),
+    );
+  }
+  state.moves.forEach((m, k) => {
+    const tab = els.moves.children[k];
+    const reps = state.progress[k].reps;
+    const done = reps >= m.target;
+    tab.classList.toggle("done", done);
+    tab.setAttribute("aria-current", String(k === state.i));
+    tab.title = `${m.area} | ${m.label}`;
+    tab.querySelector(".name").textContent = m.label;
+    tab.querySelector(".count").textContent = done ? "✓" : `${reps}/${m.target}`;
+  });
 }
 
 function selectMove(k) {
