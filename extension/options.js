@@ -1,5 +1,5 @@
 import { getSettings, saveSettings, getProfile } from "./lib/store.js";
-import { AREAS } from "./lib/routine.js";
+import { AREAS, areaImage } from "./lib/routine.js";
 import { scheduleSettingsChanged } from "./lib/schedule.js";
 import { THEMES, themeId, applyTheme, initTheme } from "./lib/themes.js";
 
@@ -29,6 +29,22 @@ function chip(container, value, label, checked) {
   input.checked = checked;
   el.append(input, ` ${label}`);
   container.append(el);
+}
+
+function areaCard(area, checked) {
+  const el = document.createElement("label");
+  el.className = "area-card";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.value = area;
+  input.checked = checked;
+  const img = document.createElement("img");
+  img.src = areaImage(area);
+  img.alt = "";
+  const name = document.createElement("span");
+  name.textContent = area;
+  el.append(input, img, name);
+  $("areas").append(el);
 }
 
 function read() {
@@ -129,7 +145,7 @@ async function init() {
   const preset = PRESETS.includes(String(initial.intervalMin)) ? String(initial.intervalMin) : "custom";
   radios("interval").forEach((r) => (r.checked = r.value === preset));
   $("customMin").value = initial.intervalMin;
-  AREAS.forEach((a) => chip($("areas"), a, a, initial.areas.includes(a)));
+  AREAS.forEach((a) => areaCard(a, initial.areas.includes(a)));
   DAYS.forEach(([d, label]) => chip($("workdays"), d, label, initial.workdays.includes(d)));
   $("activeStart").value = initial.activeStart;
   $("activeEnd").value = initial.activeEnd;

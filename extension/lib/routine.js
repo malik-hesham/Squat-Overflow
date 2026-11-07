@@ -56,3 +56,17 @@ export function swapMove(catalog, moves, i) {
 export function needsPositioning(move) {
   return move.camera === "side" || FULL_BODY_AREAS.includes(move.area);
 }
+
+const AREA_SLUGS = {
+  Neck: "neck",
+  Shoulders: "shoulders",
+  "Upper back & posture": "upper-back",
+  "Arms & wrists": "arms-wrists",
+  "Lower back & core": "core",
+  "Hips & glutes": "glutes",
+  "Legs & circulation": "legs",
+};
+
+export function areaImage(area) {
+  return `images/${AREA_SLUGS[area] ?? "neck"}.svg`;
+}
