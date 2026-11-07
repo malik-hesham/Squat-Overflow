@@ -1,4 +1,3 @@
-// ponytail: duplicated from trainer.js to keep Practice mode untouched on demo day; extract a shared module later.
 import { cacheCatalog } from "./store.js";
 
 const CAPTURE_WIDTH = 480;
