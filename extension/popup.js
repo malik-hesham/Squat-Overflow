@@ -191,13 +191,14 @@ async function renderBoard() {
   const [settings, profile] = await Promise.all([getSettings(), getProfile()]);
   const rows = $("boardRows");
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.period === period));
-  if (settings.mode !== "competitive") {
+  if (!settings.company) {
     rows.replaceChildren();
-    $("boardMsg").textContent = t(lang, "boardJoin", { company: settings.company || t(lang, "yourCompany") });
+    $("boardMsg").textContent = t(lang, "boardNeedsCompany");
     return;
   }
+  const competitive = settings.mode === "competitive";
   $("boardMsg").textContent = t(lang, "loading");
-  await submitScore(profile, settings);
+  if (competitive) await submitScore(profile, settings);
   const board = await fetchBoard(settings.company, period, profile.playerId);
   if (!board) {
     rows.replaceChildren();
@@ -205,7 +206,8 @@ async function renderBoard() {
     return;
   }
   rows.replaceChildren(...board.map(boardRow));
-  $("boardMsg").textContent = board.length ? "" : t(lang, "boardEmpty");
+  const notes = [board.length ? "" : t(lang, "boardEmpty"), competitive ? "" : t(lang, "boardPrivate")];
+  $("boardMsg").textContent = notes.filter(Boolean).join(" ");
 }
 
 document.querySelectorAll(".tab").forEach((t) =>

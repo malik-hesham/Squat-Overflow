@@ -132,3 +132,16 @@ def test_angle_mode_and_calibration_messages(client):
 def test_firefox_extension_origin_is_accepted(client):
     with client.websocket_connect("/ws", headers={"origin": "moz-extension://2b7a1c9e-4f3d-4c55-9a51-3f0d6e8b1a22"}) as ws:
         assert ws.receive_json()["type"] == "ready"
+
+
+def test_embed_page_wraps_a_valid_youtube_id(client):
+    res = client.get("/embed/gBL3gYNtun0")
+    assert res.status_code == 200
+    assert "text/html" in res.headers["content-type"]
+    assert "https://www.youtube-nocookie.com/embed/gBL3gYNtun0?" in res.text
+    assert "loop=1" in res.text and "mute=1" in res.text and "autoplay=1" in res.text
+
+
+def test_embed_page_rejects_bad_ids(client):
+    assert client.get("/embed/not-an-id").status_code == 404
+    assert client.get("/embed/%3Cscript%3E12").status_code == 404
