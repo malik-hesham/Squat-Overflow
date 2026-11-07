@@ -51,7 +51,8 @@ const Avatar = (() => {
   const BLUSH = "rgba(255, 120, 150, 0.42)";
 
   // `head` scales the head (cute characters get big heads); `party` colours the
-  // celebration hearts and stars.
+  // celebration hearts and stars; `arm` (upper-arm half-width, in body units)
+  // and `armColor` (which colour key the arms use) size and fill the biceps.
   const CHARACTERS = {
     slothbear: {
       label: "Sloth bear",
@@ -63,6 +64,8 @@ const Avatar = (() => {
       creamDark: "#c9b38f",
       claw: "#f4ecdc",
       line: "#0a0807",
+      arm: 0.15,
+      armColor: "fur",
       party: ["#ff8fb8", "#ffd23f", "#f1e6cf"],
     },
     bunny: {
@@ -75,6 +78,8 @@ const Avatar = (() => {
       nose: "#ff7aa2",
       bow: "#9b7bff",
       line: "#3a2a33",
+      arm: 0.12,
+      armColor: "fur",
       party: ["#ff8fb8", "#c9b5ff", "#ffffff"],
     },
     penguin: {
@@ -89,6 +94,8 @@ const Avatar = (() => {
       scarf: "#e8455a",
       stripe: "#ffd4dc",
       line: "#0d1018",
+      arm: 0.13,
+      armColor: "back",
       party: ["#e8455a", "#7cc7ff", "#ffffff"],
     },
     dragon: {
@@ -104,6 +111,8 @@ const Avatar = (() => {
       horn: "#fff3d1",
       spike: "#ff8fc7",
       line: "#22163f",
+      arm: 0.12,
+      armColor: "body",
       party: ["#ffd23f", "#ff8fc7", "#c9b8ff"],
     },
     surfer: {
@@ -115,6 +124,8 @@ const Avatar = (() => {
       hair: "#f2d27a", // sun-bleached curls
       shades: "#1e2a3a",
       line: "#1d1410",
+      arm: 0.1,
+      armColor: "skin",
       party: ["#ff5fa2", "#ffd23f", "#22b8a6"],
     },
     critter: {
@@ -126,6 +137,8 @@ const Avatar = (() => {
       belly: "#a8f0d2",
       spot: "#a678ff",
       line: "#0f2a22",
+      arm: 0.12,
+      armColor: "skin",
       party: ["#a678ff", "#6fe0b4", "#ffffff"],
     },
   };
@@ -435,9 +448,14 @@ const Avatar = (() => {
   }
 
   // ---- Renderer -------------------------------------------------------------
-  function create(requested) {
+  // `fitness` ({ buff, droop }, both 0..1) comes from lib/fitness.js: buff
+  // widens the shoulders and grows biceps, droop slumps the body, hangs the
+  // head and parks a rain cloud overhead.
+  function create(requested, fitness = {}) {
     const key = requested in CHARACTERS ? requested : "slothbear";
     const ch = CHARACTERS[key];
+    const buff = clamp(fitness.buff || 0, 0, 1);
+    const droop = clamp(fitness.droop || 0, 0, 1);
     const joints = new Map(Object.values(IDX).map((i) => [i, makeJoint()]));
     const chains = {
       tufts: Array.from({ length: 7 }, () => makeChain(3)), // sloth bear fur, surfer curls
@@ -489,20 +507,26 @@ const Avatar = (() => {
     // Body geometry from the smoothed joints, or null when there's no torso.
     function derive(h) {
       if (!seen("shL", 0.05) || !seen("shR", 0.05)) return null;
-      const shA = J("shL");
-      const shB = J("shR");
-      const shMid = mid(shA, shB);
-      const shDist = dist(shA, shB);
+      const jA = J("shL");
+      const jB = J("shR");
+      const jMid = mid(jA, jB);
+      const shDist = dist(jA, jB);
       const hipsReal = seen("hipL", 0.3) && seen("hipR", 0.3);
       const earsSeen = seen("earL") && seen("earR");
       const earDist = earsSeen ? dist(J("earL"), J("earR")) : 0;
       let hipMid = hipsReal ? mid(J("hipL"), J("hipR")) : null;
-      const torsoLen = hipMid ? dist(shMid, hipMid) : 0;
+      const torsoLen = hipMid ? dist(jMid, hipMid) : 0;
       const unit = Math.max(shDist, torsoLen * 0.62, earDist * 1.7, h * 0.04);
 
-      const across = norm(sub(shB, shA));
-      let up = hipMid ? norm(sub(shMid, hipMid)) : { x: across.y, y: -across.x };
+      const across = norm(sub(jB, jA));
+      let up = hipMid ? norm(sub(jMid, hipMid)) : { x: across.y, y: -across.x };
       if (!hipMid && up.y > 0) up = { x: -up.x, y: -up.y };
+      // Fitness: buff pushes the shoulders out into a V; droop slumps them down and in.
+      const spread = shDist * (0.16 * buff - 0.05 * droop);
+      const slump = -unit * 0.12 * droop;
+      const shA = add(add(jA, across, -spread), up, slump);
+      const shB = add(add(jB, across, spread), up, slump);
+      const shMid = mid(shA, shB);
       let hipA;
       let hipB;
       if (hipsReal) {
@@ -525,6 +549,7 @@ const Avatar = (() => {
       } else {
         tilt = clamp(Math.atan2(right.y, right.x), -0.6, 0.6) * 0.5;
       }
+      tilt = clamp(tilt + 0.3 * droop, -0.9, 0.9); // a droopy head lolls to one side
       const headUp = rot({ x: 0, y: -1 }, tilt);
       const headRight = rot({ x: 1, y: 0 }, tilt);
       const r = clamp(Math.max(earDist * 0.62, unit * 0.36), unit * 0.3, unit * 0.6);
@@ -543,6 +568,7 @@ const Avatar = (() => {
         c = add(shMid, up, unit * 0.8);
       }
       c = add(c, headUp, r * 0.15);
+      c = add(c, up, -r * 0.5 * droop); // and sinks towards the chest
 
       const opt = (name) => (seen(name) ? J(name) : null);
       return {
@@ -1501,15 +1527,75 @@ const Avatar = (() => {
       return pose ?? derive(h);
     }
 
+    // ---- Fitness extras ---------------------------------------------------------
+    // Biceps: a bump on the outer side of each upper arm, drawn over the
+    // character. The arm colour is then stroked back down the arm's middle so
+    // the bump's inner outline disappears and it reads as one swollen arm.
+    function drawBiceps(g, pose, lw) {
+      if (!buff) return;
+      const { unit } = pose;
+      const half = unit * ch.arm;
+      const color = ch[ch.armColor];
+      pose.arms.forEach(([sh, el], i) => {
+        if (!el) return;
+        const along = Math.atan2(el.y - sh.y, el.x - sh.x);
+        let out = { x: -Math.sin(along), y: Math.cos(along) };
+        const mid = lerp(sh, el, 0.5);
+        if ((mid.x - pose.neck.x) * out.x + (mid.y - pose.neck.y) * out.y < 0) out = scale(out, -1);
+        const bump = unit * (0.05 + 0.1 * buff);
+        const c = add(mid, out, half * 0.5);
+        g.beginPath();
+        g.ellipse(c.x, c.y, dist(sh, el) * (0.28 + 0.06 * buff), half * 0.5 + bump, along, 0, TAU);
+        fillOutline(g, color, ch.line, lw);
+        strokePath(g, [lerp(sh, el, 0.12), lerp(sh, el, 0.88)], half * 2, color, null, 0);
+        if (buff < 0.6) return;
+        // Strong enough to shine: a glint that pulses just outside the bump.
+        const a = Math.max(0, Math.sin(clock * 2.4 + i * 2.1));
+        twinkle(g, add(c, out, half * 0.5 + bump + unit * 0.1), unit * 0.08 * buff, `rgba(255, 255, 255, ${a})`);
+      });
+    }
+
+    // A small grey rain cloud that follows the head once it's properly droopy.
+    function drawGloom(g, pose) {
+      if (droop < 0.4) return;
+      const { r, c } = pose.head;
+      const k = (droop - 0.4) / 0.6;
+      const size = r * (0.55 + 0.25 * k);
+      const cx = c.x + Math.sin(clock * 0.7) * r * 0.12;
+      const cy = Math.max(size, c.y - r * 2.1 + Math.sin(clock * 1.3) * r * 0.05);
+      for (let i = 0, n = 3 + Math.round(4 * k); i < n; i++) {
+        const fall = (clock * 0.9 + hash(i + 40)) % 1;
+        const x = cx + (hash(i + 50) - 0.5) * size * 1.8;
+        const y = cy + size * 0.35 + fall * r * 1.3;
+        strokePath(g, [{ x, y }, { x, y: y + r * 0.13 }], r * 0.06, `rgba(140, 185, 235, ${0.75 * (1 - fall)})`, null, 0);
+      }
+      const puffs = [
+        [-0.62, 0.12, 0.42],
+        [0.62, 0.12, 0.42],
+        [0, -0.18, 0.56],
+        [-0.28, 0.2, 0.4],
+        [0.3, 0.22, 0.4],
+      ];
+      // Outline pass, then fill pass, so the puffs merge into one cloud.
+      for (const fill of [ch.line, "#9aa3b2"]) {
+        const grow = fill === ch.line ? r * 0.06 : 0;
+        for (const [px, py, pr] of puffs) disc(g, { x: cx + px * size, y: cy + py * size }, pr * size + grow, fill);
+      }
+    }
+
     function compose(ctx, pose, w, h, issues, dt) {
       if (!layer || layer.width !== w || layer.height !== h) layer = new OffscreenCanvas(w, h);
-      // Idle breathing: the head rises and falls a touch.
-      const breath = Math.sin((clock * TAU) / BREATH_PERIOD);
-      const shown = { ...pose, head: { ...pose.head, c: add(pose.head.c, pose.up, pose.unit * 0.015 * breath) } };
+      // Idle breathing: the head rises and falls a touch; slow, heavy sighs when droopy.
+      const breath = Math.sin((clock * TAU) / (BREATH_PERIOD * (1 + 0.6 * droop)));
+      const lift = pose.unit * 0.015 * (1 + 2 * droop) * breath;
+      const shown = { ...pose, head: { ...pose.head, c: add(pose.head.c, pose.up, lift) } };
+      const lw = Math.max(1.5, pose.unit * 0.045);
       const g = layer.getContext("2d");
       g.clearRect(0, 0, w, h);
       drawShadow(g, shown, dt);
-      PAINTERS[key](g, shown, issues, Math.max(1.5, pose.unit * 0.045));
+      PAINTERS[key](g, shown, issues, lw);
+      drawBiceps(g, shown, lw);
+      drawGloom(g, shown);
       // One alpha for the whole figure, so overlapping parts don't show seams
       // while it fades in or out.
       const presence = Math.min(J("shL").a, J("shR").a);
@@ -1557,7 +1643,8 @@ const Avatar = (() => {
   }
 
   // Picker thumbnail for a character key, or "blur" for the blurred-camera look.
-  function drawThumb(canvas, key) {
+  // `fitness` shows the character as buff or droopy as the user has made it.
+  function drawThumb(canvas, key, fitness) {
     const { width: w, height: h } = canvas;
     const g = canvas.getContext("2d");
     if (key === "blur") {
@@ -1576,7 +1663,7 @@ const Avatar = (() => {
       return;
     }
     drawBackdrop(g, w, h);
-    create(key).still(g, STANDING, w, h);
+    create(key, fitness).still(g, STANDING, w, h);
   }
 
   return { CHARACTERS, create, drawBackdrop, drawThumb };

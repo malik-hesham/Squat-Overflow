@@ -11,7 +11,7 @@ const CONNECTIONS = [
   [25, 27], [27, 29], [29, 31], [27, 31], [24, 26], [26, 28], [28, 30], [30, 32], [28, 32],
 ];
 
-export function createPoseClient({ serverUrl, video, canvas, privacy, style = "blur", avatars = null, onFrame, onStatus }) {
+export function createPoseClient({ serverUrl, video, canvas, privacy, style = "blur", avatars = null, fitness = null, onFrame, onStatus }) {
   const st = {
     privacy,
     style,
@@ -202,7 +202,7 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
     const fresh = msg?.landmarks && performance.now() - st.latestAt < 1000;
     const key = character();
     if (key) {
-      if (st.avatar?.key !== key) st.avatar = avatars.create(key);
+      if (st.avatar?.key !== key) st.avatar = avatars.create(key, fitness ?? {});
       avatars.drawBackdrop(ctx, w, h);
       st.avatar.draw(ctx, fresh ? msg.landmarks : null, w, h, { issues: fresh && msg.feedback.length > 0 });
       requestAnimationFrame(render);

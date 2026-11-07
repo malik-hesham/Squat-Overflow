@@ -10,6 +10,7 @@ import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction } from "../l
 import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
 import { activityLevel, recordActivity, backfillActivity, heatmapWeeks, activityTotals } from "../lib/activity.js";
+import { avatarFitness, missedWorkdays, fitnessCaption } from "../lib/fitness.js";
 
 function check(name, fn) {
   try {
@@ -500,6 +501,47 @@ check("activity: totals over the visible weeks", () => {
   const wed = new Date(2026, 10, 11, 15).getTime();
   const a = { "2026-11-09": { breaks: 4, xp: 38 }, "2026-11-10": { breaks: 1, xp: 9 }, "2025-01-01": { breaks: 9, xp: 90 } };
   assert.deepEqual(activityTotals(a, wed, 20), { breaks: 5, xp: 47, activeDays: 2 });
+});
+
+check("fitness: buff grows with level, 0 at Desk Potato, 1 at the top level", () => {
+  assert.equal(avatarFitness(0, null, mon, WORKDAYS).buff, 0);
+  assert.equal(avatarFitness(900, null, mon, WORKDAYS).buff, 4 / 7);
+  assert.equal(avatarFitness(99_999, null, mon, WORKDAYS).buff, 1);
+});
+
+check("fitness: missed workdays count back from yesterday, skip weekends, stop at the last break", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  assert.equal(missedWorkdays({ "2026-11-06": { breaks: 2, xp: 20 } }, wed, WORKDAYS), 2);
+  assert.equal(missedWorkdays({ "2026-11-06": { breaks: 2, xp: 20 } }, mon, WORKDAYS), 0);
+  assert.equal(missedWorkdays({ "2026-11-10": { breaks: 0, xp: 0 }, "2026-11-06": { breaks: 1, xp: 9 } }, wed, WORKDAYS), 2);
+});
+
+check("fitness: a break today perks it straight back up; a new user starts perky", () => {
+  const wed = new Date(2026, 10, 11, 15).getTime();
+  assert.equal(missedWorkdays({ "2026-11-11": { breaks: 1, xp: 9 }, "2026-10-01": { breaks: 1, xp: 9 } }, wed, WORKDAYS), 0);
+  assert.equal(missedWorkdays(null, wed, WORKDAYS), 0);
+  assert.equal(missedWorkdays({}, wed, WORKDAYS), 0);
+  // Days before the first recorded break don't count against you.
+  assert.equal(missedWorkdays({ "2026-11-09": { breaks: 1, xp: 9 } }, new Date(2026, 10, 12, 9).getTime(), WORKDAYS), 2);
+});
+
+check("fitness: a full work week without a break is as droopy as it gets", () => {
+  const f = avatarFitness(500, { "2026-10-30": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(f.missed, 5);
+  assert.equal(f.droop, 1);
+  const longer = avatarFitness(500, { "2026-10-20": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(longer.droop, 1);
+  const two = avatarFitness(500, { "2026-11-04": { breaks: 3, xp: 30 } }, mon, WORKDAYS);
+  assert.equal(two.droop, 2 / 5);
+});
+
+check("fitness: caption roasts droop first, then brags about buff", () => {
+  assert.match(fitnessCaption({ buff: 1, missed: 5 }, "Penguin"), /penguin/i);
+  assert.match(fitnessCaption({ buff: 1, missed: 5 }, "Penguin"), /chair/i);
+  assert.match(fitnessCaption({ buff: 0, missed: 2 }, "Bunny"), /2 workdays/);
+  assert.match(fitnessCaption({ buff: 0, missed: 1 }, "Bunny"), /yesterday/);
+  assert.match(fitnessCaption({ buff: 1, missed: 0 }, "Bunny"), /peak/i);
+  assert.match(fitnessCaption({ buff: 0, missed: 0 }, "Bunny"), /level up/i);
 });
 
 check("nextOpenMove: next unfinished exercise after the current one, wrapping, -1 when all done", () => {
