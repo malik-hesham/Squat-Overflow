@@ -7,3 +7,10 @@ venv/
 
 # OS
 .DS_Store
+
+# Build output
+dist/
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/

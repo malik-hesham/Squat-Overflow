@@ -1,3 +1,4 @@
+import { POSE_SERVER_URL } from "../config.js";
 import { currentAreas } from "./routine.js";
 
 export const SETTINGS_DEFAULTS = {
@@ -13,7 +14,7 @@ export const SETTINGS_DEFAULTS = {
   memes: true,
   mode: "personal",
   name: "",
-  serverUrl: "ws://127.0.0.1:8765/ws",
+  serverUrl: POSE_SERVER_URL,
   setupDone: false,
   theme: "auto",
   avatar: "bunny",

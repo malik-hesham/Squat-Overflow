@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Squat Overflow",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Movement reminders with camera-coached 2-minute breaks, form-based XP, levels and a company leaderboard.",
   "action": {
     "default_title": "Squat Overflow",
@@ -37,7 +37,7 @@
     "identity"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.supabase.co wss://*.trycloudflare.com https://www.googleapis.com https://oauth2.googleapis.com"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.supabase.co wss://*.trycloudflare.com wss://squat-overflow-pose.fly.dev https://www.googleapis.com https://oauth2.googleapis.com"
   },
   "browser_specific_settings": {
     "gecko": {

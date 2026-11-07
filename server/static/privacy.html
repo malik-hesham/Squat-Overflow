@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Squat Overflow privacy policy</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1d1d1f; --muted: #5c5c66; --bg: #ffffff; --line: #e3e3e8; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --muted: #a4a4ae; --bg: #16161a; --line: #2c2c33; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .updated { color: var(--muted); margin: 0 0 24px; }
+  ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Squat Overflow privacy policy</h1>
+  <p class="updated">Last updated: 7 November 2026</p>
+
+  <p>Squat Overflow is a browser extension that reminds you to take short movement breaks and uses your webcam to count and score the exercises in each break. This page explains what data it handles, where that data goes, and how to remove it.</p>
+
+  <h2>Camera frames</h2>
+  <ul>
+    <li>During a break, and only after you allow camera access, the extension sends small JPEG frames (about 480 pixels wide) from your webcam to the Squat Overflow pose server over an encrypted connection (WSS).</li>
+    <li>The server finds body landmarks in each frame, sends back joint positions and a rep count, and then discards the frame. Frames are processed in memory only. They are never written to disk, logged, stored, or shared.</li>
+    <li>The server runs on Fly.io in Frankfurt, Germany.</li>
+    <li>When the camera is off, or you skip the camera, nothing is sent.</li>
+    <li>Blurred mode and the avatar characters change only the preview on your own screen. The server still needs the unblurred frame to find your pose.</li>
+  </ul>
+
+  <h2>Data stored on your device</h2>
+  <p>Your settings, schedule, XP, level, streak, badges, challenges and break history are kept in the extension's local storage on your computer. They are not sent anywhere except as described below. Uninstalling the extension deletes them.</p>
+
+  <h2>Sign in with Google (optional)</h2>
+  <ul>
+    <li>Signing in is optional, and you need it only for Competitive mode. The extension asks Google for your basic profile (name, email address and profile picture).</li>
+    <li>That sign-in is passed to our account service (Supabase Auth). It keeps an account record with your Google account ID, email address, name and picture, so your leaderboard entry is tied to your verified work email.</li>
+    <li>The sign-in session is stored in the extension's local storage. Signing out in Settings removes it from your device, but the account record stays until you ask us to delete it.</li>
+  </ul>
+
+  <h2>Leaderboard (Competitive mode only)</h2>
+  <ul>
+    <li>In Competitive mode, the extension sends these to the leaderboard database (hosted by Supabase): the display name you choose, your XP, level, streak, weekly XP and chosen avatar.</li>
+    <li>The server adds your company domain (for example <code>example.com</code>), taken from your signed-in work email. Personal addresses such as gmail.com can't join a leaderboard.</li>
+    <li>It never sends form scores, break history or camera data.</li>
+    <li>Only signed-in people from the same company domain can see the leaderboard. They see your name, level, XP, streak and avatar.</li>
+    <li>Switching back to Personal mode, or signing out, deletes your leaderboard entry. Do this before you uninstall, or contact us to have the entry removed.</li>
+  </ul>
+
+  <h2>Google Calendar (optional)</h2>
+  <ul>
+    <li>If you connect Google Calendar, at sign-in or later, the extension asks Google for read-only free/busy times so that it doesn't start a break during a meeting.</li>
+    <li>It cannot see event titles, attendees or details.</li>
+    <li>The access token and the busy times stay in the extension's local storage and are sent only to Google. Disconnecting revokes the token and deletes them.</li>
+  </ul>
+
+  <h2>Exercise demo videos</h2>
+  <p>During a break, the window can show a short demo clip. The clip is embedded from YouTube's privacy-enhanced mode (youtube-nocookie.com), through a page on the pose server. YouTube receives the request like any embedded video.</p>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>No advertising, analytics or tracking.</li>
+    <li>No selling or transferring of your data to third parties, other than the service providers named above, which are used only to run these features.</li>
+    <li>No reading of the web pages you visit. The extension looks at the address of tabs that are playing sound, only to spot a meeting site (Google Meet, Zoom or Teams) so that it doesn't interrupt a call. It also checks tab addresses to find its own break window. Addresses are checked on your device and never sent anywhere.</li>
+  </ul>
+
+  <h2>Changes and contact</h2>
+  <p>If this policy changes, the date at the top changes too. Questions or deletion requests: <!-- TODO: replace with the team's public support address before the store listing goes live. --><a href="mailto:privacy@example.com">privacy@example.com</a>.</p>
+</main>
+</body>
+</html>
