@@ -29,6 +29,13 @@
     "page": "options.html",
     "open_in_tab": true
   },
+  "content_scripts": [
+    {
+      "matches": ["https://squat-overflow.pages.dev/start*"],
+      "js": ["start-from-link.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "permissions": [
     "storage",
     "alarms",
