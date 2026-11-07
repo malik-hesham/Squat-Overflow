@@ -511,6 +511,23 @@ check("nextOpenMove: next unfinished exercise after the current one, wrapping, -
   assert.equal(nextOpenMove(moves, prog(6, 6, 6), 1), -1);
 });
 
+check("swapMove cycles through every exercise in the area, skipping ones used elsewhere", () => {
+  const byKey = (k) => CATALOG.find((e) => e.key === k);
+  const move = (k) => ({ key: k, label: k, area: byKey(k).category, camera: byKey(k).camera, how_to: "", demo: null, target: BREAK_REPS });
+  const cycle = (moves, i, n) => {
+    const seen = [];
+    let ms = moves;
+    for (let s = 0; s < n; s++) {
+      const next = swapMove(CATALOG, ms, i);
+      seen.push(next.key);
+      ms = ms.map((m, k) => (k === i ? next : m));
+    }
+    return seen;
+  };
+  assert.deepEqual(cycle([move("air_curl"), move("neck_tilt"), move("t_raise")], 0, 4), ["triceps_reach", "chair_dip", "wrist_flex", "air_curl"]);
+  assert.deepEqual(cycle([move("air_curl"), move("chair_dip"), move("t_raise")], 0, 3), ["triceps_reach", "wrist_flex", "air_curl"]);
+});
+
 const pending = [];
 check("leaderboard unconfigured resolves null/false without throwing", () => {
   pending.push(
