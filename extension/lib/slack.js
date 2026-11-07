@@ -24,8 +24,10 @@ export function slackPayload({ name, startUrl, manual }) {
   const text = manual
     ? who ? `🏋️ *${who}* started a break.` : "🏋️ A break just started."
     : who ? `🏋️ *${who}*, time to move!` : "🏋️ Time to move!";
-  const blocks = [{ type: "section", text: { type: "mrkdwn", text } }];
   const url = httpsUrl(startUrl);
+  // The link also goes in the message text, so it stays clickable where buttons are not shown.
+  const body = url ? `${text}\n<${url}|Start break>` : text;
+  const blocks = [{ type: "section", text: { type: "mrkdwn", text: body } }];
   if (url) {
     blocks.push({
       type: "actions",

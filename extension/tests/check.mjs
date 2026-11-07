@@ -817,6 +817,9 @@ check("slack: message wording and the start button", () => {
   const url = "https://example.com/start/";
   const withUrl = slackPayload({ name: "Sara", startUrl: url });
   assert.equal(withUrl.blocks[1].elements[0].url, url);
+  assert.equal(withUrl.blocks[0].text.text, "🏋️ *Sara*, time to move!\n<https://example.com/start/|Start break>", "clickable markdown link in the text");
+  assert.equal(withUrl.text, "🏋️ *Sara*, time to move!", "plain fallback text stays link-free");
+  assert.equal(slackPayload({ name: "Sara", startUrl: "" }).blocks[0].text.text, "🏋️ *Sara*, time to move!");
   for (const bad of ["", undefined, "http://example.com/start/", "javascript:alert(1)", "nope"]) {
     assert.equal(slackPayload({ name: "Sara", startUrl: bad }).blocks.length, 1, String(bad));
   }

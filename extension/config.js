@@ -7,4 +7,4 @@ export const GOOGLE_CLIENT_ID = "977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.a
 // so anyone who has the extension can read it and post to that channel. Don't commit a real one.
 export const SLACK_WEBHOOK_URL = "";
 // The hosted start page (see docs/start-break-link.md). The Slack message links to it when set.
-export const START_PAGE_URL = "";
+export const START_PAGE_URL = "https://hysvvrdopodlqvuxnvco.supabase.co/start/";

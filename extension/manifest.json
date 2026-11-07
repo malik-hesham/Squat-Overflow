@@ -31,7 +31,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://squat-overflow.pages.dev/start*"],
+      "matches": ["https://hysvvrdopodlqvuxnvco.supabase.co/start*"],
       "js": ["start-from-link.js"],
       "run_at": "document_idle"
     }
