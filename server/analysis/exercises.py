@@ -1,0 +1,392 @@
+"""Exercise definitions: which angle drives the rep, and which form rules apply.
+
+Every exercise reduces a pose to one *primary value* (a joint angle) that moves
+between a REST zone and a TARGET zone once per rep, plus a list of form issues
+seen in that frame. The rep counter in `session.py` is exercise-agnostic.
+
+The office set (`OFFICE_EXERCISES`) is deliberately forgiving: each one only
+counts reps on one angle with wide thresholds, and never flags form faults.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from typing import Callable
+
+import numpy as np
+
+from .geometry import Pose, angle, angle_from_horizontal, angle_from_vertical
+
+ISSUE_TEXT: dict[str, str] = {
+    "not_visible": "Step back so your whole body is in frame",
+    "chest_up": "Keep your chest up, you're leaning too far forward",
+    "knees_past_toes": "Sit back into your hips, knees are drifting past your toes",
+    "hips_sag": "Brace your core, your hips are sagging",
+    "hips_pike": "Lower your hips into a straight line",
+    "not_plank": "Get into a plank position, side-on to the camera",
+    "elbow_drift": "Keep your elbow pinned to your side",
+    "swinging": "Don't swing your torso, keep it still",
+    "arms_down": "Start with your hands at shoulder height",
+    "uneven_press": "Press both arms evenly",
+    "not_deep_enough": "Go through the full range of motion",
+    "too_fast": "Slow down and control the movement",
+}
+
+
+@dataclass
+class Measurement:
+    value: float               # primary angle in degrees
+    issues: list[str] = field(default_factory=list)
+    valid: bool = True         # False = body isn't in the start position; don't count
+
+
+@dataclass(frozen=True)
+class Exercise:
+    key: str
+    label: str
+    metric: str                # what the primary value measures, for the UI
+    rest: float                # threshold of the rest zone
+    target: float              # threshold of the target zone
+    rest_is_high: bool = True  # True: angle is large at rest and shrinks during the rep
+    bilateral: bool = False    # True: needs both sides visible (front view)
+    joints: tuple[str, ...] = ()
+    camera: str = "side"       # recommended camera angle, for the UI
+    min_rep_seconds: float = 0.8
+    category: str = "Workout"  # groups the picker in the UI
+    how_to: str = ""           # one-line instruction shown in the UI
+
+    def at_rest(self, v: float) -> bool:
+        return v >= self.rest if self.rest_is_high else v <= self.rest
+
+    def at_target(self, v: float) -> bool:
+        return v <= self.target if self.rest_is_high else v >= self.target
+
+    def measure(self, pose: Pose, side: str) -> Measurement:  # pragma: no cover
+        raise NotImplementedError
+
+
+class Squat(Exercise):
+    def measure(self, pose: Pose, side: str) -> Measurement:
+        p = {j: pose.pt(side, j) for j in ("shoulder", "hip", "knee", "ankle", "heel", "toe")}
+        knee = angle(p["hip"], p["knee"], p["ankle"])
+        m = Measurement(knee)
+        if knee < 140:  # only judge form once they are actually squatting
+            if angle_from_vertical(p["hip"], p["shoulder"]) > 45:
+                m.issues.append("chest_up")
+            facing = 1.0 if p["toe"][0] >= p["heel"][0] else -1.0
+            shin = float(np.linalg.norm(p["knee"] - p["ankle"]))
+            if (p["knee"][0] - p["toe"][0]) * facing > 0.35 * shin:
+                m.issues.append("knees_past_toes")
+        return m
+
+
+class PushUp(Exercise):
+    def measure(self, pose: Pose, side: str) -> Measurement:
+        p = {j: pose.pt(side, j) for j in ("shoulder", "elbow", "wrist", "hip", "ankle")}
+        elbow = angle(p["shoulder"], p["elbow"], p["wrist"])
+        m = Measurement(elbow)
+        if angle_from_horizontal(p["shoulder"], p["ankle"]) > 50:
+            m.valid = False
+            m.issues.append("not_plank")
+            return m
+        if angle(p["shoulder"], p["hip"], p["ankle"]) < 160:
+            sh, an, hip = p["shoulder"], p["ankle"], p["hip"]
+            dx = an[0] - sh[0]
+            t = (hip[0] - sh[0]) / dx if abs(dx) > 1e-6 else 0.5
+            line_y = sh[1] + t * (an[1] - sh[1])
+            m.issues.append("hips_sag" if hip[1] > line_y else "hips_pike")
+        return m
+
+
+class BicepCurl(Exercise):
+    def measure(self, pose: Pose, side: str) -> Measurement:
+        p = {j: pose.pt(side, j) for j in ("shoulder", "elbow", "wrist", "hip")}
+        elbow = angle(p["shoulder"], p["elbow"], p["wrist"])
+        m = Measurement(elbow)
+        lean = angle_from_vertical(p["hip"], p["shoulder"])
+        if lean > 35:
+            m.valid = False  # bent over; this is not a standing curl
+            return m
+        if angle(p["elbow"], p["shoulder"], p["hip"]) > 35:
+            m.issues.append("elbow_drift")
+        if lean > 15:
+            m.issues.append("swinging")
+        return m
+
+
+class ShoulderPress(Exercise):
+    """Front view, both arms. Rest = hands at shoulders, target = locked out overhead."""
+
+    def measure(self, pose: Pose, side: str) -> Measurement:
+        sides = ("left", "right")
+        elbows = [angle(pose.pt(s, "shoulder"), pose.pt(s, "elbow"), pose.pt(s, "wrist")) for s in sides]
+        m = Measurement(float(np.mean(elbows)))
+        sh_l, sh_r = pose.pt("left", "shoulder"), pose.pt("right", "shoulder")
+        wr_l, wr_r = pose.pt("left", "wrist"), pose.pt("right", "wrist")
+        shoulder_w = max(float(np.linalg.norm(sh_l - sh_r)), 1.0)
+        shoulder_y = (sh_l[1] + sh_r[1]) / 2
+        # Arms hanging by the sides also give a straight elbow; require hands up.
+        if max(wr_l[1], wr_r[1]) > shoulder_y + 0.25 * shoulder_w:
+            m.valid = False
+            m.issues.append("arms_down")
+            return m
+        if abs(wr_l[1] - wr_r[1]) > 0.3 * shoulder_w:
+            m.issues.append("uneven_press")
+        return m
+
+
+# --- Office set: angle helpers -------------------------------------------
+# Each helper maps a pose (and a body side, where it matters) to one angle in
+# 0..180 degrees, so every exercise fits the same rep counter and chart.
+
+AngleFn = Callable[[Pose, str], float]
+
+
+def arm_elevation(pose: Pose, s: str) -> float:
+    """Shoulder->wrist vs straight down: 0 = arm hanging, 90 = shoulder height, 180 = overhead."""
+    return 180.0 - angle_from_vertical(pose.pt(s, "shoulder"), pose.pt(s, "wrist"))
+
+
+def elbow_angle(pose: Pose, s: str) -> float:
+    return angle(pose.pt(s, "shoulder"), pose.pt(s, "elbow"), pose.pt(s, "wrist"))
+
+
+def knee_angle(pose: Pose, s: str) -> float:
+    return angle(pose.pt(s, "hip"), pose.pt(s, "knee"), pose.pt(s, "ankle"))
+
+
+def hip_angle(pose: Pose, s: str) -> float:
+    """Torso vs thigh: ~180 standing tall, ~90 seated."""
+    return angle(pose.pt(s, "shoulder"), pose.pt(s, "hip"), pose.pt(s, "knee"))
+
+
+def leg_line_angle(pose: Pose, s: str) -> float:
+    """Torso vs whole leg (hip->ankle): ~180 standing, smaller as the leg swings."""
+    return angle(pose.pt(s, "shoulder"), pose.pt(s, "hip"), pose.pt(s, "ankle"))
+
+
+def wrist_angle(pose: Pose, s: str) -> float:
+    """Forearm vs hand: 180 = straight wrist, smaller when bent up or down."""
+    return angle(pose.pt(s, "elbow"), pose.pt(s, "wrist"), pose.pt(s, "index"))
+
+
+def heel_lift(pose: Pose, s: str) -> float:
+    """Heel->toe line vs horizontal: ~0 flat foot, grows when the heel rises."""
+    return angle_from_horizontal(pose.pt(s, "heel"), pose.pt(s, "toe"))
+
+
+def leg_out(pose: Pose, s: str) -> float:
+    """Hip->ankle vs straight down: 0 = leg under the hip, grows as it lifts out sideways."""
+    return 180.0 - angle_from_vertical(pose.pt(s, "hip"), pose.pt(s, "ankle"))
+
+
+def torso_lean(pose: Pose, s: str) -> float:
+    """Hip->shoulder vs vertical, seen from the side (forward or back)."""
+    return angle_from_vertical(pose.pt(s, "hip"), pose.pt(s, "shoulder"))
+
+
+def arm_across(pose: Pose, s: str) -> float:
+    """Other shoulder -> shoulder -> wrist: 180 = arm out wide, small = hand at the other shoulder."""
+    other = "right" if s == "left" else "left"
+    return angle(pose.pt(other, "shoulder"), pose.pt(s, "shoulder"), pose.pt(s, "wrist"))
+
+
+def _mid(pose: Pose, joint: str) -> np.ndarray:
+    return (pose.pt("left", joint) + pose.pt("right", joint)) / 2
+
+
+def torso_side_tilt(pose: Pose, _s: str = "") -> float:
+    """Mid-hip -> mid-shoulder vs vertical, seen from the front."""
+    return angle_from_vertical(_mid(pose, "hip"), _mid(pose, "shoulder"))
+
+
+def shoulder_tilt(pose: Pose, _s: str = "") -> float:
+    """Shoulder line vs horizontal; works seated with the hips hidden by the desk."""
+    return angle_from_horizontal(pose.pt("left", "shoulder"), pose.pt("right", "shoulder"))
+
+
+def head_tilt(pose: Pose, _s: str = "") -> float:
+    """Ear line vs horizontal (ear towards shoulder)."""
+    return angle_from_horizontal(pose.pt("left", "ear"), pose.pt("right", "ear"))
+
+
+def head_turn(pose: Pose, _s: str = "") -> float:
+    """How far the nose moved off the centre of the ears, as an angle (0 = facing the camera).
+
+    Always image-space: it measures the turn relative to the camera, and the
+    face points' depth from the model is too noisy to beat that.
+    """
+    el, er, nose = pose.pt2d("left", "ear"), pose.pt2d("right", "ear"), pose.pt2d("left", "nose")
+    half = max(abs(el[0] - er[0]) / 2, 1.0)
+    offset = abs(nose[0] - (el[0] + er[0]) / 2)
+    return math.degrees(math.asin(min(1.0, offset / half)))
+
+
+def both_sides(fn: AngleFn) -> AngleFn:
+    """Average of left and right: both limbs move together."""
+    return lambda pose, _s: (fn(pose, "left") + fn(pose, "right")) / 2
+
+
+def either_side(fn: AngleFn, pick: Callable[[float, float], float]) -> AngleFn:
+    """Alternating limbs: whichever side moved further counts (`pick` is min or max)."""
+    return lambda pose, _s: pick(fn(pose, "left"), fn(pose, "right"))
+
+
+@dataclass(frozen=True)
+class Gentle(Exercise):
+    """Forgiving desk exercise: counts reps on one angle and never flags form faults."""
+
+    min_rep_seconds: float = 0.5
+    angle_fn: AngleFn | None = field(default=None, repr=False, compare=False)
+
+    def measure(self, pose: Pose, side: str) -> Measurement:
+        assert self.angle_fn is not None
+        return Measurement(float(self.angle_fn(pose, side)))
+
+
+def gentle(key: str, label: str, metric: str, fn: AngleFn, rest: float, target: float, *,
+           category: str, camera: str, joints: tuple[str, ...], how_to: str) -> Gentle:
+    """Front-camera exercises need both sides visible; side-camera ones use the nearer side."""
+    return Gentle(
+        key=key, label=label, metric=metric, rest=rest, target=target,
+        rest_is_high=rest > target, bilateral=camera == "front", joints=joints,
+        camera=camera, category=category, how_to=how_to, angle_fn=fn,
+    )
+
+
+NECK, UPPER, LOWER, STAND = "Neck", "Seated upper body", "Seated legs & core", "Standing break"
+ARMS = ("shoulder", "elbow", "wrist")
+LEGS = ("hip", "knee", "ankle")
+
+# Thresholds are wide on purpose: rest and target sit well inside a comfortable
+# range of motion, so a relaxed rep counts.
+OFFICE_EXERCISES: tuple[Gentle, ...] = (
+    # Neck: a laptop camera that sees your head and shoulders is enough.
+    gentle("neck_tilt", "Neck side tilt", "Head tilt", head_tilt, 8, 18,
+           category=NECK, camera="front", joints=("ear", "shoulder"),
+           how_to="Ear towards shoulder, back to centre, then the other side. Each side is a rep."),
+    gentle("head_turn", "Look over your shoulder", "Head turn", head_turn, 15, 35,
+           category=NECK, camera="front", joints=("nose", "shoulder"),
+           how_to="Turn your head slowly to one side, back to centre, then the other side."),
+    # Seated upper body, facing the camera.
+    gentle("overhead_reach", "Overhead reach", "Arm height", both_sides(arm_elevation), 60, 135,
+           category=UPPER, camera="front", joints=ARMS,
+           how_to="Reach both arms up towards the ceiling, then lower them."),
+    gentle("alt_reach", "Alternating sky reach", "Arm height", either_side(arm_elevation, max), 60, 135,
+           category=UPPER, camera="front", joints=ARMS,
+           how_to="Reach one arm up, lower it fully, then the other arm."),
+    gentle("t_raise", "T-raise", "Arm height", both_sides(arm_elevation), 45, 75,
+           category=UPPER, camera="front", joints=ARMS,
+           how_to="Lift both arms out to the sides to shoulder height, then lower them."),
+    gentle("cross_swing", "Arm open & cross", "Arm opening", both_sides(arm_across), 140, 75,
+           category=UPPER, camera="front", joints=ARMS,
+           how_to="Open your arms wide, then hug them across your chest."),
+    gentle("triceps_reach", "Overhead triceps reach", "Elbow angle", both_sides(elbow_angle), 90, 145,
+           category=UPPER, camera="front", joints=ARMS,
+           how_to="Hands behind your head, straighten your arms up, then bend back down."),
+    gentle("air_curl", "Air curls", "Elbow angle", both_sides(elbow_angle), 140, 70,
+           category=UPPER, camera="front", joints=ARMS,
+           how_to="Arms by your sides, curl both hands up to your shoulders, then lower."),
+    gentle("seated_side_bend", "Seated side bend", "Shoulder tilt", shoulder_tilt, 7, 14,
+           category=UPPER, camera="front", joints=("shoulder",),
+           how_to="Sit tall, lean to one side, back to centre, then the other side."),
+    gentle("wrist_flex", "Wrist flex & extend", "Wrist angle", wrist_angle, 160, 135,
+           category=UPPER, camera="side", joints=("elbow", "wrist", "index"),
+           how_to="Arm out in front, bend the hand up or down, then straighten it."),
+    gentle("seated_row", "Seated rows", "Elbow angle", elbow_angle, 150, 100,
+           category=UPPER, camera="side", joints=ARMS,
+           how_to="Arms straight in front, pull the elbows back and squeeze the shoulder blades."),
+    gentle("desk_punch", "Desk punches", "Elbow angle", elbow_angle, 90, 150,
+           category=UPPER, camera="side", joints=ARMS,
+           how_to="Fists by your chest, punch straight forward, then pull back."),
+    # Seated legs & core, side-on to the camera.
+    gentle("seated_knee_ext", "Seated leg extension", "Knee angle", either_side(knee_angle, max), 110, 150,
+           category=LOWER, camera="side", joints=LEGS,
+           how_to="Sit tall, straighten one leg out in front, lower it, then switch."),
+    gentle("seated_knee_lift", "Seated knee lift", "Hip angle", hip_angle, 85, 70,
+           category=LOWER, camera="side", joints=("shoulder", "hip", "knee"),
+           how_to="Sit tall and lift one knee a few inches off the chair, then lower it."),
+    gentle("seated_heel_raise", "Seated heel raise", "Heel lift", heel_lift, 15, 25,
+           category=LOWER, camera="side", joints=("ankle", "heel", "toe"),
+           how_to="Feet flat, push up onto the balls of your feet, then lower the heels."),
+    gentle("seated_lean_back", "Seated lean-back", "Torso lean", torso_lean, 12, 25,
+           category=LOWER, camera="side", joints=("shoulder", "hip"),
+           how_to="Sit tall at the front of the chair, lean back a little with a tight core, return."),
+    # Standing break, next to the desk.
+    gentle("sit_to_stand", "Sit to stand", "Knee angle", knee_angle, 155, 110,
+           category=STAND, camera="side", joints=LEGS,
+           how_to="Stand up from your chair and sit back down without using your hands."),
+    gentle("mini_squat", "Mini squat", "Knee angle", knee_angle, 160, 135,
+           category=STAND, camera="side", joints=LEGS,
+           how_to="Hold the desk if you like and bend the knees a little, then stand tall."),
+    gentle("desk_pushup", "Desk push-up", "Elbow angle", elbow_angle, 150, 110,
+           category=STAND, camera="side", joints=ARMS,
+           how_to="Hands on the desk edge, lower your chest towards it, then push away."),
+    gentle("chair_dip", "Chair dip", "Elbow angle", elbow_angle, 150, 110,
+           category=STAND, camera="side", joints=ARMS,
+           how_to="Use a sturdy chair without wheels. Hands on the seat, bend the elbows, push up."),
+    gentle("march", "March in place", "Hip angle", either_side(hip_angle, min), 150, 120,
+           category=STAND, camera="side", joints=("shoulder", "hip", "knee"),
+           how_to="Lift one knee, put it down, then the other knee. Each lift is a rep."),
+    gentle("hamstring_curl", "Standing hamstring curl", "Knee angle", either_side(knee_angle, min), 155, 110,
+           category=STAND, camera="side", joints=LEGS,
+           how_to="Hold the desk, bring one heel towards your seat, lower it, then switch legs."),
+    gentle("side_leg_raise", "Side leg raise", "Leg out", either_side(leg_out, max), 10, 25,
+           category=STAND, camera="front", joints=("hip", "ankle"),
+           how_to="Hold the desk, lift one leg out to the side, lower it, then switch."),
+    gentle("hip_hinge", "Hip hinge", "Torso lean", torso_lean, 20, 45,
+           category=STAND, camera="side", joints=("shoulder", "hip"),
+           how_to="Soft knees, push your hips back and tip your chest forward, then stand tall."),
+    gentle("standing_side_bend", "Standing side bend", "Torso tilt", torso_side_tilt, 6, 15,
+           category=STAND, camera="front", joints=("shoulder", "hip"),
+           how_to="Stand tall, slide one hand down your leg, back to centre, then the other side."),
+    gentle("calf_raise", "Calf raise", "Heel lift", heel_lift, 15, 25,
+           category=STAND, camera="side", joints=("ankle", "heel", "toe"),
+           how_to="Hold the desk, rise onto your toes, then lower the heels."),
+    gentle("leg_swing", "Front leg swing", "Hip angle", either_side(leg_line_angle, min), 162, 145,
+           category=STAND, camera="side", joints=("shoulder", "hip", "ankle"),
+           how_to="Hold the desk, swing one straight leg forward and back, then switch legs."),
+    gentle("reverse_lunge", "Reverse lunge", "Knee angle", either_side(knee_angle, min), 155, 115,
+           category=STAND, camera="side", joints=LEGS,
+           how_to="Step one foot back and bend both knees a little, step back in, then switch."),
+    gentle("step_jack", "Step jacks", "Arm height", both_sides(arm_elevation), 50, 120,
+           category=STAND, camera="front", joints=ARMS,
+           how_to="Step one foot out as both arms swing up, step back in as they come down."),
+    gentle("front_raise", "Front arm raise", "Arm height", arm_elevation, 40, 75,
+           category=STAND, camera="side", joints=ARMS,
+           how_to="Lift a straight arm forward to shoulder height, then lower it."),
+)
+
+EXERCISES: dict[str, Exercise] = {
+    e.key: e
+    for e in (
+        Squat(
+            key="squat", label="Squat", metric="Knee angle",
+            rest=160, target=100, joints=("shoulder", "hip", "knee", "ankle"),
+            how_to="Feet shoulder-width apart, sit back until your thighs are near parallel.",
+        ),
+        PushUp(
+            key="pushup", label="Push-up", metric="Elbow angle",
+            rest=150, target=95, joints=("shoulder", "elbow", "wrist", "hip", "ankle"),
+            how_to="Body in a straight line, lower your chest until the elbows reach about 90°.",
+        ),
+        BicepCurl(
+            key="curl", label="Bicep curl", metric="Elbow angle",
+            rest=145, target=55, joints=("shoulder", "elbow", "wrist", "hip"),
+            how_to="Elbow pinned to your side, curl the hand up to your shoulder.",
+        ),
+        ShoulderPress(
+            key="press", label="Shoulder press", metric="Avg elbow angle",
+            rest=110, target=155, rest_is_high=False, bilateral=True,
+            joints=("shoulder", "elbow", "wrist"), camera="front",
+            how_to="Hands at shoulder height, press both arms straight overhead.",
+        ),
+        *OFFICE_EXERCISES,
+    )
+}
+
+# What the app offers: the office (workplace) set only. The Workout exercises
+# above stay defined and tested, but are not sent to clients or accepted by them.
+CATALOG: dict[str, Exercise] = {e.key: e for e in OFFICE_EXERCISES}
+DEFAULT_EXERCISE = OFFICE_EXERCISES[0].key
