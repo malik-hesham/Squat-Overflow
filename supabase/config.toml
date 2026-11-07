@@ -1,0 +1,11 @@
+# Supabase CLI project config. Only what this repo uses: SQL migrations in supabase/migrations/.
+# CI runs `supabase db start` to apply them to a throwaway local Postgres, and the release
+# workflow runs `supabase db push` against the hosted project (see docs/deployment.md).
+project_id = "squat-overflow"
+
+[db]
+# Must match the hosted database: run `SHOW server_version;` in the SQL Editor to check.
+major_version = 17
+
+[db.seed]
+enabled = false
