@@ -30,11 +30,11 @@ export function onFire(s, now, intervalMin) {
 }
 
 export function canSnooze(s) {
-  return s.snoozesInRow < SNOOZE_CAP;
+  return (s.snoozesInRow ?? 0) < SNOOZE_CAP;
 }
 
 export function showWarning(s) {
-  return s.skipsInRow >= WARN_SKIPS;
+  return (s.skipsInRow ?? 0) >= WARN_SKIPS;
 }
 
 export function warningHours(skips, intervalMin) {
@@ -121,4 +121,14 @@ export function decideFire(s, now, intervalMin, { idle, meeting, settings }) {
   const fired = onFire(base, now, intervalMin);
   const schedule = { ...fired, nextAt: slot(fired.nextAt), deferredFrom: null };
   return { kind: idle === "active" ? "open" : "away", schedule };
+}
+
+export function scheduleSettingsChanged(prev, next) {
+  const days = (w) => [...w].sort().join();
+  return (
+    prev.intervalMin !== next.intervalMin ||
+    prev.activeStart !== next.activeStart ||
+    prev.activeEnd !== next.activeEnd ||
+    days(prev.workdays) !== days(next.workdays)
+  );
 }

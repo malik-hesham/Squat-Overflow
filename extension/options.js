@@ -1,5 +1,7 @@
 import { getSettings, saveSettings, getProfile } from "./lib/store.js";
 import { AREAS } from "./lib/routine.js";
+import { scheduleSettingsChanged } from "./lib/schedule.js";
+import { THEMES, themeId, applyTheme, initTheme } from "./lib/themes.js";
 
 const PRESETS = ["30", "45", "60", "90", "120"];
 const DAYS = [
@@ -74,7 +76,7 @@ async function save() {
   if (problem(next)) return;
   await saveSettings({ ...next, setupDone: true });
   await chrome.runtime
-    .sendMessage({ type: "settings-saved", intervalChanged: next.intervalMin !== initial.intervalMin })
+    .sendMessage({ type: "settings-saved", scheduleChanged: scheduleSettingsChanged(initial, next) })
     .catch(() => {});
   if (initial.mode === "competitive" && next.mode === "personal") {
     await chrome.runtime.sendMessage({ type: "left-board" }).catch(() => {});
@@ -92,8 +94,37 @@ function render() {
   $("save").textContent = first ? "Get started" : "Save";
 }
 
+function renderThemes(current) {
+  $("themes").replaceChildren(
+    ...THEMES.map((t) => {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "theme-card";
+      card.setAttribute("aria-pressed", String(t.id === current));
+      const dots = document.createElement("span");
+      dots.className = "dots";
+      dots.append(
+        ...t.swatch.map((color) => {
+          const dot = document.createElement("span");
+          dot.style.background = color;
+          return dot;
+        }),
+      );
+      card.append(dots, t.name);
+      card.addEventListener("click", async () => {
+        applyTheme(t.id);
+        renderThemes(t.id);
+        await saveSettings({ theme: t.id });
+      });
+      return card;
+    }),
+  );
+}
+
 async function init() {
+  initTheme();
   initial = await getSettings();
+  renderThemes(themeId(initial.theme));
   await getProfile();
   const preset = PRESETS.includes(String(initial.intervalMin)) ? String(initial.intervalMin) : "custom";
   radios("interval").forEach((r) => (r.checked = r.value === preset));

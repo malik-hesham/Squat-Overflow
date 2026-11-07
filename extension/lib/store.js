@@ -13,6 +13,7 @@ export const SETTINGS_DEFAULTS = {
   company: "",
   serverUrl: "ws://127.0.0.1:8765/ws",
   setupDone: false,
+  theme: "auto",
 };
 
 const PROFILE_KEY = "profile";
@@ -83,4 +84,13 @@ export async function getCatalog() {
 export function cacheCatalog(msg) {
   if (!Array.isArray(msg.exercises) || !msg.exercises.length) return Promise.resolve();
   return local.set({ [CATALOG_KEY]: { exercises: msg.exercises, connections: msg.connections } });
+}
+
+export async function getActivity() {
+  const { activity } = await local.get("activity");
+  return activity && typeof activity === "object" ? activity : null;
+}
+
+export function setActivity(activity) {
+  return local.set({ activity });
 }
