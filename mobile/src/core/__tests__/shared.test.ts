@@ -1,4 +1,4 @@
-import { award, buildRoutine, currentAreas, featuredArea, levelFor, t, AREAS } from '../shared';
+import { award, buildRoutine, currentAreas, levelFor, t, AREAS } from '../shared';
 
 const catalog = AREAS.flatMap((area: string) =>
   [1, 2, 3].map((k) => ({ key: `${area}-${k}`, label: `${area} ${k}`, category: area, camera: 'front', how_to: '' })),
@@ -16,7 +16,7 @@ test('shared XP logic runs under Hermes-like globals', () => {
 
 test('routine, legacy areas and i18n come from the extension', () => {
   expect(currentAreas(['Neck', 'Knees'])).toEqual(['Neck tension', 'Knees']);
-  const moves = buildRoutine(catalog, { areas: ['Knees'], featured: featuredArea(Date.now()), lastKey: null, n: 0 });
+  const moves = buildRoutine(catalog, { areas: ['Knees'], lastKey: null, n: 0 });
   expect(moves.length).toBeGreaterThan(0);
   expect(t('en', 'breakNow')).toBe('Break now');
   expect(t('ar', 'breakNow')).not.toBe('Break now');

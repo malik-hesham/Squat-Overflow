@@ -23,7 +23,6 @@ import {
   breakXp,
   buildRoutine,
   canSnooze,
-  featuredArea,
   levelFor,
   needsPositioning,
   nextOpenMove,
@@ -112,7 +111,6 @@ export default function BreakScreen() {
     }));
     st.moves = buildRoutine(st.catalog, {
       areas: settings.areas.length ? settings.areas : (AREAS as string[]).slice(0, 2),
-      featured: featuredArea(Date.now()),
       lastKey: opened.schedule.lastKey,
       n: opened.schedule.breakCount,
     }) as Move[];
