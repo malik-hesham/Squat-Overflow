@@ -17,11 +17,11 @@ export async function createApp(
 /** Everything main() and the tests both need on top of the module: WebSocket adapter, CORS, shutdown hooks. */
 export function configureApp(app: INestApplication): INestApplication {
   app.useWebSocketAdapter(new PoseWsAdapter(app));
-  // The extension's pages call the auth and leaderboard API cross-origin. Same allowlist as /ws.
+  // The extension's pages call the auth, leaderboard and sync API cross-origin. Same allowlist as /ws.
   app.enableCors({
     origin: (origin: string | undefined, done: (err: Error | null, allow: boolean) => void) =>
       done(null, originAllowed(origin)),
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Authorization', 'Content-Type'],
     maxAge: 600,
   });

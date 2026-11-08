@@ -51,16 +51,16 @@ PATCH /me/settings              { patch: { [field]: value }, at } -> { doc, vers
 
 `Profile = { xp, level, levelName, streak, weekXp, week, todayBreaks, lastBreakAt, badges, daily, weekly }`
 
-Limits: at most 200 events per POST and 500 per GET page. `POST /sync/breaks` validates every field the same way `validateScore` does today and rejects unknown settings keys.
+`POST /sync/breaks` and `GET /me/profile` take optional `?day=YYYY-MM-DD&week=YYYY-Www`, the caller's local keys, so "today" and week XP follow the device's clock (default: server UTC). Limits: at most 200 events per POST and 500 per GET page. `POST /sync/breaks` validates every field the same way `validateScore` does today and rejects unknown settings keys.
 
 ## Items
 
-- [ ] 1. Server: schema and sync API.
+- [x] 1. Server: schema and sync API. Done: `server/src/sync/`, migration `002_sync`, specs in `server/test/sync/`.
       Add migration `002_sync` to `server/src/db/migrations.ts`:
       `break_events (user_id uuid references users on delete cascade, id uuid, seq bigserial, at timestamptz, day text, week text, device text, reps int, moves int, score int null, xp int, scored boolean, completed boolean, areas text[], received_at timestamptz default now(), primary key (user_id, id))`, an index on `(user_id, seq)`;
       `user_settings (user_id uuid primary key references users on delete cascade, doc jsonb not null default '{}', field_at jsonb not null default '{}', version int not null default 0, updated_at timestamptz default now())`;
       `user_progress (user_id uuid primary key references users on delete cascade, doc jsonb not null default '{}', at timestamptz)`.
-      Add `server/src/sync/` (`sync.module.ts`, `sync.controller.ts`, `sync.store.ts`, `validate.ts`, `profile.ts`) and `server/src/me/` (or one `SyncModule` exposing both routes). `profile.ts` derives the profile from events and reuses `levelFor` and the streak rules from `extension/lib/xp.js`. Inserts use `on conflict do nothing`. After an insert, upsert `players` when the user has a company email and `mode = competitive`.
+      Add `server/src/sync/` (`sync.module.ts`, `sync.controller.ts`, `sync.store.ts`, `validate.ts`, `profile.ts`) and `server/src/me/` (or one `SyncModule` exposing both routes). `profile.ts` derives the profile from events with `LEVELS` and the streak rule ported from `extension/lib/xp.js` (the server is CommonJS and ships alone in its image, so it can't import that ES module); `test/sync/profile.spec.ts` checks the levels still match. Inserts use `on conflict do nothing`. After an insert, upsert `players` when the user has a company email and `mode = competitive`.
       verify: Jest specs on PGlite cover idempotent re-POST, the cursor walking pages, streak across days, the per-field settings merge (an older `at` loses), and 401 without a token.
 
 - [ ] 2. Chrome extension client.
@@ -84,5 +84,5 @@ Items 2, 3 and 4 depend only on item 1's API and can run in parallel.
 
 - **XP trust:** the server still trusts the `xp` each client sends, as the leaderboard does today. Before production, recompute XP on the server from `reps`, `moves` and `completed`.
 - **Challenges** that count snoozes and skips need action events too. Until then they stay last-write-wins per device.
-- **Clock skew:** `day` comes from the device clock. A wrong clock can break a streak. Clamp `at` to within ±24 h of the server time on insert.
+- **Clock skew:** `day` comes from the device clock. A wrong clock can break a streak. The server refuses breaks dated more than 24 h ahead; old ones are allowed so local logs can be backfilled.
 - **PR #11** may change before it merges. Rebase `feat/cross-platform-sync` onto it, or onto `main` once it merges.
