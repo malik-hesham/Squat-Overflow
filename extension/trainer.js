@@ -9,7 +9,7 @@ const DEFAULTS = {
   voice: false,
   privacy: false,
   privacyStyle: "blur", // sensitive mode look: "blur" or an Avatar.CHARACTERS key
-  angleMode: "2d", // "3d" = joint angles from MediaPipe's world landmarks
+  angleMode: "2d", // "3d" = joint angles from the pose model's world landmarks
   calibrations: {}, // "exercise:mode" -> { rest, target } learnt from the user's own reps
   breakEnabled: true, // read by the service worker too (desk break coach)
   breakInterval: 50,
@@ -302,7 +302,7 @@ function connect() {
     if (state.ws !== ws) return; // closed on purpose
     state.ws = null;
     state.inflightSince = 0;
-    setConn("error", "Server offline · run python app.py");
+    setConn("error", "Server offline · run npm run start:dev in server/");
     if (state.running) {
       state.reconnectTimer = setTimeout(connect, state.reconnectDelay);
       state.reconnectDelay = Math.min(state.reconnectDelay * 2, 5000);
