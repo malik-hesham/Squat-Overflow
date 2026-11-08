@@ -1,0 +1,8 @@
+{
+  // The checks run in Node, so they get Node's types on top of the extension's.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["chrome", "node"]
+  },
+  "include": ["*.mjs", "../*.d.ts", "../lib/vendor/three.d.ts"]
+}

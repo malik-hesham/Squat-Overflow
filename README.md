@@ -39,4 +39,7 @@ Each colleague opens Settings, then Advanced, and sets **Pose server URL** to `w
 ```bash
 cd server && npm test
 node extension/tests/check.mjs
+cd extension && npm ci && npm run typecheck
 ```
+
+The extension is plain JavaScript with no build step. `npm run typecheck` runs TypeScript over it (`checkJs`, nothing emitted) using JSDoc types and `@types/chrome`. CI runs it too.

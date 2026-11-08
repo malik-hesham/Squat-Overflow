@@ -6,6 +6,9 @@ const BUSY_KEY = "calendarBusy";
 const CACHE_MS = 10 * 60_000;
 const HOUR_MS = 3_600_000;
 
+/** @typedef {{ connected: true, token: string, expiresAt: number }} CalendarAuth */
+/** @typedef {{ fetchedAt: number, busy: ReturnType<typeof parseBusy> }} BusyCache */
+
 async function authorize(interactive) {
   const redirectUri = chrome.identity.getRedirectURL();
   const redirect = await chrome.identity.launchWebAuthFlow({
@@ -19,6 +22,7 @@ async function authorize(interactive) {
 }
 
 export async function calendarState() {
+  /** @type {{ [KEY]?: CalendarAuth }} */
   const { [KEY]: cal } = await chrome.storage.local.get(KEY);
   return cal?.connected ? cal : null;
 }
@@ -62,6 +66,7 @@ async function queryBusy(token, now) {
 export async function getBusy(now = Date.now()) {
   const cal = await calendarState();
   if (!cal) return [];
+  /** @type {{ [BUSY_KEY]?: BusyCache }} */
   const { [BUSY_KEY]: cached } = await chrome.storage.local.get(BUSY_KEY);
   if (cached && now - cached.fetchedAt < CACHE_MS) return cached.busy;
   try {

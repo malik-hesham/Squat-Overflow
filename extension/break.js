@@ -15,8 +15,18 @@ const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
 const YOUTUBE_ID = /^[\w-]{11}$/;
 
+/** @param {string} id */
 const $ = (id) => document.getElementById(id);
-const els = Object.fromEntries(
+/**
+ * Every id below as an HTMLElement, with the ones whose element-specific
+ * properties this page uses typed as what break.html makes them.
+ * @typedef {Record<string, HTMLElement> & {
+ *   voice: HTMLInputElement, memes: HTMLInputElement,
+ *   done: HTMLButtonElement, snooze: HTMLButtonElement, skip: HTMLButtonElement, warnSnooze: HTMLButtonElement,
+ *   demoFrame: HTMLIFrameElement,
+ * }} Els
+ */
+const els = /** @type {Els} */ (Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
@@ -24,7 +34,7 @@ const els = Object.fromEntries(
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "memes", "lookBtn", "lookName",
     "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
-);
+));
 
 const state = {
   lang: "en",
@@ -250,7 +260,7 @@ function renderMoves() {
     );
   }
   state.moves.forEach((m, k) => {
-    const tab = els.moves.children[k];
+    const tab = /** @type {HTMLButtonElement} */ (els.moves.children[k]);
     const reps = state.progress[k].reps;
     const done = reps >= m.target;
     tab.classList.toggle("done", done);
@@ -507,7 +517,7 @@ async function init() {
   });
   state.progress = state.moves.map(() => ({ reps: 0, scores: [] }));
   state.repMarks = repMarks(state.moves.reduce((n, m) => n + m.target, 0));
-  els.target.textContent = BREAK_REPS;
+  els.target.textContent = String(BREAK_REPS);
 
   els.done.addEventListener("click", finish);
   els.snooze.addEventListener("click", () => leave("snooze"));

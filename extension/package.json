@@ -1,1 +1,14 @@
-{"type": "module", "private": true}
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -p . && tsc -p tests",
+    "test": "node tests/check.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^24.19.2",
+    "@types/three": "0.186.0",
+    "typescript": "^7.0.2"
+  }
+}

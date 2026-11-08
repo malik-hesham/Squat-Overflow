@@ -9,7 +9,7 @@
 //  - config.js points at the hosted pose server instead of localhost, and its sign-in and
 //    leaderboard API (API_URL) at the same host over https;
 //  - manifest.json has no "key" (the store rejects it on a first upload and assigns its own ID);
-//  - tests/ and package.json are left out.
+//  - tests/, package.json and the type-checking files (tsconfig.json, *.d.ts, node_modules/) are left out.
 // Needs the `zip` CLI (preinstalled on macOS and GitHub's Ubuntu runners).
 import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -21,7 +21,7 @@ const SRC = join(ROOT, "extension");
 const DIST = join(ROOT, "dist");
 const OUT = join(DIST, "extension");
 const DEFAULT_SERVER_URL = "wss://squat-overflow-pose.fly.dev/ws";
-const EXCLUDED = new Set(["tests", "package.json", ".DS_Store"]);
+const EXCLUDED = new Set(["tests", "package.json", "package-lock.json", "tsconfig.json", "node_modules", ".DS_Store"]);
 const SERVER_LINE = /^export const POSE_SERVER_URL = ".*";$/gm;
 const API_LINE = /^export const API_URL = ".*";$/gm;
 
@@ -41,7 +41,7 @@ if (server.protocol !== "wss:") fail(`release builds need a wss:// pose server, 
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
-cpSync(SRC, OUT, { recursive: true, filter: (path) => !EXCLUDED.has(basename(path)) });
+cpSync(SRC, OUT, { recursive: true, filter: (path) => !EXCLUDED.has(basename(path)) && !path.endsWith(".d.ts") });
 
 const manifestPath = join(OUT, "manifest.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

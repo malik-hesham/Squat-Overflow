@@ -20,6 +20,8 @@ import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
 import { readFileSync, readdirSync } from "node:fs";
 
+/** @typedef {import("../lib/vendor/three.js").Mesh} Mesh  what the avatar scene traversals below look at */
+
 function check(name, fn) {
   try {
     fn();
@@ -1021,7 +1023,7 @@ Promise.all(pending).then(
         const a = Avatar.create(key, fitness);
         assert.equal(a.key, key);
         let meshes = 0;
-        a.scene.traverse((o) => (meshes += o.isMesh ? 1 : 0));
+        a.scene.traverse((/** @type {Mesh} */ o) => (meshes += o.isMesh ? 1 : 0));
         assert.ok(meshes > 20, `only ${meshes} meshes`);
         for (let f = 0; f < 90; f++) {
           const p = a.update(pose((Math.sin(f / 8) + 1) / 2), 640, 480, { issues: f % 30 > 20, now: f * 33 });
@@ -1040,7 +1042,7 @@ Promise.all(pending).then(
     a.celebrate(true);
     a.update(pose(0), 640, 480, { now: 6 * 33 });
     let shown = 0;
-    a.scene.traverse((o) => (shown += o.visible && o.geometry?.type === "ExtrudeGeometry" ? 1 : 0));
+    a.scene.traverse((/** @type {Mesh} */ o) => (shown += o.visible && o.geometry?.type === "ExtrudeGeometry" ? 1 : 0));
     assert.ok(shown >= 16, `only ${shown} particles visible`);
     assert.ok(THREE.ExtrudeGeometry);
   });
@@ -1054,7 +1056,7 @@ Promise.all(pending).then(
       // The figure's real top, ears, hats, horns and antennas included (world y is up).
       a.scene.updateMatrixWorld(true);
       let maxY = -Infinity;
-      a.scene.traverse((o) => {
+      a.scene.traverse((/** @type {Mesh} */ o) => {
         if (!o.isMesh || !o.visible) return;
         for (let q = o.parent; q; q = q.parent) if (!q.visible) return;
         if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();

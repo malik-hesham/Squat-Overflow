@@ -2,6 +2,11 @@ import { API_URL } from "../config.js";
 import { levelFor, isoWeek } from "./xp.js";
 import { getSession } from "./session.js";
 
+/**
+ * Where the board lives and how to get a signed-in session; tests pass their own.
+ * @typedef {{ url: string, session: () => Promise<{ accessToken: string } | null> }} BoardConfig
+ */
+/** @type {BoardConfig} */
 const DEFAULT_CFG = { url: API_URL, session: getSession };
 const AVATAR_RE = /^[a-z]{2,20}$/;
 

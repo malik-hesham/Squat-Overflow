@@ -61,9 +61,9 @@ async function render() {
   }
 
   const today = dayKey(now);
-  $("todayDone").textContent = log.filter((b) => dayKey(b.at) === today).length;
-  $("skips").textContent = s.skipsInRow ?? 0;
-  $("streak").textContent = profile.streak;
+  $("todayDone").textContent = String(log.filter((b) => dayKey(b.at) === today).length);
+  $("skips").textContent = String(s.skipsInRow ?? 0);
+  $("streak").textContent = String(profile.streak);
   renderChallenges(withPeriods(profile, now));
   renderActivity((await getActivity()) ?? backfillActivity(log), settings, now);
 }
@@ -200,7 +200,7 @@ function boardRow(r) {
 async function renderBoard() {
   const [settings, profile, session] = await Promise.all([getSettings(), getProfile(), getSession()]);
   const rows = $("boardRows");
-  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.period === period));
+  /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".tab")).forEach((t) => t.classList.toggle("active", t.dataset.period === period));
   if (!companyFromEmail(session?.user?.email)) {
     rows.replaceChildren();
     $("boardMsg").textContent = t(lang, session ? "boardNeedsWorkEmail" : "boardNeedsSignIn");
@@ -220,7 +220,7 @@ async function renderBoard() {
   $("boardMsg").textContent = notes.filter(Boolean).join(" ");
 }
 
-document.querySelectorAll(".tab").forEach((t) =>
+/** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".tab")).forEach((t) =>
   t.addEventListener("click", () => {
     period = t.dataset.period;
     renderBoard();

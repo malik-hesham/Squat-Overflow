@@ -550,22 +550,23 @@ export function applyLang(lang) {
   const root = document.documentElement;
   root.lang = lang;
   root.dir = lang === "ar" ? "rtl" : "ltr";
-  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(lang, el.dataset.i18n);
+  for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll("[data-i18n]"))) el.textContent = t(lang, el.dataset.i18n);
   for (const [sel, data, attr] of [
     ["[data-i18n-placeholder]", "i18nPlaceholder", "placeholder"],
     ["[data-i18n-title]", "i18nTitle", "title"],
     ["[data-i18n-aria]", "i18nAria", "aria-label"],
   ]) {
-    for (const el of document.querySelectorAll(sel)) el.setAttribute(attr, t(lang, el.dataset[data]));
+    for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(sel))) el.setAttribute(attr, t(lang, el.dataset[data]));
   }
 }
 
+/** @param {(lang: string) => void} [onChange] called with the new language when it changes */
 export async function initLang(onChange = () => location.reload()) {
   const { lang } = await chrome.storage.local.get("lang");
   const resolved = resolveLang(lang, navigator.language);
   applyLang(resolved);
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && "lang" in changes) onChange(changes.lang.newValue);
+    if (area === "local" && "lang" in changes) onChange(/** @type {string} */ (changes.lang.newValue));
   });
   return resolved;
 }

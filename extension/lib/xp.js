@@ -40,7 +40,7 @@ function isoParts(now) {
   const d = new Date(Date.UTC(local.getFullYear(), local.getMonth(), local.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
   const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
-  return { year: d.getUTCFullYear(), week: Math.ceil(((d - yearStart) / DAY_MS + 1) / 7) };
+  return { year: d.getUTCFullYear(), week: Math.ceil(((d.getTime() - yearStart) / DAY_MS + 1) / 7) };
 }
 
 export function isoWeekNumber(now) {
