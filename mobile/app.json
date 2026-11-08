@@ -1,0 +1,86 @@
+{
+  "expo": {
+    "name": "Squat Overflow",
+    "slug": "squat-overflow",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "squatoverflow",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.squatoverflow.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Squat Overflow uses the camera to count your reps and score your form during breaks. Nothing is recorded and frames never leave your phone."
+      }
+    },
+    "android": {
+      "package": "com.squatoverflow.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0f1214"
+      },
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0f1214"
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ],
+      "expo-localization",
+      [
+        "expo-notifications",
+        {
+          "color": "#3ddc97"
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Squat Overflow reads only busy and free times from your calendars so break reminders wait until your meetings end.",
+          "remindersPermission": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4"
+          },
+          "android": {
+            "minSdkVersion": 24
+          }
+        }
+      ],
+      [
+        "./plugins/withPodsDeploymentTarget",
+        {
+          "deploymentTarget": "16.4"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
