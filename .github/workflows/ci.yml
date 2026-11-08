@@ -22,17 +22,15 @@ jobs:
         working-directory: server
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-node@v7
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            server/requirements.txt
-            server/requirements-dev.txt
-      # libmediapipe.so links libEGL and libGLESv2, which the runner image doesn't ship.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgles2
-      - run: pip install -r requirements-dev.txt
-      - run: pytest -q
+          # Jest loads the ESM-only NestJS 12 through require(esm), which needs Node 24.9+.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
 
   extension:
     name: Extension tests and store zip
@@ -56,13 +54,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: docker build --build-arg VERSION=ci -t squat-overflow-pose server
-      - name: MediaPipe loads inside the image
-        run: docker run --rm squat-overflow-pose python -c "from pose_engine import MODEL_PATH, PoseEngine; PoseEngine(MODEL_PATH).close(); print('pose engine ok')"
+      - name: BlazePose loads inside the image
+        run: docker run --rm squat-overflow-pose node -e "require('./dist/pose/pose-engine.js').PoseEngine.create().then((e) => { e.close(); console.log('pose engine ok'); })"
       - name: Server answers /health and /privacy
         run: |
           docker run -d --name pose -p 8080:8080 squat-overflow-pose
           for _ in $(seq 1 30); do curl -fsS localhost:8080/health -o health.json && break; sleep 1; done
-          python3 -c "import json; b = json.load(open('health.json')); assert b['ok'] and b['version'] == 'ci', b.get('version'); print(len(b['exercises']), 'exercises')"
+          node -e "const b = require('./health.json'); if (!b.ok || b.version !== 'ci') throw new Error('version ' + b.version); console.log(b.exercises.length, 'exercises')"
           curl -fsS localhost:8080/privacy | grep -q "privacy policy"
       - if: failure()
         run: docker logs pose || true

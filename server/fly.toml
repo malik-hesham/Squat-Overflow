@@ -7,7 +7,7 @@ primary_region = "fra"
   dockerfile = "Dockerfile"
 
 [env]
-  # Only these extension origins may open the WebSocket (see origin_allowed in app.py).
+  # Only these extension origins may open the WebSocket (see originAllowed in src/config.ts).
   # The first is the unpacked dev build (from the manifest "key"). Add the Chrome Web Store
   # ID here after the first store upload: "chrome-extension://<dev-id>,chrome-extension://<store-id>".
   FORMCOACH_ALLOWED_ORIGINS = "chrome-extension://lpkaoaegdjhciohkfidnmabjigidofnd"
@@ -20,7 +20,8 @@ primary_region = "fra"
   # Keep one Machine warm: the extension gives the server 3 s to answer before it shows "offline".
   min_machines_running = 1
 
-  # Every WebSocket runs its own MediaPipe engine, so cap sessions per Machine.
+  # Every WebSocket runs its own BlazePose detector, and inference shares one event loop,
+  # so cap sessions per Machine.
   # Raise these only after checking latency_ms in frame results under load.
   [http_service.concurrency]
     type = "connections"

@@ -35,7 +35,7 @@ const fri = new Date(2026, 10, 6, 11).getTime();
 const mon = new Date(2026, 10, 9, 11).getTime();
 const WORKDAYS = [1, 2, 3, 4, 5];
 
-// Mirrors the server catalog (server/analysis/exercises.py): five exercises per pain area.
+// Mirrors the server catalog (server/src/analysis/exercises.ts): five exercises per pain area.
 const AREA_KEYS = {
   "Neck tension": ["neck_tilt", "head_turn", "chin_to_chest", "shoulder_shrug", "chin_tuck"],
   "Rounded shoulders": ["cross_swing", "wy_raise", "shoulder_roll", "thoracic_extension", "clasp_opener"],

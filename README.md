@@ -6,11 +6,11 @@ VS Code user? See [vscode-extension/README.md](vscode-extension/README.md).
 
 ## Run the demo
 
-1. **Pose server** (Python 3.10–3.12):
+1. **Pose server** (Node 24.9+; NestJS + TF.js BlazePose, see [server/README.md](server/README.md)):
    ```bash
    cd server
-   python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-   .venv/bin/python app.py        # listens on ws://127.0.0.1:8765/ws
+   npm install
+   npm run start:dev              # listens on ws://127.0.0.1:8765/ws
    ```
 2. **Extension**: open `chrome://extensions`, enable Developer mode, click **Load unpacked**, and pick `extension/`. The settings page opens. Pick your areas and click **Get started**.
 3. **Leaderboard**: the team's Supabase project already has the schema; the SQL lives in `supabase/migrations/` and the release workflow applies new files there. For your own project, run `npx supabase@2.122.1 link --project-ref <ref>` then `npx supabase@2.122.1 db push`. `extension/config.js` already holds the project URL and the publishable key. Never put a secret or `service_role` key there.
@@ -37,6 +37,6 @@ Each colleague opens Settings, then Advanced, and sets **Pose server URL** to `w
 ## Tests
 
 ```bash
-cd server && .venv/bin/pytest -q
+cd server && npm test
 node extension/tests/check.mjs
 ```

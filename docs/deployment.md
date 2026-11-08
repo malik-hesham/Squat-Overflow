@@ -122,7 +122,7 @@ The API can't create a store item, so the first version is uploaded by hand:
 
 ## Capacity and limits
 
-- Every open break holds one WebSocket and one MediaPipe engine. `fly.toml` limits each Machine to 6 sessions (`hard_limit`) and starts a second Machine past 4 (`soft_limit`). The first deploy creates 2 Machines.
+- Every open break holds one WebSocket and one BlazePose detector. Inference for all sessions on a Machine shares one Node event loop. `fly.toml` limits each Machine to 6 sessions (`hard_limit`) and starts a second Machine past 4 (`soft_limit`). The first deploy creates 2 Machines.
 - To scale, raise `fly scale count`, or the limits after checking `latency_ms` in frame results under load.
 - The pose server has no login. The Origin allowlist keeps web pages out, but scripts can fake an Origin, so the Fly connection limit is what bounds abuse.
 - Camera frames go to Fly.io in Frankfurt. They are processed in memory and never stored. See `server/static/privacy.html`.
