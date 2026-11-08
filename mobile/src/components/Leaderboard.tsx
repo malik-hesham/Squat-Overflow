@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/text';
 import { avatarEmoji } from '@/src/components/avatars';
 import { Muted } from '@/src/components/kit';
 import { SignInButton } from '@/src/components/GoogleSignIn';
-import { fetchBoard, submitScore, type BoardRow, type Period } from '@/src/core/board';
+import { fetchBoard, type BoardRow, type Period } from '@/src/core/board';
 import { levelName, t } from '@/src/core/i18n';
 import { useSession } from '@/src/core/session';
 import { LEVELS, companyFromEmail } from '@/src/core/shared';
@@ -28,7 +28,7 @@ export function Leaderboard({ settings, profile, lang }: { settings: Settings; p
     let alive = true;
     setRows(undefined);
     (async () => {
-      if (competitive) await submitScore(profile, settings);
+      // The server writes your row from your synced breaks and settings.
       const board = await fetchBoard(period);
       if (alive) setRows(board);
     })();

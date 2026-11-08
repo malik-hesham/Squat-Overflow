@@ -28,6 +28,32 @@ export const SETTINGS_DEFAULTS = {
 
 export type Settings = typeof SETTINGS_DEFAULTS;
 
+// Settings every signed-in device shares (SHARED_SETTINGS in server/src/sync/validate.ts). The
+// rest (calendar, privacy, setupDone, theme) stay on this phone.
+export const SHARED_SETTINGS = [
+  'intervalMin',
+  'areas',
+  'activeStart',
+  'activeEnd',
+  'workdays',
+  'autoPause',
+  'voice',
+  'memes',
+  'mode',
+  'name',
+  'avatar',
+  'lang',
+  'weekStart',
+] as const satisfies readonly (keyof Settings)[];
+export type SharedSetting = (typeof SHARED_SETTINGS)[number];
+const isShared = (k: string): k is SharedSetting => (SHARED_SETTINGS as readonly string[]).includes(k);
+
+// Sync bookkeeping written here so every local change is seen: when each shared setting last
+// changed on this phone and hasn't been sent yet ({ key: epoch ms }), and when the profile's
+// badges or challenges last changed.
+export const SETTINGS_DIRTY_KEY = 'syncSettingsDirty';
+export const PROGRESS_AT_KEY = 'syncProgressAt';
+
 export type Profile = {
   playerId: string;
   secret: string;
@@ -50,6 +76,8 @@ export type Profile = {
 };
 
 export type LogEntry = {
+  id?: string; // the break event's id on the server; set when queued or backfilled for sync
+  device?: string; // set on breaks pulled from another device
   at: number;
   reps: number;
   moves: number;
@@ -74,8 +102,16 @@ export async function getSettings(): Promise<Settings> {
   return { ...settings, areas: currentAreas(settings.areas) };
 }
 
-export function saveSettings(patch: Partial<Settings>): Promise<void> {
-  return setItems(patch);
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Saves a change the user made; shared settings that really changed are queued for sync. */
+export async function saveSettings(patch: Partial<Settings>, now = Date.now()): Promise<void> {
+  const before = await getSettings();
+  const changed = Object.keys(patch).filter((k) => isShared(k) && !same(before[k as SharedSetting], patch[k as SharedSetting]));
+  if (!changed.length) return setItems(patch);
+  const dirty = (await getItem<Record<string, number>>(SETTINGS_DIRTY_KEY)) ?? {};
+  for (const k of changed) dirty[k] = now;
+  return setItems({ ...patch, [SETTINGS_DIRTY_KEY]: dirty });
 }
 
 export async function getProfile(): Promise<Profile> {
@@ -98,7 +134,16 @@ export async function getProfile(): Promise<Profile> {
   return profile;
 }
 
-export function setProfile(profile: Profile): Promise<void> {
+const progressOf = (p: Profile | undefined) => JSON.stringify([p?.badges ?? [], p?.daily ?? null, p?.weekly ?? null]);
+
+/**
+ * Saves the profile. A local change to badges or challenges is stamped for sync; `fromServer`
+ * marks a write that copies the server's profile, which has nothing to send back.
+ */
+export async function setProfile(profile: Profile, { fromServer = false, now = Date.now() } = {}): Promise<void> {
+  if (!fromServer && progressOf(await getItem<Profile>(PROFILE_KEY)) !== progressOf(profile)) {
+    return setItems({ [PROFILE_KEY]: profile, [PROGRESS_AT_KEY]: now });
+  }
   return setItems({ [PROFILE_KEY]: profile });
 }
 
@@ -119,6 +164,11 @@ export async function appendLog(entry: LogEntry): Promise<void> {
   const log = await readLog();
   log.push(entry);
   await setItems({ [LOG_KEY]: log.slice(-LOG_MAX) });
+}
+
+/** Replaces the whole log (sync merges other devices' breaks in), keeping the newest LOG_MAX. */
+export function writeLog(log: LogEntry[]): Promise<void> {
+  return setItems({ [LOG_KEY]: log.slice(-LOG_MAX) });
 }
 
 export async function getActivity(): Promise<Activity | null> {

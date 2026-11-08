@@ -15,10 +15,12 @@ jest.mock('../notifications', () => ({
   },
 }));
 jest.mock('../board', () => ({ submitScore: jest.fn(async () => false) }));
+jest.mock('../session', () => ({ getSession: async () => null })); // signed out: sync is a no-op
 
-import { breakAction, breakDone, sync } from '../engine';
+import { breakAction, breakDone, breakElsewhere, pause, sync } from '../engine';
 import { emptySchedule } from '../plan';
 import { removeItems } from '../storage';
+import { OUTBOX_KEY, readOutbox } from '../sync';
 import { getProfile, getSchedule, readLog, saveSettings, setSchedule } from '../store';
 
 const MIN = 60_000;
@@ -28,7 +30,7 @@ const MON_10 = new Date(2026, 10, 9, 10, 0).getTime();
 beforeEach(async () => {
   jest.useFakeTimers({ now: MON_10, doNotFake: ['nextTick', 'setImmediate'] });
   scheduled.length = 0;
-  await removeItems(['profile', 'breakLog', 'activity']);
+  await removeItems(['profile', 'breakLog', 'activity', OUTBOX_KEY]);
   await setSchedule(emptySchedule());
   await saveSettings({ setupDone: true, areas: ['Knees'], intervalMin: 60, workdays: [1, 2, 3, 4, 5], activeStart: '09:00', activeEnd: '17:00' });
 });
@@ -86,4 +88,58 @@ test('leaving a reminder break without answering counts as a skip; leaving other
   const s = await getSchedule();
   expect(s.skipsInRow).toBe(1);
   expect(s.dueAt).toBeNull();
+});
+
+test('a finished break is logged with an id and queued for sync', async () => {
+  await sync(MON_10);
+  await breakDone(
+    {
+      scored: true,
+      countedReps: 18,
+      targetReps: 18,
+      scores: [90],
+      moves: [
+        { key: 'a', area: 'Knees', completed: true },
+        { key: 'b', area: 'Knees', completed: true },
+      ],
+    },
+    'b',
+  );
+  const [logged] = await readLog();
+  expect(logged.id).toEqual(expect.any(String));
+  const outbox = await readOutbox();
+  expect(outbox).toHaveLength(1);
+  expect(outbox[0]).toMatchObject({ id: logged.id, at: logged.at, xp: logged.xp, device: 'ios', day: '2026-11-09', week: '2026-W46', areas: ['Knees'] });
+});
+
+test("another device's break restarts the interval from it, on a whole second", async () => {
+  await sync(MON_10);
+  const at = MON_10 + 25 * MIN + 400; // a Chrome break at 10:25:00.400
+  jest.setSystemTime(MON_10 + 26 * MIN);
+  await breakElsewhere(at);
+  const s = await getSchedule();
+  expect(s.nextAt).toBe(MON_10 + 85 * MIN + 1000);
+  expect(scheduled.at(-1)![0].at).toBe(s.nextAt);
+});
+
+test('a break elsewhere answers a due reminder', async () => {
+  await sync(MON_10);
+  await sync(MON_10 + 61 * MIN); // the 11:00 reminder is due
+  expect((await getSchedule()).dueAt).toBe(MON_10 + 60 * MIN);
+  jest.setSystemTime(MON_10 + 63 * MIN);
+  await breakElsewhere(MON_10 + 62 * MIN);
+  const s = await getSchedule();
+  expect(s.dueAt).toBeNull();
+  expect(s.skipsInRow).toBe(0);
+  expect(s.nextAt).toBe(MON_10 + 122 * MIN);
+});
+
+test('a pause or a long-past break elsewhere leaves the schedule alone', async () => {
+  await sync(MON_10);
+  await breakElsewhere(MON_10 - 90 * MIN); // its next break would already be over
+  expect((await getSchedule()).nextAt).toBe(MON_10 + 60 * MIN);
+  await pause();
+  const paused = await getSchedule();
+  await breakElsewhere(MON_10 + MIN);
+  expect(await getSchedule()).toEqual(paused);
 });
