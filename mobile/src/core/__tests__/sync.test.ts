@@ -196,8 +196,8 @@ describe('backfill ids', () => {
   test('uuidv5 matches the RFC 4122 reference (Python uuid.uuid5)', () => {
     expect(uuidv5('www.example.com', '6ba7b810-9dad-11d1-80b4-00c04fd430c8')).toBe('2ed6657d-e927-568b-95e1-2665a8aea6a2');
     expect(uuidv5('héllo ✓ 𝄞', '6ba7b811-9dad-11d1-80b4-00c04fd430c8')).toBe('81bb52a4-bbfd-57a3-9a0c-0b5515020437');
-    expect(uuidv5('player-1:1762682400000', BACKFILL_NAMESPACE)).toBe('c71b883a-6619-5b03-a1d0-947a6b80e4d1');
-    expect(backfillId('player-1', 1762682400000)).toBe('c71b883a-6619-5b03-a1d0-947a6b80e4d1');
+    expect(uuidv5('player-1:1762682400000', BACKFILL_NAMESPACE)).toBe('79303894-602b-51d4-b1b4-c8cb34ee69dc');
+    expect(backfillId('player-1', 1762682400000)).toBe('79303894-602b-51d4-b1b4-c8cb34ee69dc');
   });
 
   test('the first sync after sign-in uploads the old log once, with ids from playerId:at', async () => {
@@ -429,6 +429,7 @@ describe('sync run', () => {
     expect(local.intervalMin).toBe(30);
     expect(local.areas).toEqual(['Neck tension']);
     expect(server.settings).toMatchObject({ intervalMin: 30, name: 'Phone me', mode: 'personal' });
+    expect(server.fieldAt.name).toBe(Date.UTC(2024, 0, 1)); // seeded as old, so real changes elsewhere win
     expect(onSettings).toHaveBeenCalledWith(expect.objectContaining({ intervalMin: 90 }), expect.objectContaining({ intervalMin: 30 }));
     expect(await getItem(SETTINGS_DIRTY_KEY)).toEqual({});
 

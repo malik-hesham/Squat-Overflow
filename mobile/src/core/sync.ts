@@ -42,7 +42,8 @@ export const PULL_LIMIT = 500;
 /** Breaks kept waiting while signed out; older ones are still in the log for the backfill. */
 const OUTBOX_MAX = 1000;
 /** Namespace for ids of breaks logged before sync existed: UUIDv5 of `${playerId}:${at}`. */
-export const BACKFILL_NAMESPACE = '899efa4d-d899-4a33-b31a-8a51cafc25db';
+// Same namespace as the extension (extension/lib/sync-core.js), so the rule is one everywhere.
+export const BACKFILL_NAMESPACE = '240ab37e-ad3a-409a-a2f2-29f50c8e346d';
 /** The server keeps `at` to the microsecond, but allow a little drift before calling a break someone else's. */
 const SAME_BREAK_MS = 1_000;
 
@@ -364,11 +365,11 @@ async function syncSettings(session: Session, hooks: SyncHooks, exclusive: NonNu
   let doc: SettingsDoc | null = null;
   if (state.settingsVersion == null) {
     // First time for this account: the server's settings win where it has them (another
-    // device set them up), and this phone's fill in the rest.
+    // device set them up), and this phone's fill in the rest. They're stamped with the oldest
+    // time the server takes, like the extension's seed, so any real change elsewhere wins.
     doc = await call<SettingsDoc>(session, 'GET', '/me/settings');
-    const now = Date.now();
     const missing = SHARED_SETTINGS.filter((k) => !(k in doc!.doc));
-    await setItems({ [SETTINGS_DIRTY_KEY]: Object.fromEntries(missing.map((k) => [k, now])) });
+    await setItems({ [SETTINGS_DIRTY_KEY]: Object.fromEntries(missing.map((k) => [k, MIN_AT])) });
   }
   const dirty = (await getItem<Record<string, number>>(SETTINGS_DIRTY_KEY)) ?? {};
   for (const { at, patch } of patchGroups(dirty, await getSettings())) {
