@@ -6,7 +6,8 @@
 //   POSE_SERVER_URL=wss://example.fly.dev/ws node scripts/build-extension.mjs
 //
 // Differences from the extension/ folder you load unpacked:
-//  - config.js points at the hosted pose server instead of localhost;
+//  - config.js points at the hosted pose server instead of localhost, and its sign-in and
+//    leaderboard API (API_URL) at the same host over https;
 //  - manifest.json has no "key" (the store rejects it on a first upload and assigns its own ID);
 //  - tests/ and package.json are left out.
 // Needs the `zip` CLI (preinstalled on macOS and GitHub's Ubuntu runners).
@@ -22,6 +23,7 @@ const OUT = join(DIST, "extension");
 const DEFAULT_SERVER_URL = "wss://squat-overflow-pose.fly.dev/ws";
 const EXCLUDED = new Set(["tests", "package.json", ".DS_Store"]);
 const SERVER_LINE = /^export const POSE_SERVER_URL = ".*";$/gm;
+const API_LINE = /^export const API_URL = ".*";$/gm;
 
 function fail(message) {
   console.error(`build-extension: ${message}`);
@@ -47,17 +49,26 @@ if (!/^\d+(\.\d+){0,3}$/.test(manifest.version ?? "")) fail(`manifest version "$
 delete manifest.key;
 const csp = manifest.content_security_policy?.extension_pages ?? "";
 const connectSrc = csp.match(/connect-src([^;]*)/)?.[1].trim().split(/\s+/) ?? [];
-const origin = `${server.protocol}//${server.host}`;
-if (!connectSrc.includes(origin)) {
-  fail(`manifest CSP connect-src has no ${origin}; add it to extension/manifest.json or the extension can't reach the server`);
+const apiUrl = `https://${server.host}`;
+for (const origin of [`${server.protocol}//${server.host}`, apiUrl]) {
+  if (!connectSrc.includes(origin)) {
+    fail(`manifest CSP connect-src has no ${origin}; add it to extension/manifest.json or the extension can't reach the server`);
+  }
 }
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
 const configPath = join(OUT, "config.js");
 const config = readFileSync(configPath, "utf8");
-const matches = config.match(SERVER_LINE) ?? [];
-if (matches.length !== 1) fail(`expected one POSE_SERVER_URL line in config.js, found ${matches.length}`);
-writeFileSync(configPath, config.replace(SERVER_LINE, `export const POSE_SERVER_URL = ${JSON.stringify(serverUrl)};`));
+for (const [name, line] of [["POSE_SERVER_URL", SERVER_LINE], ["API_URL", API_LINE]]) {
+  const matches = config.match(line) ?? [];
+  if (matches.length !== 1) fail(`expected one ${name} line in config.js, found ${matches.length}`);
+}
+writeFileSync(
+  configPath,
+  config
+    .replace(SERVER_LINE, `export const POSE_SERVER_URL = ${JSON.stringify(serverUrl)};`)
+    .replace(API_LINE, `export const API_URL = ${JSON.stringify(apiUrl)};`),
+);
 
 const zipPath = join(DIST, `squat-overflow-${manifest.version}.zip`);
 rmSync(zipPath, { force: true });

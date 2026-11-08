@@ -64,21 +64,3 @@ jobs:
           curl -fsS localhost:8080/privacy | grep -q "privacy policy"
       - if: failure()
         run: docker logs pose || true
-
-  supabase:
-    name: Database migrations apply
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: supabase/setup-cli@v3
-        with:
-          version: 2.122.1
-      # Starts a throwaway local Postgres and applies every file in supabase/migrations/.
-      - run: supabase db start
-      - name: Leaderboard functions exist
-        run: |
-          docker exec "$(docker ps --filter name=supabase_db --format '{{.Names}}' | head -1)" \
-            psql -U postgres -tAc "select count(*) from pg_proc where proname in ('submit_score', 'leaderboard') and pronamespace = 'public'::regnamespace" \
-            | grep -qx 2
-      - if: always()
-        run: supabase stop --no-backup || true

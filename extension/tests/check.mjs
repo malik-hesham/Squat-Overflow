@@ -6,6 +6,8 @@ import {
   nextActiveSlot, decideFire, isActive, scheduleSettingsChanged, weekOrder, countdownText,
 } from "../lib/schedule.js";
 import { toPayload, fetchBoard, submitScore } from "../lib/leaderboard.js";
+import { requestSession } from "../lib/session.js";
+import { API_URL } from "../config.js";
 import { DAILY_POOL, WEEKLY, dailyFor, updateChallenges, noteAction, withPeriods } from "../lib/challenges.js";
 import { createSerial } from "../lib/serial.js";
 import { THEMES, themeId } from "../lib/themes.js";
@@ -16,7 +18,7 @@ import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 function check(name, fn) {
   try {
@@ -306,15 +308,22 @@ check("upcoming after snooze lists shifted times", () => {
 check("leaderboard payload maps fields without id, secret or company, zeroes stale week", () => {
   const profile = { ...blankProfile(), playerId: "id1", secret: "sec", xp: 260, streak: 4, weekXp: 40, week: "2026-W45" };
   const settings = { name: "Malik", avatar: "penguin" };
-  assert.deepEqual(toPayload(profile, settings, false, fri), {
-    p_name: "Malik", p_xp: 260, p_level: 3, p_streak: 4, p_week_xp: 40, p_week: "2026-W45", p_delete: false, p_avatar: "penguin",
+  assert.deepEqual(toPayload(profile, settings, fri), {
+    name: "Malik", xp: 260, level: 3, streak: 4, weekXp: 40, week: "2026-W45", avatar: "penguin",
   });
-  assert.equal(toPayload(profile, { ...settings, avatar: "<script>" }, false, fri).p_avatar, "bunny");
-  assert.equal(toPayload(profile, { name: "M" }, false, fri).p_avatar, "bunny");
-  const stale = toPayload(profile, settings, true, mon);
-  assert.equal(stale.p_week, "2026-W46");
-  assert.equal(stale.p_week_xp, 0);
-  assert.equal(stale.p_delete, true);
+  assert.equal(toPayload(profile, { ...settings, avatar: "<script>" }, fri).avatar, "bunny");
+  assert.equal(toPayload(profile, { name: "M" }, fri).avatar, "bunny");
+  const stale = toPayload(profile, settings, mon);
+  assert.equal(stale.week, "2026-W46");
+  assert.equal(stale.weekXp, 0);
+});
+
+check("leaderboard API is the hosted pose server, and the manifest CSP lets pages reach it", () => {
+  assert.equal(API_URL, "https://squat-overflow-pose.fly.dev");
+  const manifest = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
+  const connectSrc = manifest.content_security_policy.extension_pages.match(/connect-src([^;]*)/)[1].trim().split(/\s+/);
+  assert.ok(connectSrc.includes(new URL(API_URL).origin), "CSP connect-src misses the API origin");
+  assert.ok(!connectSrc.some((src) => src.includes("supabase")), "CSP still allows Supabase");
 });
 
 const dayWith = (id, hour = 11) => {
@@ -725,7 +734,7 @@ check("auth: parses id and access tokens from the redirect, rejects errors and m
   assert.equal(parseSignInResponse("https://abc.chromiumapp.org/", CAL_NOW), null);
 });
 
-check("auth: Supabase token response maps to the stored session", () => {
+check("auth: the token response maps to the stored session", () => {
   const body = {
     access_token: "jwt", refresh_token: "r1", expires_in: 3600,
     user: { id: "u1", email: "malik@leadliaison.com", user_metadata: { full_name: "Malik Hesham", avatar_url: "https://pic" } },
@@ -757,12 +766,12 @@ check("auth: Google gets the SHA-256 hex of a fresh random nonce", () => {
 });
 check("leaderboard unconfigured resolves null/false without throwing", () => {
   pending.push(
-    fetchBoard("week", { url: "", key: "", session: async () => ({ accessToken: "t" }) }).then((r) => assert.equal(r, null)),
-    submitScore(blankProfile(), { mode: "competitive", name: "a" }, { remove: false }, { url: "", key: "", session: async () => ({ accessToken: "t" }) }).then((r) => assert.equal(r, false)),
+    fetchBoard("week", { url: "", session: async () => ({ accessToken: "t" }) }).then((r) => assert.equal(r, null)),
+    submitScore(blankProfile(), { mode: "competitive", name: "a" }, { remove: false }, { url: "", session: async () => ({ accessToken: "t" }) }).then((r) => assert.equal(r, false)),
   );
 });
 check("leaderboard signed out resolves null/false without calling the server", () => {
-  const cfg = { url: "https://x.supabase.co", key: "k", session: async () => null };
+  const cfg = { url: "https://api.test", session: async () => null };
   const realFetch = globalThis.fetch;
   globalThis.fetch = () => Promise.reject(new Error("fetch called while signed out"));
   pending.push(
@@ -772,6 +781,75 @@ check("leaderboard signed out resolves null/false without calling the server", (
       submitScore(blankProfile(), { mode: "competitive", name: "a" }, { remove: true }, cfg).then((r) => assert.equal(r, false)),
     ]).finally(() => (globalThis.fetch = realFetch)),
   );
+});
+/** Swaps globalThis.fetch for one call: records the request, answers with `status` and `json`. */
+function fakeFetch(status, json) {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url, method: init.method ?? "GET", headers: init.headers ?? {}, body: init.body === undefined ? undefined : JSON.parse(init.body) });
+    return new Response(status === 204 ? null : JSON.stringify(json), { status });
+  };
+  return { calls, restore: () => (globalThis.fetch = realFetch) };
+}
+const serially = (() => { let chain = Promise.resolve(); return (fn) => (chain = chain.then(fn, fn)); })();
+const signedIn = { url: "https://api.test", session: async () => ({ accessToken: "tok" }) };
+const competitor = { mode: "competitive", name: "Malik", avatar: "penguin" };
+check("leaderboard submit PUTs my score with the bearer token; leaving DELETEs it", () => {
+  pending.push(serially(async () => {
+    const put = fakeFetch(204);
+    try {
+      assert.equal(await submitScore({ ...blankProfile(), xp: 260 }, competitor, {}, signedIn), true);
+    } finally { put.restore(); }
+    assert.equal(put.calls.length, 1);
+    assert.equal(put.calls[0].url, "https://api.test/leaderboard/me");
+    assert.equal(put.calls[0].method, "PUT");
+    assert.equal(put.calls[0].headers.Authorization, "Bearer tok");
+    assert.equal(put.calls[0].body.name, "Malik");
+    assert.equal(put.calls[0].body.xp, 260);
+
+    const del = fakeFetch(204);
+    try {
+      assert.equal(await submitScore(blankProfile(), { mode: "casual" }, { remove: true }, signedIn), true);
+    } finally { del.restore(); }
+    assert.deepEqual([del.calls[0].url, del.calls[0].method, del.calls[0].body], ["https://api.test/leaderboard/me", "DELETE", undefined]);
+
+    const down = fakeFetch(503, { message: "leaderboard not configured" });
+    try {
+      assert.equal(await submitScore(blankProfile(), competitor, {}, signedIn), false);
+    } finally { down.restore(); }
+  }));
+});
+check("leaderboard board GETs the period with the bearer token; errors resolve null", () => {
+  pending.push(serially(async () => {
+    const rows = [{ rank: 1, name: "Malik", level: 3, xp: 260, streak: 4, is_me: true, avatar: "penguin", company: "leadliaison.com" }];
+    const ok = fakeFetch(200, rows);
+    try {
+      assert.deepEqual(await fetchBoard("week", signedIn), rows);
+    } finally { ok.restore(); }
+    assert.deepEqual([ok.calls[0].url, ok.calls[0].method, ok.calls[0].headers.Authorization], ["https://api.test/leaderboard?period=week", "GET", "Bearer tok"]);
+    const bad = fakeFetch(401, { message: "Unauthorized" });
+    try {
+      assert.equal(await fetchBoard("all", signedIn), null);
+    } finally { bad.restore(); }
+  }));
+});
+check("session: sign-in and refresh POST to the pose server's auth API and map the reply", () => {
+  pending.push(serially(async () => {
+    const reply = { access_token: "jwt", refresh_token: "r2", expires_in: 3600, user: { id: "u1", email: "malik@leadliaison.com", user_metadata: { full_name: "Malik" } } };
+    const ok = fakeFetch(200, reply);
+    let session;
+    try {
+      session = await requestSession("/auth/refresh", { refresh_token: "r1" }, "https://api.test");
+    } finally { ok.restore(); }
+    assert.deepEqual([ok.calls[0].url, ok.calls[0].method, ok.calls[0].body], ["https://api.test/auth/refresh", "POST", { refresh_token: "r1" }]);
+    assert.equal(session.accessToken, "jwt");
+    assert.equal(session.user.name, "Malik");
+    const bad = fakeFetch(401, { message: "invalid session" });
+    try {
+      await assert.rejects(requestSession("/auth/refresh", { refresh_token: "spent" }, "https://api.test"), /auth 401/);
+    } finally { bad.restore(); }
+  }));
 });
 const log = [];
 const serial = createSerial();

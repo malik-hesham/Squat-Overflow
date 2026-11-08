@@ -1,20 +1,21 @@
 # Deployment and releases
 
-Squat Overflow has three deployable parts. One version tag ships all three.
+Squat Overflow has two deployable parts. One version tag ships both.
 
 | Part | Where it runs | Deployed by |
 |------|---------------|-------------|
-| Pose server (`server/`) | Fly.io app `squat-overflow-pose`, Frankfurt (`fra`) | `flyctl deploy` in the release workflow |
-| Leaderboard database (`supabase/migrations/`) | Supabase project `hysvvrdopodlqvuxnvco` | `supabase db push` in the release workflow |
+| Pose server, sign-in and leaderboard API (`server/`) | Fly.io app `squat-overflow-pose`, Frankfurt (`fra`) | `flyctl deploy` in the release workflow |
+| Leaderboard database | Postgres at `DATABASE_URL` (a Fly secret) | Schema migrations run when the server starts |
 | Extension (`extension/`) | Chrome Web Store | `scripts/publish-cws.mjs` in the release workflow |
 
 ```
 PR / push to main ── CI (.github/workflows/ci.yml)
-                     server tests · extension tests + store zip · Docker image smoke test · migrations apply
+                     server tests (incl. auth, leaderboard and migrations on in-process Postgres) · extension tests + store zip · Docker image smoke test
 
 tag vX.Y.Z ──────── Release (.github/workflows/release.yml)
-                     verify tag == manifest version → CI → supabase db push → fly deploy
-                     → /health reports vX.Y.Z → GitHub Release (+ zip) → Chrome Web Store (submit for review)
+                     verify tag == manifest version → CI → fly deploy (migrates the DB at startup)
+                     → /health reports vX.Y.Z, /leaderboard answers 401 → GitHub Release (+ zip)
+                     → Chrome Web Store (submit for review)
 ```
 
 ## Releasing a version
@@ -27,7 +28,6 @@ tag vX.Y.Z ──────── Release (.github/workflows/release.yml)
    git push origin v0.4.0
    ```
 3. Watch **Actions → Release**. The `production` environment jobs run in order:
-   - The DB migrations run.
    - The Fly deploy runs and is checked: it waits until `https://squat-overflow-pose.fly.dev/health` reports the new `version`.
    - The GitHub Release is created with notes generated from merged PRs and the store zip attached.
    - The store job uploads the zip and submits it for review. It goes live automatically once Google approves it, usually within a few days.
@@ -56,11 +56,13 @@ To point the build at another server, set `POSE_SERVER_URL=wss://…/ws`. That s
 
 ## Database migrations
 
-Schema changes go in a **new** file, `supabase/migrations/<YYYYMMDDHHMMSS>_<name>.sql`. Never edit a migration that has already been released: production only runs files it hasn't recorded yet. Make new SQL safe to re-run (`if not exists`, `create or replace`) where you can. CI applies every migration to a throwaway Postgres (`supabase db start`) on each PR.
+Schema changes go in a **new** entry at the end of `server/src/db/migrations.ts`. Never edit a migration that has already been released: the server only runs entries it hasn't recorded in `schema_migrations`. Each runs in a transaction when the server starts; an advisory lock keeps two Machines from migrating at once. The server tests apply every migration to an in-process Postgres (PGlite) on each PR.
+
+Demo data for the leadliaison.com board: `psql "$DATABASE_URL" -f server/scripts/demo-seed.sql`; remove it with `server/scripts/demo-clear.sql`.
 
 ## One-time setup
 
-You need admin access to the GitHub repo and owner access to the Fly, Supabase, Google Cloud and Chrome Web Store accounts. Do the steps in this order.
+You need admin access to the GitHub repo and owner access to the Fly, Google Cloud and Chrome Web Store accounts, plus a Postgres database. Do the steps in this order.
 
 ### 1. Fly.io (pose server)
 1. Install `flyctl` and sign in (`fly auth login`).
@@ -74,14 +76,16 @@ You need admin access to the GitHub repo and owner access to the Fly, Supabase, 
 3. Create a deploy token for CI: `fly tokens create deploy -x 999999h`. Copy the whole output, including the `FlyV1 ` prefix.
 4. Optionally, deploy once by hand to try it: `fly deploy --build-arg VERSION=manual`, then open `https://squat-overflow-pose.fly.dev/health`.
 
-### 2. Supabase (leaderboard)
-1. Create an access token at https://supabase.com/dashboard/account/tokens and look up the database password (Project Settings → Database).
-2. Production got the leaderboard schema by hand, pasted into the SQL Editor before migrations existed. **Don't** mark `20261107000000_leaderboard.sql` as applied. Let the first release run it: every statement is safe to re-run, and the run brings production up to the repo's schema even if a hand-pasted change was missed (such as the Google sign-in change to `submit_score`/`leaderboard`). It runs in one transaction. To preview it:
+### 2. Leaderboard database and sign-in secrets
+1. Create a Postgres database (13 or newer) the Fly app can reach, e.g. `fly mpg create` (Fly Managed Postgres) or any hosted Postgres. Use a connection string with `sslmode=require` when it goes over the internet.
+2. Set the server's secrets (they are not in `fly.toml`):
    ```bash
-   npx supabase@2.122.1 link --project-ref hysvvrdopodlqvuxnvco
-   npx supabase@2.122.1 db push --dry-run
+   fly secrets set -a squat-overflow-pose \
+     DATABASE_URL='postgres://…' \
+     AUTH_JWT_SECRET="$(openssl rand -base64 48)"
    ```
-3. Check that `major_version` in `supabase/config.toml` matches `SHOW server_version;` in the SQL Editor.
+   `AUTH_JWT_SECRET` signs the server's session tokens. Changing it signs every user out, and they sign in again with one click. `GOOGLE_CLIENT_ID` is in `fly.toml` and must match `extension/config.js`.
+3. The next deploy creates the tables. Without `DATABASE_URL` the pose server still works, but sign-in and the leaderboard answer 503 and the release workflow fails its leaderboard check.
 
 ### 3. GitHub
 In **Settings → Environments**, create `production`. Optionally, add yourself as a required reviewer so every release waits for a click. Then add:
@@ -89,10 +93,7 @@ In **Settings → Environments**, create `production`. Optionally, add yourself 
 | Kind | Name | Value |
 |------|------|-------|
 | Secret | `FLY_API_TOKEN` | Fly deploy token from step 1 |
-| Secret | `SUPABASE_ACCESS_TOKEN` | Supabase access token |
-| Secret | `SUPABASE_DB_PASSWORD` | Database password |
 | Secret | `CWS_SERVICE_ACCOUNT_JSON` | Service-account JSON key from step 5 |
-| Variable | `SUPABASE_PROJECT_REF` | `hysvvrdopodlqvuxnvco` |
 | Variable | `CWS_PUBLISHER_ID` | Developer Dashboard → Publisher → Settings |
 | Variable | `CWS_ITEM_ID` | The store item ID (= extension ID) from step 4. While this is empty, releases skip the store job. |
 
@@ -117,12 +118,12 @@ The API can't create a store item, so the first version is uploaded by hand:
 | Part | How |
 |------|-----|
 | Pose server | `fly releases -a squat-overflow-pose`, then `fly deploy -a squat-overflow-pose --image <image from a previous release>` |
-| Database | Add a new migration that reverts the change. Don't edit or delete applied migrations. |
+| Database | Add a new migration that reverts the change and deploy it. Don't edit or delete applied migrations. An older server image ignores migrations it doesn't know, so roll the server back only to a release whose code works with the current schema. |
 | Extension | Developer Dashboard → the item → roll back to the previous published version (the API has a `rollback` method too), or publish a fixed higher version. |
 
 ## Capacity and limits
 
 - Every open break holds one WebSocket and one BlazePose detector. Inference for all sessions on a Machine shares one Node event loop. `fly.toml` limits each Machine to 6 sessions (`hard_limit`) and starts a second Machine past 4 (`soft_limit`). The first deploy creates 2 Machines.
 - To scale, raise `fly scale count`, or the limits after checking `latency_ms` in frame results under load.
-- The pose server has no login. The Origin allowlist keeps web pages out, but scripts can fake an Origin, so the Fly connection limit is what bounds abuse.
+- The pose stream has no login (sign-in only gates the leaderboard). The Origin allowlist keeps web pages out, but scripts can fake an Origin, so the Fly connection limit is what bounds abuse.
 - Camera frames go to Fly.io in Frankfurt. They are processed in memory and never stored. See `server/static/privacy.html`.
