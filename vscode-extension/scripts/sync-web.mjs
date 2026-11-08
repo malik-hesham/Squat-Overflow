@@ -15,6 +15,6 @@ for (const entry of await readdir(src, { withFileTypes: true })) {
   }
 }
 for (const dir of ["lib", "icons"]) {
-  await cp(path.join(src, dir), path.join(dest, dir), { recursive: true });
+  await cp(path.join(src, dir), path.join(dest, dir), { recursive: true, filter: (p) => !p.endsWith(".d.ts") });
 }
 await writeFile(path.join(dest, "package.json"), JSON.stringify({ type: "module", private: true }));

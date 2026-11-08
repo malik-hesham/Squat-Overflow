@@ -85,12 +85,13 @@ const STAGE_LABEL = {
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
+/** @param {string} id */
 const $ = (id) => document.getElementById(id);
 const els = {
   conn: $("conn"),
   connText: $("connText"),
-  video: $("video"),
-  overlay: $("overlay"),
+  video: /** @type {HTMLVideoElement} */ ($("video")),
+  overlay: /** @type {HTMLCanvasElement} */ ($("overlay")),
   placeholder: $("placeholder"),
   hud: $("hud"),
   hudReps: $("hudReps"),
@@ -99,18 +100,18 @@ const els = {
   hudStage: $("hudStage"),
   cues: $("cues"),
   flash: $("flash"),
-  chart: $("chart"),
+  chart: /** @type {HTMLCanvasElement} */ ($("chart")),
   chartTitle: $("chartTitle"),
   perf: $("perf"),
-  exercise: $("exercise"),
+  exercise: /** @type {HTMLSelectElement} */ ($("exercise")),
   cameraHint: $("cameraHint"),
   howTo: $("howTo"),
   demo: $("demo"),
   demoBtn: $("demoBtn"),
   demoCredit: $("demoCredit"),
-  startBtn: $("startBtn"),
-  resetBtn: $("resetBtn"),
-  voice: $("voice"),
+  startBtn: /** @type {HTMLButtonElement} */ ($("startBtn")),
+  resetBtn: /** @type {HTMLButtonElement} */ ($("resetBtn")),
+  voice: /** @type {HTMLInputElement} */ ($("voice")),
   sReps: $("sReps"),
   sGood: $("sGood"),
   sPartial: $("sPartial"),
@@ -120,19 +121,19 @@ const els = {
   topIssues: $("topIssues"),
   repLog: $("repLog"),
   repEmpty: $("repEmpty"),
-  exportBtn: $("exportBtn"),
-  serverUrl: $("serverUrl"),
-  privacy: $("privacy"),
+  exportBtn: /** @type {HTMLButtonElement} */ ($("exportBtn")),
+  serverUrl: /** @type {HTMLInputElement} */ ($("serverUrl")),
+  privacy: /** @type {HTMLInputElement} */ ($("privacy")),
   privacyStyles: $("privacyStyles"),
   styleGrid: $("styleGrid"),
   hudPrivacy: $("hudPrivacy"),
-  angle3d: $("angle3d"),
+  angle3d: /** @type {HTMLInputElement} */ ($("angle3d")),
   chartLegend: $("chartLegend"),
   legendMain: $("legendMain"),
   legendAlt: $("legendAlt"),
-  calib: document.querySelector(".calib"),
+  calib: /** @type {HTMLElement} */ (document.querySelector(".calib")),
   calibText: $("calibText"),
-  calibBtn: $("calibBtn"),
+  calibBtn: /** @type {HTMLButtonElement} */ ($("calibBtn")),
   calibReset: $("calibReset"),
   calibBanner: $("calibBanner"),
   calibBannerText: $("calibBannerText"),
@@ -145,15 +146,15 @@ const els = {
   routineBar: $("routineBar"),
   routineSkip: $("routineSkip"),
   routineEnd: $("routineEnd"),
-  shareBtn: $("shareBtn"),
-  breakEnabled: $("breakEnabled"),
-  breakInterval: $("breakInterval"),
+  shareBtn: /** @type {HTMLButtonElement} */ ($("shareBtn")),
+  breakEnabled: /** @type {HTMLInputElement} */ ($("breakEnabled")),
+  breakInterval: /** @type {HTMLSelectElement} */ ($("breakInterval")),
   breakNext: $("breakNext"),
   breakToday: $("breakToday"),
   breakNow: $("breakNow"),
   breakTest: $("breakTest"),
-  cardDialog: $("cardDialog"),
-  cardImg: $("cardImg"),
+  cardDialog: /** @type {HTMLDialogElement} */ ($("cardDialog")),
+  cardImg: /** @type {HTMLImageElement} */ ($("cardImg")),
   cardClose: $("cardClose"),
   cardDownload: $("cardDownload"),
   cardCopy: $("cardCopy"),
@@ -199,7 +200,8 @@ async function loadSettings() {
       ...Object.keys(DEFAULTS),
       CATALOG_KEY,
     ]);
-    const { [CATALOG_KEY]: catalog, ...settings } = stored;
+    const { [CATALOG_KEY]: cached, ...settings } = stored;
+    const catalog = /** @type {{ exercises?: typeof FALLBACK_EXERCISES, connections?: typeof FALLBACK_CONNECTIONS } | undefined} */ (cached);
     state.settings = { ...DEFAULTS, ...settings };
     if (Array.isArray(catalog?.exercises) && catalog.exercises.length) {
       state.exercises = catalog.exercises;
@@ -430,7 +432,7 @@ function applyFrame(msg) {
   els.sTempo.textContent =
     s.avg_duration_s == null ? "–" : `${s.avg_duration_s}s`;
   els.sRom.textContent = s.avg_rom == null ? "–" : `${Math.round(s.avg_rom)}°`;
-  els.sScore.textContent = s.avg_score == null ? "–" : Math.round(s.avg_score);
+  els.sScore.textContent = s.avg_score == null ? "–" : String(Math.round(s.avg_score));
   renderTopIssues(s.top_issues);
   renderCues(msg.feedback);
 
@@ -1890,9 +1892,10 @@ async function init() {
     sendJson({ type: "privacy", enabled: wantsMask() });
   });
   els.styleGrid.addEventListener("change", async (ev) => {
-    if (ev.target.name !== "privacyStyle") return;
+    const input = /** @type {HTMLInputElement} */ (ev.target);
+    if (input.name !== "privacyStyle") return;
     clearMask(); // switching back to blur must not reuse an old mask
-    await saveSettings({ privacyStyle: ev.target.value });
+    await saveSettings({ privacyStyle: input.value });
     setPrivacyUi();
     sendJson({ type: "privacy", enabled: wantsMask() });
   });

@@ -47,7 +47,7 @@ The server deploys right away, but the store update waits for review, so for a f
 node scripts/build-extension.mjs
 ```
 
-The command writes `dist/extension/` (load it unpacked to try the store build) and `dist/squat-overflow-<version>.zip`. The build differs from `extension/` in three ways:
+The command writes `dist/extension/` (load it unpacked to try the store build) and `dist/squat-overflow-<version>.zip`. The build differs from `extension/` in three ways (the type-checking files, `tsconfig.json`, `*.d.ts` and `node_modules/`, are left out too):
 - `config.js` points at `wss://squat-overflow-pose.fly.dev/ws`.
 - The manifest `key` is removed.
 - `tests/` is left out.

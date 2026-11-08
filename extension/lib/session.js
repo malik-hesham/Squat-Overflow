@@ -3,6 +3,8 @@ import { buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } f
 
 const KEY = "auth";
 
+/** @typedef {ReturnType<typeof toSession>} Session */
+
 /** POSTs to the pose server's auth API (/auth/google or /auth/refresh) and maps the reply to a stored session. */
 export async function requestSession(path, body, base = API_URL) {
   const res = await fetch(`${base}${path}`, {
@@ -32,6 +34,7 @@ export async function signIn({ calendar = false } = {}) {
 }
 
 export async function getSession() {
+  /** @type {{ [KEY]?: Session }} */
   const { [KEY]: stored } = await chrome.storage.local.get(KEY);
   if (!stored?.accessToken) return null;
   if (stored.expiresAt - Date.now() > 60_000) return stored;

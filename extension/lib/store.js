@@ -31,6 +31,23 @@ const MEME_TURNS_KEY = "memeTurns";
 
 const local = chrome.storage.local;
 
+/**
+ * @typedef {object} Profile
+ * @property {string} playerId
+ * @property {string} secret
+ * @property {number} xp
+ * @property {number} streak
+ * @property {string | null} lastStreakDay  dayKey() of the last day that counted for the streak
+ * @property {string | null} lastBreakDay   dayKey() of the last finished break
+ * @property {number} weekXp
+ * @property {string | null} week           isoWeek() that weekXp belongs to
+ * @property {string[]} badges
+ * @property {object | null} daily
+ * @property {object | null} weekly
+ */
+
+/** @typedef {ReturnType<typeof import("./schedule.js").initialSchedule>} Schedule */
+
 export async function getSettings() {
   const settings = { ...SETTINGS_DEFAULTS, ...(await local.get(Object.keys(SETTINGS_DEFAULTS))) };
   return { ...settings, areas: currentAreas(settings.areas) };
@@ -40,9 +57,12 @@ export function saveSettings(patch) {
   return local.set(patch);
 }
 
+/** @returns {Promise<Profile>} */
 export async function getProfile() {
+  /** @type {{ [PROFILE_KEY]?: Profile }} */
   const { [PROFILE_KEY]: stored } = await local.get(PROFILE_KEY);
   if (stored?.playerId) return stored;
+  /** @type {Profile} */
   const profile = {
     playerId: crypto.randomUUID(),
     secret: crypto.randomUUID(),
@@ -64,7 +84,9 @@ export function setProfile(profile) {
   return local.set({ [PROFILE_KEY]: profile });
 }
 
+/** @returns {Promise<Schedule>} */
 export async function getSchedule() {
+  /** @type {{ [SCHEDULE_KEY]?: Schedule }} */
   const { [SCHEDULE_KEY]: s } = await local.get(SCHEDULE_KEY);
   return { windowId: null, lastKey: null, breakCount: 0, ...s };
 }
@@ -85,6 +107,7 @@ export async function appendLog(entry) {
 }
 
 export async function getCatalog() {
+  /** @type {{ [CATALOG_KEY]?: { exercises?: unknown, connections?: unknown } }} */
   const { [CATALOG_KEY]: catalog } = await local.get(CATALOG_KEY);
   return Array.isArray(catalog?.exercises) ? catalog.exercises : [];
 }

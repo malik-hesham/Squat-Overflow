@@ -10,8 +10,18 @@ import { companyFromEmail } from "./lib/auth.js";
 
 const PRESETS = ["30", "45", "60", "90", "120"];
 
+/** @param {string} id */
 const $ = (id) => document.getElementById(id);
-const radios = (name) => [...document.querySelectorAll(`input[name="${name}"]`)];
+/** @param {string} id */
+const input = (id) => /** @type {HTMLInputElement} */ ($(id));
+/** @param {string} id */
+const button = (id) => /** @type {HTMLButtonElement} */ ($(id));
+/** @param {string} id */
+const select = (id) => /** @type {HTMLSelectElement} */ ($(id));
+/** @param {string} name */
+const radios = (name) => [.../** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll(`input[name="${name}"]`))];
+/** @param {string} id */
+const checkedInputs = (id) => [.../** @type {NodeListOf<HTMLInputElement>} */ ($(id).querySelectorAll("input:checked"))];
 const checkedValue = (name) => radios(name).find((r) => r.checked)?.value;
 
 let initial = null;
@@ -43,17 +53,17 @@ function read() {
   const preset = checkedValue("interval");
   const mode = checkedValue("mode");
   return {
-    intervalMin: preset === "custom" ? Number($("customMin").value) : Number(preset),
-    areas: [...$("areas").querySelectorAll("input:checked")].map((i) => i.value),
-    activeStart: $("activeStart").value,
-    activeEnd: $("activeEnd").value,
-    workdays: [...$("workdays").querySelectorAll("input:checked")].map((i) => Number(i.value)),
-    weekStart: Number($("weekStart").value),
-    autoPause: $("autoPause").checked,
-    privacy: $("privacy").checked,
+    intervalMin: preset === "custom" ? Number(input("customMin").value) : Number(preset),
+    areas: checkedInputs("areas").map((i) => i.value),
+    activeStart: input("activeStart").value,
+    activeEnd: input("activeEnd").value,
+    workdays: checkedInputs("workdays").map((i) => Number(i.value)),
+    weekStart: Number(select("weekStart").value),
+    autoPause: input("autoPause").checked,
+    privacy: input("privacy").checked,
     mode,
-    name: $("name").value.trim(),
-    serverUrl: $("serverUrl").value.trim(),
+    name: input("name").value.trim(),
+    serverUrl: input("serverUrl").value.trim(),
   };
 }
 
@@ -75,7 +85,7 @@ function refresh() {
   $("modeHint").textContent = t(lang, checkedValue("mode") === "competitive" ? "modeCompetitiveHint" : "modePersonalHint");
   const err = problem(read());
   $("error").textContent = initial.setupDone ? err : "";
-  $("save").disabled = Boolean(err);
+  button("save").disabled = Boolean(err);
   $("saved").hidden = true;
 }
 
@@ -99,7 +109,7 @@ function render() {
   const first = !initial.setupDone;
   $("heading").textContent = t(lang, first ? "welcome" : "settingsTitle");
   $("intro").hidden = !first;
-  $("save").textContent = t(lang, first ? "getStarted" : "save");
+  button("save").textContent = t(lang, first ? "getStarted" : "save");
   renderAccount();
 }
 
@@ -167,30 +177,30 @@ async function init() {
   await getProfile();
   const preset = PRESETS.includes(String(initial.intervalMin)) ? String(initial.intervalMin) : "custom";
   radios("interval").forEach((r) => (r.checked = r.value === preset));
-  $("customMin").value = initial.intervalMin;
-  $("weekStart").value = String(initial.weekStart);
+  input("customMin").value = String(initial.intervalMin);
+  select("weekStart").value = String(initial.weekStart);
   renderChips(initial.areas, initial.workdays, initial.weekStart);
-  $("weekStart").addEventListener("change", () => {
+  select("weekStart").addEventListener("change", () => {
     const form = read();
     renderChips(form.areas, form.workdays, form.weekStart);
   });
-  $("activeStart").value = initial.activeStart;
-  $("activeEnd").value = initial.activeEnd;
-  $("autoPause").checked = initial.autoPause;
-  $("privacy").checked = initial.privacy;
+  input("activeStart").value = initial.activeStart;
+  input("activeEnd").value = initial.activeEnd;
+  input("autoPause").checked = initial.autoPause;
+  input("privacy").checked = initial.privacy;
   radios("mode").forEach((r) => (r.checked = r.value === initial.mode));
-  $("name").value = initial.name;
-  $("serverUrl").value = initial.serverUrl;
+  input("name").value = initial.name;
+  input("serverUrl").value = initial.serverUrl;
   radios("lang").forEach((r) => (r.checked = r.value === (LANGS.includes(initial.lang) ? initial.lang : "auto")));
-  $("langs").addEventListener("change", (ev) => saveSettings({ lang: ev.target.value }));
+  $("langs").addEventListener("change", (ev) => saveSettings({ lang: /** @type {HTMLInputElement} */ (ev.target).value }));
   render();
   document.querySelector("main").addEventListener("input", refresh);
   document.querySelector("main").addEventListener("change", refresh);
-  $("save").addEventListener("click", save);
+  button("save").addEventListener("click", save);
   refresh();
   renderCalendar();
-  $("calBtn").addEventListener("click", toggleCalendar);
-  $("welcomeSignIn").addEventListener("click", () => startSignIn($("signInCalendar").checked, "welcomeError"));
+  button("calBtn").addEventListener("click", toggleCalendar);
+  $("welcomeSignIn").addEventListener("click", () => startSignIn(input("signInCalendar").checked, "welcomeError"));
   $("accountSignIn").addEventListener("click", () => startSignIn(false, "accountError"));
   $("signOut").addEventListener("click", leaveAccount);
   $("skipSignIn").addEventListener("click", (ev) => {
@@ -220,7 +230,7 @@ async function renderCalendar(error = false) {
 }
 
 async function toggleCalendar() {
-  $("calBtn").disabled = true;
+  button("calBtn").disabled = true;
   let error = false;
   try {
     if (await calendarState()) await disconnectCalendar();
@@ -228,7 +238,7 @@ async function toggleCalendar() {
   } catch {
     error = true;
   }
-  $("calBtn").disabled = false;
+  button("calBtn").disabled = false;
   await renderCalendar(error);
 }
 
@@ -264,7 +274,7 @@ async function startSignIn(calendar, errorId) {
     $(errorId).textContent = t(lang, "signInFailed");
     return;
   }
-  if (!$("name").value.trim()) $("name").value = session.user.name.slice(0, 40);
+  if (!input("name").value.trim()) input("name").value = session.user.name.slice(0, 40);
   renderAccount();
   refresh();
   renderCalendar();
