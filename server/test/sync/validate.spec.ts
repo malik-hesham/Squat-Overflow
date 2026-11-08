@@ -70,12 +70,13 @@ describe('validateSettingsPatch', () => {
 
 describe('validateProgress', () => {
   test('accepts badges and challenge objects', () => {
-    const body = { badges: ['variety', 'high_five'], daily: { id: 'variety', done: false }, weekly: null, at: NOW };
+    const body = { badges: ['variety', 'high_five', 'weekly:Neck tension', 'weekly:Shoulder & rotator cuff'], daily: { id: 'variety', done: false }, weekly: null, at: NOW };
     expect(validateProgress(body, NOW)).toEqual({ ok: true, value: body });
   });
 
   test('refuses bad badges and huge challenge objects', () => {
-    expect(validateProgress({ badges: ['has space'], at: NOW }, NOW).ok).toBe(false);
+    for (const bad of [' lead', 'trail ', 'semi;colon', 'a'.repeat(61), ''])
+      expect(validateProgress({ badges: [bad], at: NOW }, NOW).ok).toBe(false);
     expect(validateProgress({ badges: [], daily: { x: 'y'.repeat(5000) }, at: NOW }, NOW).ok).toBe(false);
     expect(validateProgress({ badges: [], daily: [1], at: NOW }, NOW).ok).toBe(false);
   });

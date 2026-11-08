@@ -21,7 +21,7 @@ export const BACKFILL_NAMESPACE = "240ab37e-ad3a-409a-a2f2-29f50c8e346d";
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const AVATAR_RE = /^[a-z]{2,20}$/;
 const LANG_RE = /^(auto|[a-z]{2,3}(-[A-Za-z]{2,4})?)$/;
-const BADGE_RE = /^[A-Za-z0-9_.:-]{1,60}$/;
+const BADGE_RE = /^(?! )[A-Za-z0-9_.:& -]{1,60}(?<! )$/; // server/src/sync/validate.ts
 const MAX_CHALLENGE_JSON = 4_096;
 
 const intIn = (v, min, max) => typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;

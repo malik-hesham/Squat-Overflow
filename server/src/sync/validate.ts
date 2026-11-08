@@ -34,7 +34,8 @@ export const WEEK_RE = /^\d{4}-W\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const AVATAR_RE = /^[a-z]{2,20}$/;
 const LANG_RE = /^(auto|[a-z]{2,3}(-[A-Za-z]{2,4})?)$/;
-const BADGE_RE = /^[A-Za-z0-9_.:-]{1,60}$/;
+// Weekly badges hold the area name (`weekly:Shoulder & rotator cuff`), so spaces and '&' are allowed, not at the ends.
+const BADGE_RE = /^(?! )[A-Za-z0-9_.:& -]{1,60}(?<! )$/;
 
 export type Check<T> = { ok: true; value: T } | { ok: false; error: string };
 

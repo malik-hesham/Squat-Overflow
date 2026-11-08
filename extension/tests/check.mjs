@@ -1189,13 +1189,14 @@ Promise.all(pending).then(
   });
 
   await acheck("sync: the profile takes XP, streak and week XP from the server and unions badges", () => {
-    const local = { ...blankProfile(), xp: 40, streak: 1, lastStreakDay: "2026-11-05", lastBreakDay: "2026-11-05", weekXp: 40, week: "2026-W45", badges: ["daily:a", "weekly:Neck tension"], daily: { day: "x" } };
+    const local = { ...blankProfile(), xp: 40, streak: 1, lastStreakDay: "2026-11-05", lastBreakDay: "2026-11-05", weekXp: 40, week: "2026-W45", badges: ["daily:a", "weekly:Neck tension", "bad;id"], daily: { day: "x" } };
     const server = { xp: 95, streak: 3, week: "2026-W46", weekXp: 30, lastBreakDay: "2026-11-09", badges: ["daily:b", "daily:a"], daily: null, weekly: { week: "2026-W46" } };
     const p = core.mergeProfile(local, server);
     assert.deepEqual([p.xp, p.streak, p.week, p.weekXp, p.lastBreakDay, p.lastStreakDay], [95, 3, "2026-W46", 30, "2026-11-09", "2026-11-09"]);
-    assert.deepEqual(p.badges, ["daily:a", "weekly:Neck tension", "daily:b"]);
+    assert.deepEqual(p.badges, ["daily:a", "weekly:Neck tension", "bad;id", "daily:b"]);
     assert.deepEqual([p.daily, p.weekly, p.playerId], [{ day: "x" }, { week: "2026-W46" }, "p"]);
-    assert.deepEqual(core.progressOf(p).badges, ["daily:a", "daily:b"], "badge ids the server refuses stay local");
+    assert.deepEqual(core.progressOf(p).badges, ["daily:a", "weekly:Neck tension", "daily:b"], "badge ids the server refuses stay local");
+    assert.deepEqual(core.progressOf({ badges: ["weekly:Shoulder & rotator cuff", " x", "x "] }).badges, ["weekly:Shoulder & rotator cuff"]);
     const noStreak = core.mergeProfile(local, { ...server, streak: 0, lastBreakDay: "2026-11-04" });
     assert.deepEqual([noStreak.lastBreakDay, noStreak.lastStreakDay], ["2026-11-05", "2026-11-05"]);
   });
@@ -1218,7 +1219,7 @@ Promise.all(pending).then(
       srv.doc = { intervalMin: 30 };
       srv.fieldAt = { intervalMin: NOW - DAY };
       reset({
-        profile: { ...blankProfile(), playerId: PLAYER, xp: 26, badges: ["daily:clean_form", "weekly:Neck tension"] },
+        profile: { ...blankProfile(), playerId: PLAYER, xp: 26, badges: ["daily:clean_form", "weekly:Neck tension", "bad;id"] },
         breakLog: structuredClone(oldLog),
         setupDone: true,
         intervalMin: 45,
@@ -1255,8 +1256,8 @@ Promise.all(pending).then(
       // Progress: badges the server accepts, once.
       const puts = srv.calls.filter((c) => c.method === "PUT");
       assert.equal(puts.length, 1);
-      assert.deepEqual(puts[0].body.badges, ["daily:clean_form"]);
-      assert.deepEqual(profile.badges, ["daily:clean_form", "weekly:Neck tension"]);
+      assert.deepEqual(puts[0].body.badges, ["daily:clean_form", "weekly:Neck tension"]);
+      assert.deepEqual(profile.badges, ["daily:clean_form", "weekly:Neck tension", "bad;id"]);
 
       // Again: nothing to send, nothing new to pull, no second backfill or progress PUT.
       srv.calls.length = 0;
