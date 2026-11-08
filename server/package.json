@@ -26,6 +26,8 @@
     "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@tensorflow/tfjs-converter": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",
+    "jose": "^6.2.15",
+    "pg": "^8.23.1",
     "pngjs": "^7.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
@@ -33,10 +35,12 @@
     "ws": "^8.22.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "@nestjs/testing": "^12.4.0",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
     "@types/pngjs": "^6.0.5",
     "@types/ws": "^8.18.2",
     "jest": "^30.5.2",

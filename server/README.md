@@ -1,6 +1,6 @@
 # Pose server
 
-Webcam frames in over WebSocket, pose analysis out. NestJS on Node, with TF.js BlazePose for pose detection.
+Webcam frames in over WebSocket, pose analysis out; plus Google sign-in and the team leaderboard. NestJS on Node, with TF.js BlazePose for pose detection and Postgres for accounts and scores.
 
 Needs Node 24.9+: NestJS 12 ships as ESM, and this CommonJS build loads it through `require(esm)`, which Jest supports from Node 24.9.
 
@@ -8,10 +8,24 @@ Needs Node 24.9+: NestJS 12 ships as ESM, and this CommonJS build loads it throu
 cd server
 npm install
 npm run start:dev      # builds, then listens on http://127.0.0.1:8765 (ws path /ws)
-npm test               # analysis unit tests + mask tests + end-to-end HTTP/WebSocket tests
+npm test               # unit, Postgres (in-process PGlite) and end-to-end HTTP/WebSocket tests
 ```
 
-Routes: `GET /health` (version + exercise catalog), `GET /privacy` (the store's privacy policy page), `GET /embed/:youtubeId` (demo clip wrapper), and the WebSocket on `/ws`. The protocol is documented at the top of [src/pose/protocol.ts](src/pose/protocol.ts). Keep it backward compatible (see [docs/deployment.md](../docs/deployment.md)).
+Routes:
+
+| Route | |
+|---|---|
+| `GET /health` | Version + exercise catalog |
+| `GET /privacy` | The store's privacy policy page |
+| `GET /embed/:youtubeId` | Demo clip wrapper |
+| `WS /ws` | Pose stream; protocol at the top of [src/pose/protocol.ts](src/pose/protocol.ts). Keep it backward compatible (see [docs/deployment.md](../docs/deployment.md)) |
+| `POST /auth/google` `{id_token, nonce}` | Exchange the extension's Google ID token (+ the raw nonce whose SHA-256 Google signed) for a session |
+| `POST /auth/refresh` `{refresh_token}` | New session; the refresh token is single-use |
+| `GET /leaderboard?period=week\|all` | Bearer token. My company's board: top 10, plus my row if I'm lower |
+| `PUT /leaderboard/me` `{name, xp, level, streak, weekXp, week, avatar}` | Bearer token, work email. Upserts my score |
+| `DELETE /leaderboard/me` | Bearer token. Leaves the board |
+
+The company is the domain of the signed-in Google email. Personal providers (gmail.com, outlook.com, …) can sign in but get an empty board. Sessions have the same JSON shape Supabase Auth used to return: an HS256 access token (1 h) and a random refresh token (60 days, stored hashed, rotated on every refresh). Without `DATABASE_URL` the pose routes work and the auth/leaderboard routes answer 503.
 
 Environment variables:
 
@@ -22,6 +36,9 @@ Environment variables:
 | `FORMCOACH_ALLOWED_ORIGINS` | unset | Comma-separated exact origins; replaces the extension + loopback default |
 | `FORMCOACH_VERSION` | `dev` | Set from the Docker `VERSION` build arg |
 | `FORMCOACH_TF_BACKEND` | `wasm` | `cpu` falls back to the pure-JS kernels |
+| `DATABASE_URL` | unset | Postgres for accounts and the leaderboard; migrations run at startup |
+| `AUTH_JWT_SECRET` | — | Required with `DATABASE_URL`; at least 32 characters. Signs session tokens |
+| `GOOGLE_CLIENT_ID` | — | Required with `DATABASE_URL`; the OAuth client in `extension/config.js` |
 
 ## Layout
 
@@ -35,6 +52,10 @@ Environment variables:
 | `src/pose/pose-engine.ts` | BlazePose lite on the TF.js WASM backend: landmarks, world landmarks, person mask |
 | `src/pose/mask.ts` | Person mask -> small feathered PNG for the client's privacy blur |
 | `src/analysis/` | Rep counting, form rules, calibration, exercise catalog, demo clips |
+| `src/auth/` | Google ID-token check, sessions (access + refresh tokens), `BearerGuard`, `/auth/*` |
+| `src/leaderboard/` | Score validation, company-from-email, the board query, `/leaderboard` |
+| `src/db/` | Postgres pool, migrations (`migrations.ts`) applied at startup under an advisory lock |
+| `scripts/demo-seed.sql`, `demo-clear.sql` | Demo players for the leadliaison.com board |
 | `models/blazepose/` | Committed TF.js graph models (8.5 MB); `npm run fetch-models` downloads them again |
 
 ## Notes

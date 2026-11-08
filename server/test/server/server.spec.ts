@@ -184,3 +184,10 @@ test('explicit allowed origins replace loopback default', () => {
   expect(originAllowed(EXT, allowed)).toBe(false);
   expect(originAllowed(undefined, allowed)).toBe(true); // non-browser clients send no Origin
 });
+
+test('without DATABASE_URL the auth and leaderboard API answers 503', async () => {
+  for (const [method, path] of [['POST', '/auth/google'], ['POST', '/auth/refresh'], ['GET', '/leaderboard?period=all'], ['PUT', '/leaderboard/me']]) {
+    const res = await fetch(`${server.http}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
+    expect([path, res.status]).toEqual([path, 503]);
+  }
+});

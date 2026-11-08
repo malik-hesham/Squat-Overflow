@@ -11,6 +11,9 @@ primary_region = "fra"
   # The first is the unpacked dev build (from the manifest "key"). Add the Chrome Web Store
   # ID here after the first store upload: "chrome-extension://<dev-id>,chrome-extension://<store-id>".
   FORMCOACH_ALLOWED_ORIGINS = "chrome-extension://lpkaoaegdjhciohkfidnmabjigidofnd"
+  # Google sign-in: ID tokens must be issued for this OAuth client (same as extension/config.js).
+  # DATABASE_URL and AUTH_JWT_SECRET are Fly secrets; see docs/deployment.md.
+  GOOGLE_CLIENT_ID = "977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com"
 
 [http_service]
   internal_port = 8080
