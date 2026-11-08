@@ -8,12 +8,16 @@ import { recordActivity, backfillActivity } from "./lib/activity.js";
 import { getBusy } from "./lib/calendar-client.js";
 import { busyNow } from "./lib/calendar.js";
 import { t, resolveLang, localeFor } from "./lib/i18n.js";
+import { syncNow } from "./lib/sync.js";
+import { getSession } from "./lib/session.js";
+import { API_URL } from "./config.js";
 
 const BREAK_URL = chrome.runtime.getURL("break.html");
 const BREAK_WINDOW = { width: 980, height: 760 };
 const ALARM = "next-break";
 const BADGE_TICK = "badge-tick";
 const COUNTDOWN = "countdown";
+const SYNC = "sync";
 const serial = createSerial();
 
 async function isBreakWindow(id) {
@@ -72,6 +76,7 @@ async function saveSchedule(schedule) {
 async function ensureAlarm() {
   const settings = await getSettings();
   if (!(await chrome.alarms.get(BADGE_TICK))) await chrome.alarms.create(BADGE_TICK, { periodInMinutes: 1 });
+  if (!(await chrome.alarms.get(SYNC))) await chrome.alarms.create(SYNC, { periodInMinutes: 1 });
   if (!settings.setupDone) return;
   const s = await getSchedule();
   if (!s.nextAt) {
@@ -144,21 +149,25 @@ async function onDone(msg, s, settings) {
   const scores = result.scores ?? [];
   const activity = (await getActivity()) ?? backfillActivity(await readLog());
   await setActivity(recordActivity(activity, now, breakdown.total));
-  await appendLog({
-    at: now,
-    reps: result.countedReps,
-    moves: result.moves.filter((m) => m.completed).length,
-    score: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
-    xp: breakdown.total,
-    scored: result.scored,
-    completed: result.moves.length > 0 && result.moves.every((m) => m.completed),
-  });
+  await appendLog(
+    {
+      at: now,
+      reps: result.countedReps,
+      moves: result.moves.filter((m) => m.completed).length,
+      score: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+      xp: breakdown.total,
+      scored: result.scored,
+      completed: result.moves.length > 0 && result.moves.every((m) => m.completed),
+    },
+    { areas: settings.areas },
+  );
   await saveSchedule({
     ...applyAction(s, "done", now, settings.intervalMin),
     lastKey: msg.lastKey ?? s.lastKey,
     breakCount: s.breakCount + 1,
     extraWindowId: s.windowId ?? s.extraWindowId ?? null,
   });
+  sync(); // not awaited: it queues its storage writes behind this handler
   return { ok: true, breakdown, levelUp, newBadges, profile: next };
 }
 
@@ -193,7 +202,39 @@ async function onSettingsSaved(msg) {
   if (!s.nextAt) await saveSchedule({ ...initialSchedule(Date.now(), settings.intervalMin), lastKey: s.lastKey, breakCount: s.breakCount });
   else if (msg.scheduleChanged) await saveSchedule(rescheduleForInterval(s, Date.now(), settings.intervalMin));
   else await saveSchedule(s);
+  sync();
   return { ok: true };
+}
+
+/**
+ * After a sync: shared schedule settings that changed on another device reschedule like a local
+ * save, and a break finished on another device after the last one here moves the next break to
+ * count from it (never earlier than it already is).
+ * @param {{ scheduleChanged?: boolean, lastBreakAt?: number | null }} res
+ */
+async function afterSync({ scheduleChanged, lastBreakAt }) {
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  if (!settings.setupDone || !s.nextAt) return;
+  const now = Date.now();
+  let next = scheduleChanged ? rescheduleForInterval(s, now, settings.intervalMin) : s;
+  const from = lastBreakAt ? lastBreakAt + settings.intervalMin * 60_000 : 0;
+  if (from > next.nextAt && !(s.pausedUntil > now)) next = { ...applyAction(next, "done", now, settings.intervalMin), windowId: s.windowId, nextAt: from };
+  if (next !== s) await saveSchedule(next);
+}
+
+let syncing = null;
+
+/**
+ * Runs one sync (lib/sync.js), or joins the one already running. Never call it from inside
+ * serial(): sync takes the serial queue for its own storage writes.
+ */
+function sync() {
+  syncing ??= (async () => {
+    const res = await syncNow({ url: API_URL, session: getSession, lock: serial });
+    if (res.ok && (res.scheduleChanged || res.lastBreakAt)) await serial(() => afterSync(res));
+    return { ok: res.ok, reason: res.reason, pending: res.pending };
+  })().finally(() => (syncing = null));
+  return syncing;
 }
 
 const HANDLERS = {
@@ -207,6 +248,10 @@ const HANDLERS = {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
+  if (msg?.type === "sync") {
+    sync().then(sendResponse);
+    return true;
+  }
   const handler = HANDLERS[msg?.type];
   if (!handler) return false;
   serial(() => handler(msg)).then(sendResponse, (err) => sendResponse({ ok: false, error: String(err) }));
@@ -216,6 +261,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM) serial(onNextBreak);
   else if (alarm.name === BADGE_TICK || alarm.name === COUNTDOWN) updateBadge();
+  else if (alarm.name === SYNC) sync();
 });
 
 chrome.windows.onRemoved.addListener((id) =>
@@ -240,6 +286,7 @@ chrome.runtime.onStartup.addListener(() =>
   }),
 );
 serial(ensureAlarm);
+sync();
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && "lang" in changes) updateBadge();
 });

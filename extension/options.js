@@ -274,6 +274,7 @@ async function startSignIn(calendar, errorId) {
     $(errorId).textContent = t(lang, "signInFailed");
     return;
   }
+  chrome.runtime.sendMessage({ type: "sync" }).catch(() => {}); // first sync: uploads the local break history
   if (!input("name").value.trim()) input("name").value = session.user.name.slice(0, 40);
   renderAccount();
   refresh();
