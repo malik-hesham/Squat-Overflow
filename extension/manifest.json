@@ -31,7 +31,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://hysvvrdopodlqvuxnvco.supabase.co/start*"],
+      "matches": ["https://squat-overflow-pose.fly.dev/start*"],
       "js": ["start-from-link.js"],
       "run_at": "document_idle"
     }

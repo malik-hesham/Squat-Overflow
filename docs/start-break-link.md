@@ -12,11 +12,11 @@ No Slack code, accounts or secrets are involved.
 
 ## Default start URL (no hosting needed)
 
-The extension is set up to use this project's own API host as the start link:
+The extension is set up to use this project's own server, the hosted pose and API server, as the start link:
 
-`https://hysvvrdopodlqvuxnvco.supabase.co/start/`
+`https://squat-overflow-pose.fly.dev/start/`
 
-That address returns a plain 404 page, which is fine: the content script still runs on it, starts the break, and draws a short "Break started" message itself. Nothing has to be hosted. The same URL is `START_PAGE_URL` in `extension/config.js`, and it is what the Slack message's **Start break** link and button point to.
+That address returns a JSON 404, which is fine: the content script still runs on it, starts the break, and draws a short "Break started" message itself. Nothing has to be hosted. The same URL is `START_PAGE_URL` in `extension/config.js`, and it is what the Slack message's **Start break** link and button point to.
 
 To use a nicer hosted page later, change `START_PAGE_URL` and the `content_scripts[0].matches` entry in `extension/manifest.json` to the new host (details below). The script only draws its own message when the page is raw JSON, so a real page is left alone.
 
@@ -43,7 +43,7 @@ It needs to be an `https` page whose path starts with `/start`. It can be fully 
 
 ## When the URL is known
 
-1. In `extension/manifest.json`, set `content_scripts[0].matches` to `https://<host>/start*`. It currently holds `https://hysvvrdopodlqvuxnvco.supabase.co/start*`.
+1. In `extension/manifest.json`, set `content_scripts[0].matches` to `https://<host>/start*`. It currently holds `https://squat-overflow-pose.fly.dev/start*`.
 2. Reload the extension at `chrome://extensions`. Everyone using a packaged copy needs the updated extension, because the content script ships with it.
 3. Open `https://<host>/start/` and check that a break window opens.
 
