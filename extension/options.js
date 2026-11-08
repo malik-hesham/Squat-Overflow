@@ -27,7 +27,6 @@ const checkedValue = (name) => radios(name).find((r) => r.checked)?.value;
 let initial = null;
 let lang = "en";
 let session = null;
-let skipped = false;
 
 function chip(container, value, label, checked, hint = "") {
   const el = document.createElement("label");
@@ -200,16 +199,8 @@ async function init() {
   refresh();
   renderCalendar();
   button("calBtn").addEventListener("click", toggleCalendar);
-  $("welcomeSignIn").addEventListener("click", () => startSignIn(input("signInCalendar").checked, "welcomeError"));
   $("accountSignIn").addEventListener("click", () => startSignIn(false, "accountError"));
   $("signOut").addEventListener("click", leaveAccount);
-  $("skipSignIn").addEventListener("click", (ev) => {
-    ev.preventDefault();
-    skipped = true;
-    radios("mode").forEach((r) => (r.checked = r.value === "personal"));
-    renderAccount();
-    refresh();
-  });
 }
 
 function renderChips(areas, workdays, weekStart) {
@@ -258,7 +249,6 @@ async function relabel(setting) {
 function renderAccount() {
   const email = session?.user?.email;
   const company = companyFromEmail(email);
-  $("welcomeCard").hidden = Boolean(session) || initial.setupDone || skipped;
   $("companyText").textContent = !session ? t(lang, "notSignedIn") : company ? t(lang, "companyFrom", { domain: company }) : t(lang, "companyPersonal");
   $("accountEmail").textContent = session ? t(lang, "signedInAs", { email }) : "";
   $("accountEmail").hidden = !session;

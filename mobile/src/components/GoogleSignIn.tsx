@@ -37,7 +37,7 @@ export function SignInButton({ lang, onSignedIn }: { lang: string; onSignedIn?: 
   );
 }
 
-/** Who's signed in and which company board that puts them on, with Sign out; or the sign-in pitch. */
+/** Who's signed in and which company board that puts them on, with Sign out; or "Not signed in" and the optional sign-in button. */
 export function Account({
   lang,
   session,
@@ -53,7 +53,7 @@ export function Account({
   if (!session) {
     return (
       <View className="gap-2">
-        <Muted>{t(lang, 'signInWhy')}</Muted>
+        <Muted>{t(lang, 'notSignedIn')}</Muted>
         <SignInButton lang={lang} onSignedIn={onSignedIn} />
       </View>
     );
