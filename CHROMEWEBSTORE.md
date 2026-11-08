@@ -63,7 +63,7 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 | `tabs` | permissions | Reads the address of tabs that are playing sound, to detect a Google Meet, Zoom or Teams call and hold the reminder until it ends. Also finds and focuses the extension's own break window. Addresses are checked on the device and never sent anywhere. |
 | `identity` | permissions | Optional "Continue with Google" sign-in (`openid email profile`), which verifies the work email used to join the company leaderboard in Competitive mode. Also optional Google Calendar access: free/busy times only (read-only `calendar.freebusy` scope), so reminders avoid meetings. No event titles or details are read. |
 | Camera (browser prompt, no manifest permission) | n/a | The break window and Practice page ask for the webcam to count reps and score form. |
-| Remote connections (CSP `connect-src`) | n/a | `wss://squat-overflow-pose.fly.dev`: the pose server that analyses camera frames. `https://*.supabase.co`: account sign-in and leaderboard. `googleapis.com`: Calendar free/busy. Localhost and `*.trycloudflare.com`: self-hosted pose servers set in Advanced settings. No `host_permissions` are requested. |
+| Remote connections (CSP `connect-src`) | n/a | `wss://squat-overflow-pose.fly.dev`: the pose server that analyses camera frames. `https://squat-overflow-pose.fly.dev`: the same server's account sign-in and leaderboard API. `googleapis.com`: Calendar free/busy. Localhost and `*.trycloudflare.com`: self-hosted pose servers set in Advanced settings. No `host_permissions` are requested. |
 
 ## Privacy and data use
 
@@ -73,10 +73,10 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 
 | Data type | Collected? | Off device? | Purpose | Shared with third parties? |
 |-----------|-----------|-------------|---------|---------------------------|
-| Personally identifiable info | Yes | Yes | (1) Webcam images of the user during a break, sent to the pose server for real-time pose detection and discarded immediately, never stored. (2) After optional Google sign-in: the account's email, name and picture, kept by the account service (Supabase Auth). (3) In Competitive mode: display name, plus the company domain taken from the verified email, on the leaderboard. | No. The service providers that host them (Fly.io, Supabase) only process them for these features. |
+| Personally identifiable info | Yes | Yes | (1) Webcam images of the user during a break, sent to the pose server for real-time pose detection and discarded immediately, never stored. (2) After optional Google sign-in: the account's email, name and picture, kept by our server (the pose server's account database). (3) In Competitive mode: display name, plus the company domain taken from the verified email, on the leaderboard. | No. The service providers that host them (Fly.io and our database host) only process them for these features. |
 | Health info | No | | XP and form scores are game points, not health data, and form scores never leave the device. | |
 | Financial info | No | | | |
-| Authentication info | Yes | Yes | The Google sign-in token is exchanged once with the account service (Supabase Auth) for a session. The session is stored on the device and sent to Supabase with leaderboard requests. The Google Calendar access token is stored on the device and sent only to Google; it is revoked on disconnect. | No |
+| Authentication info | Yes | Yes | The Google sign-in token is exchanged once with our server for a session. The session is stored on the device and sent to our server with leaderboard requests. The Google Calendar access token is stored on the device and sent only to Google; it is revoked on disconnect. | No |
 | Personal communications | No | | | |
 | Location | No | | | |
 | Web history | No | | Tab addresses are checked on the device to detect meeting sites; nothing is stored or sent. | |

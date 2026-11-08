@@ -4,8 +4,4 @@
 # Build output
 dist/
 
-# Supabase CLI
-supabase/.temp/
-supabase/.branches/
-
 node_modules/

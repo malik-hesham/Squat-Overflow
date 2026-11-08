@@ -13,7 +13,7 @@ VS Code user? See [vscode-extension/README.md](vscode-extension/README.md).
    npm run start:dev              # listens on ws://127.0.0.1:8765/ws
    ```
 2. **Extension**: open `chrome://extensions`, enable Developer mode, click **Load unpacked**, and pick `extension/`. The settings page opens. Pick your areas and click **Get started**.
-3. **Leaderboard**: the team's Supabase project already has the schema; the SQL lives in `supabase/migrations/` and the release workflow applies new files there. For your own project, run `npx supabase@2.122.1 link --project-ref <ref>` then `npx supabase@2.122.1 db push`. `extension/config.js` already holds the project URL and the publishable key. Never put a secret or `service_role` key there.
+3. **Leaderboard**: sign-in and the leaderboard are served by the hosted pose server (`API_URL` in `extension/config.js`), so unpacked builds share the team board. To run them locally too, give the local server a Postgres database: `DATABASE_URL=postgres://… AUTH_JWT_SECRET=<32+ random chars> GOOGLE_CLIENT_ID=<the client ID in extension/config.js> npm run start:dev`, and point `API_URL` at `http://127.0.0.1:8765` (also add it to the manifest CSP `connect-src`). The server applies its schema at startup.
 4. **Try it**: click the toolbar icon, then **Break now**. To see automatic reminders, set a custom interval of 1 minute and include today in your workdays.
 
 ## Releases and the hosted pose server
