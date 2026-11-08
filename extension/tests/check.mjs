@@ -984,6 +984,393 @@ Promise.all(pending).then(
   },
 );
 
+// ---- Cross-device sync (lib/sync-core.js, lib/store.js's outbox, lib/sync.js) against an
+// in-memory chrome.storage.local and a fake sync server that behaves like server/src/sync.
+{
+  await Promise.allSettled(pending); // those checks swap globalThis.fetch; don't overlap them
+  const acheck = async (name, fn) => {
+    try {
+      await fn();
+      console.log(`ok ${name}`);
+    } catch (err) {
+      console.log(`FAIL ${name}\n  ${err.stack ?? err.message}`);
+      process.exitCode = 1;
+    }
+  };
+  /** chrome.storage.local over a plain object, with its get() key forms. */
+  const fakeLocal = (mem) => {
+    const pick = (keys) => {
+      if (keys == null) return structuredClone(mem);
+      if (typeof keys === "string") return pick([keys]);
+      if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in mem).map((k) => [k, structuredClone(mem[k])]));
+      return Object.fromEntries(Object.entries(keys).map(([k, d]) => [k, k in mem ? structuredClone(mem[k]) : d]));
+    };
+    return {
+      get: async (keys) => pick(keys),
+      set: async (o) => void Object.assign(mem, structuredClone(o)),
+      remove: async (keys) => [].concat(keys).forEach((k) => delete mem[k]),
+    };
+  };
+  const mem = {};
+  const reset = (data = {}) => {
+    for (const k of Object.keys(mem)) delete mem[k];
+    Object.assign(mem, structuredClone(data));
+  };
+  const hadChrome = "chrome" in globalThis;
+  globalThis.chrome = /** @type {any} */ ({ storage: { local: fakeLocal(mem) } });
+  const core = await import("../lib/sync-core.js");
+  const store = await import("../lib/store.js");
+  const { syncNow } = await import("../lib/sync.js");
+
+  /** The sync API in memory: events with seq, per-field settings merge, last-write-wins progress. */
+  const fakeServer = () => {
+    /** @type {any} */
+    const srv = { events: [], seq: 0, doc: {}, fieldAt: {}, progress: { badges: [], daily: null, weekly: null, at: 0 }, calls: [], offline: false };
+    const profileOf = (q) => {
+      const day = q.get("day");
+      const week = q.get("week");
+      const last = srv.events.reduce((m, e) => (!m || e.at > m.at ? e : m), null);
+      const xp = srv.events.reduce((n, e) => n + e.xp, 0);
+      return {
+        xp, level: levelFor(xp).level, levelName: levelFor(xp).name, streak: srv.events.some((e) => e.xp > 0) ? 2 : 0, week,
+        weekXp: srv.events.filter((e) => e.week === week).reduce((n, e) => n + e.xp, 0), day,
+        todayBreaks: srv.events.filter((e) => e.day === day).length, breaks: srv.events.length,
+        lastBreakAt: last?.at ?? null, lastBreakDay: last?.day ?? null,
+        badges: srv.progress.badges, daily: srv.progress.daily, weekly: srv.progress.weekly,
+      };
+    };
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init = {}) => {
+      if (srv.offline) throw new TypeError("Failed to fetch");
+      const u = new URL(url);
+      const method = init.method ?? "GET";
+      const body = init.body === undefined ? undefined : JSON.parse(init.body);
+      srv.calls.push({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body, auth: init.headers?.Authorization });
+      const json = (o, status = 200) => new Response(o === null ? null : JSON.stringify(o), { status });
+      switch (`${method} ${u.pathname}`) {
+        case "POST /sync/breaks": {
+          if (body.events.length < 1 || body.events.length > 200) return json({ message: "1 to 200 events" }, 400);
+          let accepted = 0;
+          for (const e of body.events) if (!srv.events.some((x) => x.id === e.id)) (srv.events.push({ ...e, seq: ++srv.seq }), accepted++);
+          return json({ accepted, profile: profileOf(u.searchParams) });
+        }
+        case "GET /sync/breaks": {
+          const since = Number(u.searchParams.get("since"));
+          const page = srv.events.filter((e) => e.seq > since).slice(0, Number(u.searchParams.get("limit")));
+          return json({ events: page, next: page.length ? page[page.length - 1].seq : since });
+        }
+        case "GET /me/profile":
+          await srv.beforeProfile?.();
+          return json(profileOf(u.searchParams));
+        case "GET /me/settings":
+          return json({ doc: srv.doc, version: 1 });
+        case "PATCH /me/settings":
+          if (srv.refusePatch) return json({ message: "invalid name" }, 400);
+          for (const [k, v] of Object.entries(body.patch)) {
+            if (!core.SHARED_SETTINGS[k]) return json({ message: `unknown setting ${k}` }, 400);
+            if ((srv.fieldAt[k] ?? 0) > body.at) continue;
+            srv.doc[k] = v;
+            srv.fieldAt[k] = body.at;
+          }
+          return json({ doc: srv.doc, version: 2 });
+        case "PUT /me/progress":
+          if (body.at >= srv.progress.at) srv.progress = body;
+          return json(null, 204);
+        default:
+          return json({ message: "not found" }, 404);
+      }
+    };
+    srv.restore = () => (globalThis.fetch = realFetch);
+    srv.ev = (at, extra = {}) => ({
+      id: crypto.randomUUID(), at, day: dayKey(at), week: isoWeek(at), device: "ios", reps: 10, moves: 2, score: 80, xp: 12,
+      scored: true, completed: true, areas: [], ...extra,
+    });
+    srv.addRemote = (e) => srv.events.push({ ...e, seq: ++srv.seq });
+    return srv;
+  };
+  const NOW = Date.now();
+  const cfg = { url: "https://api.test", session: async () => ({ accessToken: "tok", user: { id: "user-1" } }), now: () => NOW };
+  const PLAYER = "11111111-2222-4333-8444-555555555555";
+  const oldLog = [
+    { at: NOW - 3 * DAY, reps: 12, moves: 3, score: 85, xp: 15, scored: true, completed: true },
+    { at: NOW - 2 * DAY, reps: 5, moves: 1, score: null, xp: 0, scored: false, completed: false },
+    { at: NOW - DAY, reps: 9, moves: 2, score: 70, xp: 11, scored: true, completed: true },
+  ];
+  const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  await acheck("sync: UUIDv5 matches RFC 4122; backfill ids are stable per player and break time", async () => {
+    // Python: uuid.uuid5(uuid.NAMESPACE_DNS, "www.example.com")
+    assert.equal(await core.uuidv5("www.example.com", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"), "2ed6657d-e927-568b-95e1-2665a8aea6a2");
+    const a = await core.backfillId(PLAYER, 1_762_000_000_000);
+    assert.match(a, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.equal(a, await core.backfillId(PLAYER, 1_762_000_000_000));
+    assert.equal(a, await core.uuidv5(`${PLAYER}:1762000000000`, core.BACKFILL_NAMESPACE));
+    assert.notEqual(a, await core.backfillId(PLAYER, 1_762_000_000_001));
+    assert.notEqual(a, await core.backfillId("another-player", 1_762_000_000_000));
+  });
+
+  await acheck("sync: backfill gives old entries UUIDv5 ids, keeps queued ids, skips pulled and undatable breaks", async () => {
+    const own = { ...oldLog[2], id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" };
+    const pulled = { ...oldLog[0], at: NOW - 4 * DAY, id: "99999999-bbbb-4ccc-8ddd-eeeeeeeeeeee", device: "ios" };
+    const ancient = { at: Date.UTC(2023, 5, 1), reps: 1, moves: 1, score: 50, xp: 3, scored: true, completed: true };
+    const { events, log } = await core.backfillEvents([pulled, ancient, oldLog[0], own], PLAYER, NOW);
+    assert.deepEqual(events.map((e) => e.id), [await core.backfillId(PLAYER, oldLog[0].at), own.id]);
+    assert.equal(log.length, 4);
+    assert.equal(log[1].id, await core.backfillId(PLAYER, ancient.at), "an entry the server won't take still gets its id");
+    assert.equal(log[0], pulled);
+    assert.equal(events[0].device, "chrome");
+    assert.equal(events[0].day, dayKey(oldLog[0].at));
+  });
+
+  await acheck("sync: a break event carries the local day and week, clamped to what the server takes", () => {
+    const at = new Date(2026, 10, 9, 0, 30).getTime(); // 00:30 local: the UTC day can differ
+    const e = core.breakEvent({ at, reps: 20_000, moves: 2.4, score: 140, xp: -5, scored: 1, completed: 0 }, { id: "x", areas: ["Neck tension", "", 5], now: at });
+    assert.deepEqual(e, {
+      id: "x", at, day: "2026-11-09", week: "2026-W46", device: "chrome", reps: 10_000, moves: 2, score: 100, xp: 0,
+      scored: true, completed: false, areas: ["Neck tension"],
+    });
+    assert.equal(core.breakEvent({ at, score: null }, { id: "y", now: at }).score, null);
+    assert.equal(core.breakEvent({ at: at + 2 * DAY }, { id: "z", now: at }), null, "more than 24 h ahead");
+    assert.equal(core.breakEvent({ at: Date.UTC(2023, 11, 31) }, { id: "z", now: at }), null, "before 2024");
+    assert.equal(core.breakEvent({}, { id: "z", now: at }), null);
+  });
+
+  await acheck("sync: the outbox keeps one copy per id, drops the oldest past its cap, and removes sent ids", () => {
+    const ev = (id) => ({ id });
+    const box = core.addToOutbox([ev("a"), ev("b")], [ev("b"), ev("c"), null, ev("c")]);
+    assert.deepEqual(box.map((e) => e.id), ["a", "b", "c"]);
+    assert.deepEqual(core.removeFromOutbox(box, ["a", "c", "zz"]).map((e) => e.id), ["b"]);
+    const big = core.addToOutbox([], Array.from({ length: core.OUTBOX_MAX + 5 }, (_, i) => ev(`e${i}`)));
+    assert.equal(big.length, core.OUTBOX_MAX);
+    assert.equal(big[0].id, "e5");
+  });
+
+  await acheck("sync: appendLog queues the break with a random UUID, chrome device, local keys and areas", async () => {
+    reset();
+    const at = NOW - 5 * M;
+    await store.appendLog({ at, reps: 10, moves: 3, score: 88, xp: 14, scored: true, completed: true }, { areas: ["Upper back"] });
+    const [entry] = await store.readLog();
+    const [event] = await store.readOutbox();
+    assert.match(entry.id, UUID_V4_RE);
+    assert.deepEqual(event, {
+      id: entry.id, at, day: dayKey(at), week: isoWeek(at), device: "chrome", reps: 10, moves: 3, score: 88, xp: 14,
+      scored: true, completed: true, areas: ["Upper back"],
+    });
+    await store.appendLog({ at: at + M, reps: 1, moves: 1, score: 50, xp: 2, scored: true, completed: false });
+    const box = await store.readOutbox();
+    assert.equal(box.length, 2);
+    assert.notEqual(box[0].id, box[1].id);
+    assert.deepEqual(box[1].areas, []);
+  });
+
+  await acheck("sync: saveSettings marks only shared settings that changed, with the time of the change", async () => {
+    reset({ intervalMin: 60, theme: "auto" });
+    await store.saveSettings({ intervalMin: 60, voice: true, theme: "dark", serverUrl: "ws://x" }, NOW - 2 * M);
+    assert.equal(mem.syncDirty, undefined, "unchanged values and device-only settings are not sent");
+    await store.saveSettings({ intervalMin: 45, memes: false }, NOW - M);
+    await store.saveSettings({ intervalMin: 30, workdays: [1, 2, 3, 4, 5] }, NOW);
+    assert.deepEqual(mem.syncDirty, { intervalMin: NOW, memes: NOW - M });
+    assert.equal(mem.intervalMin, 30);
+  });
+
+  await acheck("sync: settings merge sends per-field times, seeds only unknown keys, and never overwrites unsent changes", () => {
+    const settings = { intervalMin: 45, memes: false, theme: "dark", name: "x".repeat(41), mode: "competitive", lang: "auto" };
+    const { patches, invalid } = core.dirtyPatches(settings, { memes: NOW - M, intervalMin: NOW, mode: NOW, name: NOW, theme: NOW });
+    assert.deepEqual(patches, [{ patch: { memes: false }, at: NOW - M }, { patch: { intervalMin: 45, mode: "competitive" }, at: NOW }]);
+    assert.deepEqual(invalid.sort(), ["name", "theme"]);
+    assert.deepEqual(core.clearDirty({ memes: NOW - M, intervalMin: NOW + 5 }, { memes: NOW - M, intervalMin: NOW }), { intervalMin: NOW + 5 });
+    assert.deepEqual(core.seedPatch({ ...settings, name: "Malik" }, { intervalMin: 30, lang: "ar" }), { memes: false, name: "Malik", mode: "competitive" });
+    assert.deepEqual(
+      core.remotePatch(settings, { intervalMin: 30, memes: true, mode: "competitive", lang: "xx-123456", serverUrl: "ws://evil" }, { memes: NOW }),
+      { intervalMin: 30 },
+      "memes has an unsent change, mode is equal, lang is invalid, serverUrl is device-only",
+    );
+    assert.deepEqual(core.changedSharedKeys({ workdays: [1, 2], theme: "a" }, { workdays: [1, 2], theme: "b", areas: ["Eyes"] }), ["areas"]);
+  });
+
+  await acheck("sync: the profile takes XP, streak and week XP from the server and unions badges", () => {
+    const local = { ...blankProfile(), xp: 40, streak: 1, lastStreakDay: "2026-11-05", lastBreakDay: "2026-11-05", weekXp: 40, week: "2026-W45", badges: ["daily:a", "weekly:Neck tension"], daily: { day: "x" } };
+    const server = { xp: 95, streak: 3, week: "2026-W46", weekXp: 30, lastBreakDay: "2026-11-09", badges: ["daily:b", "daily:a"], daily: null, weekly: { week: "2026-W46" } };
+    const p = core.mergeProfile(local, server);
+    assert.deepEqual([p.xp, p.streak, p.week, p.weekXp, p.lastBreakDay, p.lastStreakDay], [95, 3, "2026-W46", 30, "2026-11-09", "2026-11-09"]);
+    assert.deepEqual(p.badges, ["daily:a", "weekly:Neck tension", "daily:b"]);
+    assert.deepEqual([p.daily, p.weekly, p.playerId], [{ day: "x" }, { week: "2026-W46" }, "p"]);
+    assert.deepEqual(core.progressOf(p).badges, ["daily:a", "daily:b"], "badge ids the server refuses stay local");
+    const noStreak = core.mergeProfile(local, { ...server, streak: 0, lastBreakDay: "2026-11-04" });
+    assert.deepEqual([noStreak.lastBreakDay, noStreak.lastStreakDay], ["2026-11-05", "2026-11-05"]);
+  });
+
+  await acheck("sync: pulled events merge into the log once, sorted, with their device", () => {
+    const log = [{ at: 10, xp: 1, id: "a" }, { at: 30, xp: 1 }];
+    const { log: out, added } = core.mergeLog(log, [{ id: "a", at: 10 }, { id: "b", at: 20, xp: 5, device: "ios", seq: 7, day: "d" }], 500);
+    assert.deepEqual(out.map((e) => e.at), [10, 20, 30]);
+    assert.equal(added.length, 1);
+    assert.equal(out[1].device, "ios");
+    assert.equal("seq" in out[1], false);
+    assert.equal(core.mergeLog(log, [], 500).log, log);
+  });
+
+  await acheck("sync: first sync backfills the old log once, pulls other devices, adopts the server profile and settings", async () => {
+    const srv = fakeServer();
+    try {
+      const phone = srv.ev(NOW - 10 * M, { xp: 20 });
+      srv.addRemote(phone);
+      srv.doc = { intervalMin: 30 };
+      srv.fieldAt = { intervalMin: NOW - DAY };
+      reset({
+        profile: { ...blankProfile(), playerId: PLAYER, xp: 26, badges: ["daily:clean_form", "weekly:Neck tension"] },
+        breakLog: structuredClone(oldLog),
+        setupDone: true,
+        intervalMin: 45,
+        name: "Malik",
+        mode: "competitive",
+        theme: "dark",
+      });
+      const res = await syncNow(cfg);
+      assert.equal(res.ok, true, res.error);
+      assert.equal(res.pending, 0);
+      const ids = await Promise.all(oldLog.map((e) => core.backfillId(PLAYER, e.at)));
+      assert.deepEqual(srv.events.filter((e) => e.device === "chrome").map((e) => e.id).sort(), [...ids].sort());
+      const post = srv.calls.find((c) => c.method === "POST");
+      assert.deepEqual(post.query, { day: dayKey(NOW), week: isoWeek(NOW) });
+      assert.equal(post.auth, "Bearer tok");
+      // Pulled: the phone's break is in the log once, the backfilled ones aren't duplicated.
+      const log = await store.readLog();
+      assert.equal(log.length, 4);
+      assert.deepEqual(log.map((e) => e.id).sort(), [...ids, phone.id].sort());
+      assert.equal(log.find((e) => e.id === phone.id).device, "ios");
+      assert.equal(mem.syncState.cursor, srv.seq);
+      assert.equal(mem.activity[dayKey(phone.at)].xp >= 20, true);
+      // Profile: XP from every device.
+      const profile = await store.getProfile();
+      assert.equal(profile.xp, 15 + 11 + 20);
+      assert.equal(profile.playerId, PLAYER);
+      assert.equal(res.lastBreakAt, phone.at, "the phone's break is newer than the last one here");
+      // Settings: the phone's interval wins (the seed is older than any real change), unknown keys are seeded.
+      assert.equal(mem.intervalMin, 30);
+      assert.equal(res.scheduleChanged, true);
+      assert.deepEqual(srv.doc, { intervalMin: 30, ...core.seedPatch({ ...(await store.getSettings()) }, { intervalMin: 30 }) });
+      assert.equal(srv.doc.name, "Malik");
+      assert.equal("theme" in srv.doc, false);
+      // Progress: badges the server accepts, once.
+      const puts = srv.calls.filter((c) => c.method === "PUT");
+      assert.equal(puts.length, 1);
+      assert.deepEqual(puts[0].body.badges, ["daily:clean_form"]);
+      assert.deepEqual(profile.badges, ["daily:clean_form", "weekly:Neck tension"]);
+
+      // Again: nothing to send, nothing new to pull, no second backfill or progress PUT.
+      srv.calls.length = 0;
+      const again = await syncNow(cfg);
+      assert.equal(again.ok, true);
+      assert.deepEqual(srv.calls.map((c) => `${c.method} ${c.path}`), ["GET /me/settings", "GET /sync/breaks", "GET /me/profile"]);
+      assert.equal(again.lastBreakAt, null);
+      assert.equal(again.scheduleChanged, false);
+
+      // Even a repeated backfill (state lost) can't count a break twice.
+      mem.syncState = { ...mem.syncState, backfilled: false };
+      await syncNow(cfg);
+      assert.equal(srv.events.length, 4);
+    } finally {
+      srv.restore();
+    }
+  });
+
+  await acheck("sync: local changes go up with their time; the outbox goes up in batches of 200; offline keeps everything", async () => {
+    const srv = fakeServer();
+    try {
+      await syncNow(cfg); // state from the previous check: already synced
+      srv.calls.length = 0;
+      await store.saveSettings({ intervalMin: 20 }, NOW - 1000);
+      for (let i = 0; i < 450; i++) await store.appendLog({ at: NOW - 450 * 1000 + i * 1000, reps: 1, moves: 1, score: 60, xp: 1, scored: true, completed: true });
+      const res = await syncNow(cfg);
+      assert.equal(res.ok, true, res.error);
+      assert.deepEqual(srv.calls.filter((c) => c.method === "POST").map((c) => c.body.events.length), [200, 200, 50]);
+      const patch = srv.calls.find((c) => c.method === "PATCH");
+      assert.deepEqual(patch.body, { patch: { intervalMin: 20 }, at: NOW - 1000 });
+      assert.equal(srv.doc.intervalMin, 20);
+      assert.deepEqual(mem.syncDirty, {});
+      assert.equal((await store.readOutbox()).length, 0);
+      assert.equal(srv.events.length, 450, "a fresh server: only the new breaks were waiting");
+
+      srv.offline = true;
+      await store.appendLog({ at: NOW, reps: 3, moves: 1, score: 60, xp: 4, scored: true, completed: true });
+      await store.saveSettings({ voice: false }, NOW);
+      const xpBefore = (await store.getProfile()).xp;
+      const off = await syncNow(cfg);
+      assert.deepEqual([off.ok, off.reason], [false, "offline"]);
+      assert.equal((await store.readOutbox()).length, 1);
+      assert.deepEqual(mem.syncDirty, { voice: NOW });
+      assert.equal((await store.getProfile()).xp, xpBefore);
+      srv.offline = false;
+      assert.equal((await syncNow(cfg)).ok, true);
+      assert.equal((await store.readOutbox()).length, 0);
+      assert.equal(srv.doc.voice, false);
+    } finally {
+      srv.restore();
+    }
+  });
+
+  await acheck("sync: signed out or unconfigured never calls the server; a new account starts over", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.reject(new Error("fetch called"));
+    try {
+      assert.deepEqual(await syncNow({ ...cfg, session: async () => null }), { ok: false, reason: "signed-out" });
+      assert.deepEqual(await syncNow({ ...cfg, url: "" }), { ok: false, reason: "off" });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const srv = fakeServer();
+    try {
+      const res = await syncNow({ ...cfg, session: async () => ({ accessToken: "t2", user: { id: "user-2" } }) });
+      assert.equal(res.ok, true, res.error);
+      assert.equal(mem.syncState.user, "user-2");
+      assert.equal(srv.calls.find((c) => c.method === "GET" && c.path === "/sync/breaks").query.since, "0");
+      const log = await store.readLog();
+      assert.equal(log.filter((e) => e.device === "ios").length, 1);
+      assert.deepEqual(srv.events.map((e) => e.id).sort(), log.filter((e) => !e.device).map((e) => e.id).sort(), "this device's own breaks, not the one pulled for user-1");
+    } finally {
+      srv.restore();
+    }
+  });
+
+  await acheck("sync: a refused settings change is dropped, and a break finished mid-sync keeps its local XP", async () => {
+    const srv = fakeServer();
+    try {
+      await syncNow(cfg);
+      srv.refusePatch = true;
+      await store.saveSettings({ memes: true }, NOW);
+      srv.beforeProfile = async () => {
+        srv.beforeProfile = null;
+        const p = await store.getProfile();
+        await store.setProfile({ ...p, xp: p.xp + 7 });
+        await store.appendLog({ at: NOW, reps: 3, moves: 1, score: 60, xp: 7, scored: true, completed: true });
+      };
+      const xp = (await store.getProfile()).xp;
+      const res = await syncNow(cfg);
+      assert.equal(res.ok, true, res.error);
+      assert.deepEqual(mem.syncDirty, {});
+      assert.equal((await store.getProfile()).xp, xp + 7, "not replaced by a server total that misses the new break");
+      assert.equal((await store.readOutbox()).length, 1);
+    } finally {
+      srv.restore();
+    }
+  });
+
+  await acheck("leaderboard: with sync on, submitScore doesn't PUT (the server writes the row); leaving still DELETEs", async () => {
+    const del = fakeFetch(204);
+    try {
+      assert.equal(await submitScore(blankProfile(), competitor, {}, { ...signedIn, sync: true }), true);
+      assert.equal(del.calls.length, 0);
+      assert.equal(await submitScore(blankProfile(), competitor, { remove: true }, { ...signedIn, sync: true }), true);
+      assert.deepEqual(del.calls.map((c) => c.method), ["DELETE"]);
+    } finally {
+      del.restore();
+    }
+  });
+
+  if (!hadChrome) delete globalThis.chrome;
+}
+
 // ---- Avatar characters: every one poses its 3D figure through squats, issues,
 // reps, buff and droop with nothing broken or non-finite. WebGL isn't
 // available in Node, so this drives the physics and scene graph; rendering is

@@ -1,13 +1,14 @@
-import { API_URL } from "../config.js";
+import { API_URL, SYNC_ENABLED } from "../config.js";
 import { levelFor, isoWeek } from "./xp.js";
 import { getSession } from "./session.js";
 
 /**
- * Where the board lives and how to get a signed-in session; tests pass their own.
- * @typedef {{ url: string, session: () => Promise<{ accessToken: string } | null> }} BoardConfig
+ * Where the board lives, how to get a signed-in session, and whether sync is on (then the server
+ * writes my row from synced breaks and settings); tests pass their own.
+ * @typedef {{ url: string, session: () => Promise<{ accessToken: string } | null>, sync?: boolean }} BoardConfig
  */
 /** @type {BoardConfig} */
-const DEFAULT_CFG = { url: API_URL, session: getSession };
+const DEFAULT_CFG = { url: API_URL, session: getSession, sync: SYNC_ENABLED };
 const AVATAR_RE = /^[a-z]{2,20}$/;
 
 function call(method, path, cfg, session, body) {
@@ -35,10 +36,14 @@ export function toPayload(profile, settings, now = Date.now()) {
   };
 }
 
-/** Puts my score on my company's board, or with `remove` takes it off. Resolves false on any failure. */
+/**
+ * Puts my score on my company's board, or with `remove` takes it off. Resolves false on any
+ * failure. With sync on there is nothing to put: the server keeps the row up to date itself.
+ */
 export async function submitScore(profile, settings, { remove = false } = {}, cfg = DEFAULT_CFG) {
   if (!cfg.url) return false;
   if (!remove && settings.mode !== "competitive") return false;
+  if (!remove && cfg.sync) return true;
   try {
     const session = await cfg.session();
     if (!session) return false;

@@ -208,6 +208,7 @@ async function renderBoard() {
   }
   const competitive = settings.mode === "competitive";
   $("boardMsg").textContent = t(lang, "loading");
+  await synced;
   if (competitive) await submitScore(profile, settings);
   const board = await fetchBoard(period);
   if (!board) {
@@ -226,6 +227,9 @@ async function renderBoard() {
     renderBoard();
   }),
 );
+
+// Sync on open (the service worker runs it); the board waits for it so my row is current.
+const synced = chrome.runtime.sendMessage({ type: "sync" }).catch(() => {});
 
 initTheme();
 chrome.storage.onChanged.addListener(render);
