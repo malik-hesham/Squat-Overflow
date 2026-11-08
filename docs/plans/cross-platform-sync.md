@@ -71,7 +71,7 @@ PATCH /me/settings              { patch: { [field]: value }, at } -> { doc, vers
       `mobile/src/core/sync.ts` mirrors item 2 on the `storage.ts` API. Hook it into `engine.ts` (after `appendLog`) and `AppData.tsx` (on foreground via `AppState`). Reschedule notifications when `lastBreakAt` moves forward.
       verify: Jest tests for the outbox and merge; manual check on the iOS simulator that a break done in Chrome shows in the app.
 
-- [ ] 4. Mac menu bar app.
+- [x] 4. Mac menu bar app. Done: `macos/` (see `macos/README.md`), unit tests in `macos/SquatOverflowBarTests/`. Manual sign-in check still open: it needs `<server>/auth/mobile-callback` registered with Google (`TODO.md`).
       New `macos/` folder: a SwiftUI `MenuBarExtra` app (macOS 14+, `LSUIElement`, generated with XcodeGen from `macos/project.yml`). Keychain holds the refresh token. It shows level and XP bar, streak, today's breaks, a next-break countdown from shared settings + `lastBreakAt`, and the team top 5 from `GET /leaderboard`. The menu bar title is the countdown. Buttons: **Break now** (opens the deep link), **Open settings**, **Sign out**. It polls every 60 s and when the menu opens.
       verify: `xcodebuild` builds; a manual run signs in and shows the same XP as Chrome.
 

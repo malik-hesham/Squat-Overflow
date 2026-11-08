@@ -1,0 +1,74 @@
+name: SquatOverflowBar
+options:
+  bundleIdPrefix: com.squatoverflow
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # The NestJS server (server/). Override per build:
+    #   xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://squat-overflow-pose.fly.dev
+    SO_SERVER_URL: "http://127.0.0.1:8765"
+    # The Chrome extension's start page (PR #10, docs/start-break-link.md): opening it starts a break.
+    SO_START_URL: "https://hysvvrdopodlqvuxnvco.supabase.co/start/"
+    # The extension's fixed ID, derived from the "key" in extension/manifest.json.
+    SO_EXTENSION_ID: "lpkaoaegdjhciohkfidnmabjigidofnd"
+    # The extension's web OAuth client (extension/config.js), so the server needs no new client.
+    SO_GOOGLE_CLIENT_ID: "977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com"
+
+targets:
+  SquatOverflowBar:
+    type: application
+    platform: macOS
+    sources:
+      - path: SquatOverflowBar
+    info:
+      path: SquatOverflowBar/Info.plist
+      properties:
+        CFBundleDisplayName: Squat Overflow
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.healthcare-fitness
+        SOServerURL: $(SO_SERVER_URL)
+        SOStartURL: $(SO_START_URL)
+        SOExtensionID: $(SO_EXTENSION_ID)
+        SOGoogleClientID: $(SO_GOOGLE_CLIENT_ID)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.squatoverflow.bar
+        PRODUCT_NAME: SquatOverflowBar
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: false
+        GENERATE_INFOPLIST_FILE: false
+        COMBINE_HIDPI_IMAGES: true
+
+  SquatOverflowBarTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: SquatOverflowBarTests
+    dependencies:
+      - target: SquatOverflowBar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.squatoverflow.bar.tests
+        GENERATE_INFOPLIST_FILE: true
+        CODE_SIGN_IDENTITY: "-"
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/SquatOverflowBar.app/Contents/MacOS/SquatOverflowBar
+        BUNDLE_LOADER: $(TEST_HOST)
+
+schemes:
+  SquatOverflowBar:
+    build:
+      targets:
+        SquatOverflowBar: all
+        SquatOverflowBarTests: [test]
+    test:
+      targets:
+        - SquatOverflowBarTests
