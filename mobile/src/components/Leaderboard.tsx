@@ -5,36 +5,49 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Text } from '@/components/ui/text';
 import { avatarEmoji } from '@/src/components/avatars';
 import { Muted } from '@/src/components/kit';
+import { SignInButton } from '@/src/components/GoogleSignIn';
+import { fetchBoard, submitScore, type BoardRow, type Period } from '@/src/core/board';
 import { levelName, t } from '@/src/core/i18n';
-import { LEVELS, fetchBoard, submitScore } from '@/src/core/shared';
+import { useSession } from '@/src/core/session';
+import { LEVELS, companyFromEmail } from '@/src/core/shared';
 import type { Profile, Settings } from '@/src/core/store';
 import { cn } from '@/lib/utils';
 
-type Row = { rank: number; name: string; level: number; xp: number; streak: number; avatar: string; is_me: boolean };
-type Period = 'week' | 'all';
-
-// The company board, read through the same Supabase functions as the extension.
+// Your company's board, from the same server API as the extension. The company comes from
+// the email of the Google account you signed in with.
 export function Leaderboard({ settings, profile, lang }: { settings: Settings; profile: Profile; lang: string }) {
   const [period, setPeriod] = React.useState<Period>('week');
-  const [rows, setRows] = React.useState<Row[] | null | undefined>(undefined);
+  const [rows, setRows] = React.useState<BoardRow[] | null | undefined>(undefined);
+  const session = useSession();
+  const email = session?.user.email ?? null;
+  const company = companyFromEmail(email);
   const competitive = settings.mode === 'competitive';
 
   React.useEffect(() => {
-    if (!settings.company) return;
+    if (!company) return;
     let alive = true;
     setRows(undefined);
     (async () => {
       if (competitive) await submitScore(profile, settings);
-      const board = (await fetchBoard(settings.company, period, profile.playerId)) as Row[] | null;
+      const board = await fetchBoard(period);
       if (alive) setRows(board);
     })();
     return () => {
       alive = false;
     };
-    // Refetch when the period, company or your XP changes.
-  }, [period, settings.company, competitive, profile.xp]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Refetch when the period, account or your XP changes (not on every token refresh).
+  }, [period, email, company, competitive, profile.xp]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!settings.company) return <Muted>{t(lang, 'boardNeedsCompany')}</Muted>;
+  if (session === undefined) return <ActivityIndicator />;
+  if (!session) {
+    return (
+      <View className="gap-2">
+        <Muted>{t(lang, 'boardNeedsSignIn')}</Muted>
+        <SignInButton lang={lang} />
+      </View>
+    );
+  }
+  if (!company) return <Muted>{t(lang, 'boardNeedsWorkEmail')}</Muted>;
 
   return (
     <View className="gap-3">

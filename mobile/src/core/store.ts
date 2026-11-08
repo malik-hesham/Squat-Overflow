@@ -19,7 +19,6 @@ export const SETTINGS_DEFAULTS = {
   memes: true,
   mode: 'personal' as 'personal' | 'competitive',
   name: '',
-  company: '',
   setupDone: false,
   theme: 'auto',
   avatar: 'bunny',

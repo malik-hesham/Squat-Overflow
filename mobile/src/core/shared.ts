@@ -1,6 +1,7 @@
 // The extension's pure modules, shared as-is. Only modules with no chrome.* or
 // DOM access at import time belong here (store.js, calendar-client.js,
-// pose-client.js and themes.js's init stay extension-only).
+// pose-client.js and themes.js's init stay extension-only). leaderboard.js needs
+// the phone's Google session, so it is wrapped in ./board instead.
 import './polyfills';
 
 export { LEVELS, XP, levelFor, dayKey, isoWeek, isoWeekNumber, breakXp, award } from '../../../extension/lib/xp.js';
@@ -36,8 +37,8 @@ export { DAILY_POOL, WEEKLY, withPeriods, noteAction } from '../../../extension/
 export { recordActivity, backfillActivity, heatmapWeeks, activityTotals } from '../../../extension/lib/activity.js';
 export { avatarFitness, fitnessCaption } from '../../../extension/lib/fitness.js';
 export { badgeLabel, challengeIcon } from '../../../extension/lib/badges.js';
-export { submitScore, fetchBoard } from '../../../extension/lib/leaderboard.js';
 export { busyNow, agenda } from '../../../extension/lib/calendar.js';
+export { companyFromEmail } from '../../../extension/lib/auth.js';
 export { MEMES, takeTurn, repMarks, createMemePlayer } from '../../../extension/lib/memes.js';
 export { createSerial } from '../../../extension/lib/serial.js';
 export { THEMES, themeId } from '../../../extension/lib/themes.js';

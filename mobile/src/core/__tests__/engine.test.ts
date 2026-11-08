@@ -14,10 +14,7 @@ jest.mock('../notifications', () => ({
     return planned.length;
   },
 }));
-jest.mock('../shared', () => {
-  const actual = jest.requireActual('../shared');
-  return { ...actual, submitScore: jest.fn(async () => false) };
-});
+jest.mock('../board', () => ({ submitScore: jest.fn(async () => false) }));
 
 import { breakAction, breakDone, sync } from '../engine';
 import { emptySchedule } from '../plan';

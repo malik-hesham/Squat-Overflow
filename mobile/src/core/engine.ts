@@ -3,6 +3,7 @@
 // schedule change replans the reminder notifications.
 import { getLocales } from 'expo-localization';
 
+import { submitScore } from './board';
 import { getBusy } from './calendar';
 import { MAX_PLANNED, cancelReminders, notificationsGranted, scheduleReminders } from './notifications';
 import { catchUp, planReminders, settle, type Busy, type Hours, type Schedule } from './plan';
@@ -16,7 +17,6 @@ import {
   recordActivity,
   rescheduleForInterval,
   resolveLang,
-  submitScore,
 } from './shared';
 import {
   appendLog,

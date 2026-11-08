@@ -9,38 +9,39 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Text } from '@/components/ui/text';
 import { AVATARS, avatarKey, avatarName, type AvatarKey } from '@/src/components/avatars';
+import { Account } from '@/src/components/GoogleSignIn';
 import { Chip, ChipRow, Muted, Section, SwitchRow } from '@/src/components/kit';
 import { useAppData } from '@/src/core/AppData';
 import { calendarGranted, requestCalendar } from '@/src/core/calendar';
 import { deviceLang, leftBoard, settingsSaved } from '@/src/core/engine';
 import { areaName, nameText, t } from '@/src/core/i18n';
 import { requestNotifications } from '@/src/core/notifications';
-import { AREAS, LANGS, THEMES, scheduleSettingsChanged, weekOrder } from '@/src/core/shared';
+import { signOut, useSession, type Session } from '@/src/core/session';
+import { AREAS, LANGS, THEMES, companyFromEmail, scheduleSettingsChanged, weekOrder } from '@/src/core/shared';
 import { saveSettings, type Settings } from '@/src/core/store';
 import { cn } from '@/lib/utils';
 import { PALETTES } from '@/src/theme/palettes';
 
 const PRESETS = [30, 45, 60, 90, 120];
 const PRESET_KEYS: Record<number, string> = { 30: 'min30', 45: 'min45', 60: 'hr1', 90: 'min90', 120: 'hr2' };
-const COMPANY_RE = /^[a-z0-9.-]+\.[a-z]{2,}$/;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const WEEK_STARTS = [6, 0, 1];
 
 type Form = Pick<
   Settings,
-  'intervalMin' | 'areas' | 'activeStart' | 'activeEnd' | 'workdays' | 'weekStart' | 'autoPause' | 'privacy' | 'mode' | 'name' | 'company'
+  'intervalMin' | 'areas' | 'activeStart' | 'activeEnd' | 'workdays' | 'weekStart' | 'autoPause' | 'privacy' | 'mode' | 'name'
 >;
 
-function problem(lang: string, f: Form): string {
+// Competitive mode needs a signed-in work email: the server files your score under its domain.
+function problem(lang: string, f: Form, email: string | null): string {
   if (!Number.isInteger(f.intervalMin) || f.intervalMin < 1 || f.intervalMin > 240) return t(lang, 'errInterval');
   if (!f.areas.length) return t(lang, 'errAreas');
   if (!f.workdays.length) return t(lang, 'errWorkdays');
   if (!HHMM.test(f.activeStart) || !HHMM.test(f.activeEnd) || f.activeStart >= f.activeEnd) return t(lang, 'errHours');
   if (f.mode === 'competitive') {
     if (!f.name || f.name.length > 40) return t(lang, 'errName');
-    if (!COMPANY_RE.test(f.company)) return t(lang, 'errCompany');
+    if (!companyFromEmail(email)) return t(lang, 'errCompany');
   }
-  if (f.company && !COMPANY_RE.test(f.company)) return t(lang, 'errCompany');
   return '';
 }
 
@@ -72,7 +73,6 @@ export default function SetupScreen() {
     privacy: initial.privacy,
     mode: initial.mode,
     name: initial.name,
-    company: initial.company,
   });
   const [custom, setCustom] = React.useState(!PRESETS.includes(initial.intervalMin));
   const [customText, setCustomText] = React.useState(String(initial.intervalMin));
@@ -84,13 +84,14 @@ export default function SetupScreen() {
     setSaved(false);
   };
 
-  const err = problem(lang, form);
+  const session = useSession();
+  const err = problem(lang, form, session?.user.email ?? null);
 
   async function save() {
     if (err || saving) return;
     setSaving(true);
     try {
-      const next = { ...form, name: form.name.trim(), company: form.company.trim().toLowerCase() };
+      const next = { ...form, name: form.name.trim() };
       await requestNotifications();
       await saveSettings({ ...next, setupDone: true });
       await settingsSaved(scheduleSettingsChanged(initial, next));
@@ -100,6 +101,21 @@ export default function SetupScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function signedIn(s: Session) {
+    if (!form.name.trim()) set({ name: s.user.name.slice(0, 40) });
+  }
+
+  // As on the extension: signing out takes you off the board first, while the session still
+  // works, and drops you back to Personal mode.
+  async function leaveAccount() {
+    if (settings.mode === 'competitive') {
+      await leftBoard();
+      await saveSettings({ mode: 'personal' });
+    }
+    if (form.mode === 'competitive') set({ mode: 'personal' });
+    await signOut();
   }
 
   async function toggleCalendar() {
@@ -149,19 +165,7 @@ export default function SetupScreen() {
               <Label nativeID="name">{t(lang, 'displayName')}</Label>
               <Input aria-labelledby="name" value={form.name} maxLength={40} placeholder={t(lang, 'namePlaceholder')} onChangeText={(name) => set({ name })} />
             </View>
-            <View className="gap-1.5">
-              <Label nativeID="company">{t(lang, 'companyDomain')}</Label>
-              <Input
-                aria-labelledby="company"
-                value={form.company}
-                maxLength={100}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                placeholder={t(lang, 'companyPlaceholder')}
-                onChangeText={(company) => set({ company })}
-              />
-            </View>
+            <Account lang={lang} session={session} onSignedIn={signedIn} onSignOut={leaveAccount} />
           </Section>
 
           <Section title={t(lang, 'howOften')}>
