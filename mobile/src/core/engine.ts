@@ -1,6 +1,7 @@
 // The phone's version of the extension's service worker: every change to the
 // schedule, XP and leaderboard goes through here, one at a time, and every
 // schedule change replans the reminder notifications.
+import { randomUUID } from 'expo-crypto';
 import { getLocales } from 'expo-localization';
 
 import { submitScore } from './board';
@@ -17,6 +18,7 @@ import {
   recordActivity,
   rescheduleForInterval,
   resolveLang,
+  scheduleSettingsChanged,
 } from './shared';
 import {
   appendLog,
@@ -31,6 +33,7 @@ import {
   type Profile,
   type Settings,
 } from './store';
+import { enqueue, syncAccount as runSync, toEvent, type SyncResult } from './sync';
 
 const MIN_MS = 60_000;
 const serial = createSerial();
@@ -106,12 +109,13 @@ async function onDone(result: BreakResult, lastKey: string | null): Promise<Done
   const now = Date.now();
   const [settings, s, profile] = await Promise.all([getSettings(), getSchedule(), getProfile()]);
   const { profile: next, breakdown, levelUp, newBadges } = award(profile, result, now, settings.workdays);
+  // The server now writes the leaderboard row from synced breaks; no direct score submit.
   await setProfile(next);
-  void submitScore(next, settings);
   const activity = (await getActivity()) ?? backfillActivity(await readLog());
   await setActivity(recordActivity(activity, now, breakdown.total));
   const scores = result.scores ?? [];
-  await appendLog({
+  const entry = {
+    id: randomUUID(),
     at: now,
     reps: result.countedReps,
     moves: result.moves.filter((m) => m.completed).length,
@@ -119,7 +123,9 @@ async function onDone(result: BreakResult, lastKey: string | null): Promise<Done
     xp: breakdown.total,
     scored: result.scored,
     completed: result.moves.length > 0 && result.moves.every((m) => m.completed),
-  });
+  };
+  await appendLog(entry);
+  await enqueue([toEvent(entry, [...new Set(result.moves.map((m) => m.area))])]);
   await save(
     {
       ...(applyAction(s, 'done', now, settings.intervalMin) as Schedule),
@@ -132,8 +138,10 @@ async function onDone(result: BreakResult, lastKey: string | null): Promise<Done
   return { breakdown, levelUp, newBadges, profile: next };
 }
 
-export function breakDone(result: BreakResult, lastKey: string | null): Promise<DoneOutcome> {
-  return queue(() => onDone(result, lastKey));
+export async function breakDone(result: BreakResult, lastKey: string | null): Promise<DoneOutcome> {
+  const out = await queue(() => onDone(result, lastKey));
+  void syncAccount();
+  return out;
 }
 
 // Snooze, Skip, Pause 1 hr from a break, or "close": leaving a reminder's
@@ -168,16 +176,50 @@ export function resume(): Promise<void> {
   });
 }
 
-export function settingsSaved(scheduleChanged: boolean): Promise<void> {
+function replan(scheduleChanged: boolean): Promise<void> {
   return queue(async () => {
-    const [settings, s, profile] = await Promise.all([getSettings(), getSchedule(), getProfile()]);
-    void submitScore(profile, settings);
+    const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
     const now = Date.now();
     if (s.nextAt == null || scheduleChanged) {
       await save({ ...s, nextAt: now + settings.intervalMin * MIN_MS, deferredFrom: null }, settings);
     } else {
       await save(s, settings);
     }
+  });
+}
+
+export async function settingsSaved(scheduleChanged: boolean): Promise<void> {
+  await replan(scheduleChanged);
+  void syncAccount();
+}
+
+// One shared break timer: a break finished on another device restarts the interval from it, so
+// the phone doesn't remind you right after you moved at your desk. A pause still holds, and a
+// break too long ago to matter leaves the schedule alone.
+async function onRemoteBreak(at: number): Promise<void> {
+  const now = Date.now();
+  const [settings, s] = await Promise.all([getSettings(), getSchedule()]);
+  if (!settings.setupDone || s.pausedUntil > now) return;
+  // Whole seconds: the OS fires date triggers on the second, up to ~1 s early (see plan.ts).
+  const nextAt = Math.ceil((at + settings.intervalMin * MIN_MS) / 1000) * 1000;
+  if (nextAt <= now) return;
+  await save({ ...(applyAction(s, 'done', at, settings.intervalMin) as Schedule), nextAt, dueAt: null, deferredFrom: null }, settings);
+}
+
+export function breakElsewhere(at: number): Promise<void> {
+  return queue(() => onRemoteBreak(at));
+}
+
+/**
+ * Syncs breaks, settings and progress with the signed-in account (sync.ts). Local writes run in
+ * the engine's queue; settings from another device replan reminders, and its breaks move the
+ * next one. Resolves null when signed out.
+ */
+export function syncAccount(): Promise<SyncResult | null> {
+  return runSync({
+    exclusive: queue,
+    onSettings: (before, after) => replan(scheduleSettingsChanged(before, after)),
+    onRemoteBreak: breakElsewhere,
   });
 }
 
