@@ -35,6 +35,23 @@ test('privacy page', async () => {
   expect(text).toContain('Competitive mode');
 });
 
+test('mobile sign-in callback hands the fragment to the app, with no other target', async () => {
+  const res = await fetch(`${server.http}/auth/mobile-callback`);
+  expect(res.status).toBe(200);
+  expect(res.headers.get('content-type')).toMatch(/^text\/html/);
+  expect(res.headers.get('cache-control')).toBe('no-store');
+  expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+  const csp = res.headers.get('content-security-policy') ?? '';
+  // The only script allowed is the page's own, pinned by hash.
+  expect(csp).toMatch(/(^|; )script-src 'sha256-[A-Za-z0-9+/]+=*'(;|$)/);
+  expect(csp).toContain("default-src 'none'");
+  const text = await res.text();
+  expect(text).toContain('"squatoverflow://auth?" + location.hash');
+  // A query string can't change where the page sends the user.
+  const other = await (await fetch(`${server.http}/auth/mobile-callback?redirect=https://evil.example`)).text();
+  expect(other).toBe(text);
+});
+
 test('embed page wraps a valid YouTube id', async () => {
   const res = await fetch(`${server.http}/embed/gBL3gYNtun0`);
   expect(res.status).toBe(200);
