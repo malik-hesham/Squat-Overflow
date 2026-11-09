@@ -6,7 +6,8 @@ import WebKit
 /// The pose model on this Mac: the extension's own lib/pose gateway and MediaPipe model, running in
 /// a web view that is never shown (PoseWeb/bridge.html). It takes the place of the pose server's
 /// WebSocket with the same messages, so SquatCore.PoseLink drives it unchanged: JSON text and JPEG
-/// frames go in, the server's JSON replies come out. Nothing leaves the Mac.
+/// frames go in, the server's JSON replies come out. Nothing leaves the Mac: bridge.html carries the
+/// extension's Content-Security-Policy, which keeps the page (and MediaPipe's own logging) off the network.
 ///
 /// The pages load from the app bundle through the `squatpose://` scheme, because ES modules and
 /// WebAssembly don't load from file:// URLs.
@@ -18,7 +19,8 @@ final class PoseBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     var onText: (String) -> Void = { _ in }
     var onClose: (Int) -> Void = { _ in }
 
-    private var webView: WKWebView?
+    /// Readable so the tests can watch what the page requests.
+    private(set) var webView: WKWebView?
     private var loaded = false
     private var pending: [String] = [] // calls made before bridge.js ran
     private var closed = false

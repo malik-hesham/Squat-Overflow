@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct SquatOverflowBarApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
 
     var body: some Scene {
@@ -13,6 +14,15 @@ struct SquatOverflowBarApp: App {
             MenuBarLabel(model: model)
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// The unit tests run inside the app and wait on the pose model, so the app stays open for them.
+    /// SwiftUI quits an app whose only scene is a MenuBarExtra when macOS hides its item
+    /// (System Settings > Menu Bar), which can happen before the first test starts.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        AppModel.underTests ? .terminateCancel : .terminateNow
     }
 }
 
