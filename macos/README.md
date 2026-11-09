@@ -12,7 +12,7 @@ A native SwiftUI menu bar app (macOS 14+, no Dock icon) that runs Squat Overflow
 | Break window (`break.html`, `break.js`) | Break window (`BreakView.swift`, `BreakController.swift`) running `SquatCore.BreakSession` |
 | Service worker + `chrome.alarms` (`service-worker.js`) | `SquatCore.Engine`, a `Timer` for the next break, a 60 s sync timer |
 | `chrome.storage.local` (`lib/store.js`) | `~/Library/Application Support/SquatOverflowBar/store.json`, with the same keys (`SquatCore.Store`) |
-| On-device pose (`lib/pose`, MediaPipe in the page, through `lib/pose-client.js`) | The same code and model: `PoseBridge.swift` runs `extension/lib/pose` and the vendored MediaPipe in a web view that is never shown (`PoseWeb/bridge.html`, files served from the app bundle). It speaks the old server's messages, so `SquatCore.PoseLink` decides what to send, as before |
+| On-device pose (`lib/pose`, MediaPipe in the page, through `lib/pose-client.js`) | The same code and model: `PoseBridge.swift` runs `extension/lib/pose` and the vendored MediaPipe in a web view that is never shown (`PoseWeb/bridge.html`, files served from the app bundle). It speaks the old server's messages, so `SquatCore.PoseLink` decides what to send, as before. The page carries the manifest's Content-Security-Policy (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'` only: Swift talks to the API server, not the page), which also stops MediaPipe's own usage logging to `odml.pa.googleapis.com` |
 | `chrome.idle` | Seconds since the last input, screen lock (`Presence.swift`) |
 | Sync (`lib/sync.js`, `lib/sync-core.js`) | `SquatCore.SyncClient` and `SquatCore.SyncCore`, device `mac` |
 | Web Speech, `Audio` meme clips | `AVSpeechSynthesizer`, `AVAudioPlayer` (`Sounds.swift`) |
@@ -37,7 +37,7 @@ Break now and the scheduled reminder open the same break as the extension:
 
 If the camera is denied or the pose model can't start, the break goes on by hand with no XP ("Camera unavailable", "Coach unavailable"), as in the extension.
 
-The camera preview is mirrored. With privacy on (the default, "Blur") the person is blurred using the mask the pose model makes, and the whole frame is blurred while there's no fresh mask. Frames stay on this Mac and are never recorded; a break works with no network.
+The camera preview is mirrored. With privacy on (the default, "Blur") the person is blurred using the mask the pose model makes, and the whole frame is blurred while there's no fresh mask. Frames stay on this Mac and are never recorded; a break works with no network, and the pose page can't reach one (its policy allows only the app's own files).
 
 ### Gaps
 
