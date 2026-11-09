@@ -5,3 +5,6 @@
 dist/
 
 node_modules/
+
+# Server secrets for deploy/docker-compose.yml
+deploy/.env

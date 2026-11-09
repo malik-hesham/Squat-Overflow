@@ -42,6 +42,8 @@ docker run -p 8080:8080 \
 
 Put TLS in front of the container (a load balancer, reverse proxy or the host's own HTTPS) and check `https://<host>/health` and `https://<host>/privacy`.
 
+**On one machine:** [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) runs the server, Postgres and Caddy (automatic Let's Encrypt HTTPS) together. [aws-free-plan.md](aws-free-plan.md) walks through it on a single EC2 instance within the AWS Free plan's credits, including updates, rollback and backups.
+
 Every open break holds one WebSocket and one BlazePose detector, and inference for all sessions in a process shares one Node event loop. `FORMCOACH_MAX_SESSIONS` (default 6) caps sessions per process; add instances past that, and check `latency_ms` in frame results under load before raising it. The pose stream has no login (sign-in only gates the leaderboard), and the origin allowlist keeps web pages out but scripts can fake an Origin. The cap keeps a flood of connections from slowing the sessions already open, but it can't stop that flood from filling the slots; a per-IP connection limit at your host or proxy does that.
 
 Deploy the server before tagging a release whose extension needs new server behaviour. **Keep the WebSocket protocol backward compatible** (add message fields, don't rename or remove them), because store updates wait for review and old extensions keep talking to the new server.
