@@ -1,9 +1,10 @@
 # Squat Overflow menu bar app (macOS)
 
-A SwiftUI `MenuBarExtra` app (macOS 14+, no Dock icon) that shows your synced Squat Overflow data and hands breaks off to Chrome. It doesn't use the camera.
+A SwiftUI `MenuBarExtra` app (macOS 14+, no Dock icon) that shows your next break and hands breaks off to Chrome. Sign-in is optional, as in the extension. If you sign in, it also shows your synced Squat Overflow data. It doesn't use the camera.
 
 - **Menu bar title:** the countdown to your next break. It's computed from the shared settings (`intervalMin`, `activeStart`/`activeEnd`, `workdays`) and the newest break on any device (`lastBreakAt`), using the rules in `extension/lib/schedule.js`.
-- **Menu:** level and XP bar, streak, today's breaks, week XP, and your team's top 5 for the week.
+- **Signed out (the default):** the countdown, **Break now**, **Open settings**, and an optional **Continue with Google** row. The app never asks you to sign in. The countdown uses the extension's default schedule (`SETTINGS_DEFAULTS` in `extension/lib/store.js`: every 60 min, 09:00–17:00, Monday–Friday), counted from when today's window opened. The Mac app can't read the extension's local storage, so it doesn't know your own schedule or your last break until you sign in. Signed out, the countdown can be off from the extension's timer. That's the gap.
+- **Signed in:** level and XP bar, streak, today's breaks, week XP, and your team's top 5 for the week. The countdown uses your synced settings.
 - **Break now** opens the extension's start page (`SO_START_URL`, from PR #10 / `docs/start-break-link.md`) in Chrome, which starts a break. **Open settings** opens the extension's options page, `chrome-extension://<SO_EXTENSION_ID>/options.html`. **Sign out** removes the session from Keychain.
 - **Data:** `GET /me/profile?day=&week=`, `GET /me/settings` and `GET /leaderboard?period=week`, fetched every 60 s and each time the menu opens.
 

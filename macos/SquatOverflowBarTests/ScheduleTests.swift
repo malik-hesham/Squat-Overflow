@@ -81,6 +81,17 @@ final class ScheduleTests: XCTestCase {
         XCTAssertEqual(r.settings.workdays, [1, 2])
     }
 
+    func testSignedOutCountsDownOnTheExtensionDefaults() {
+        // SETTINGS_DEFAULTS in extension/lib/store.js.
+        let s = AppModel.countdownSettings(signedIn: false, synced: nil)
+        XCTAssertEqual(s, ScheduleSettings(intervalMin: 60, activeStart: "09:00", activeEnd: "17:00", workdays: [1, 2, 3, 4, 5]))
+        // Signed in, it waits for the synced settings instead of showing the defaults first.
+        XCTAssertNil(AppModel.countdownSettings(signedIn: true, synced: nil))
+        var synced = ScheduleSettings()
+        synced.intervalMin = 30
+        XCTAssertEqual(AppModel.countdownSettings(signedIn: true, synced: synced)?.intervalMin, 30)
+    }
+
     func testIdTokenFromRedirect() {
         XCTAssertEqual(Auth.idToken(from: URL(string: "squatoverflow://auth?id_token=abc.def&authuser=0")!), "abc.def")
         XCTAssertNil(Auth.idToken(from: URL(string: "squatoverflow://auth?error=access_denied")!))

@@ -44,9 +44,17 @@ final class AppModel: ObservableObject {
     // MARK: Derived
 
     var nextBreak: Date? {
-        guard session != nil, let settings else { return nil }
+        guard let s = Self.countdownSettings(signedIn: session != nil, synced: settings) else { return nil }
         let last = profile?.lastBreakAt.map { Date(timeIntervalSince1970: $0 / 1000) }
-        return Schedule.nextBreak(now: now, lastBreakAt: last, settings: settings)
+        return Schedule.nextBreak(now: now, lastBreakAt: last, settings: s)
+    }
+
+    /// The schedule the countdown runs on. Sign-in is optional (the extension starts in Personal
+    /// mode with no account), so signed out the app counts down on the extension's defaults
+    /// (SETTINGS_DEFAULTS in extension/lib/store.js). Signed in, it waits for the synced settings
+    /// rather than flashing the defaults first.
+    nonisolated static func countdownSettings(signedIn: Bool, synced: ScheduleSettings?) -> ScheduleSettings? {
+        signedIn ? synced : ScheduleSettings()
     }
 
     /// The menu bar title: the next-break countdown, or nothing when there's no data yet.
