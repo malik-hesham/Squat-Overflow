@@ -101,7 +101,7 @@ So the analysis exists twice (server and mobile), and the extension can't run a 
 
 - [ ] 12. End-to-end check.
       With the network off: finish a break in Chrome, on the phone, in the Mac app and in the VS Code extension; XP, streak and today's count update in each. Sign in on two clients, go online: each offline break uploads once and shows on the other client.
-      Run on 2026-11-09, all checks passed:
+      Re-run it with `scripts/cross-device/run.mjs` (build the server first; needs Postgres, Playwright and Swift; see its header). Run on 2026-11-09, all checks passed:
       - Setup: the real API server from this branch (`server/dist`) on a fresh Postgres 18 database, all three clients signed in to one test account through the server's own `POST /auth/google`. Only Google's key check was a local test key, as in `server/test/support/google.ts`. "Network off" = the API server stopped.
       - Clients: Chrome = the real extension in Playwright's Chromium, its break started with Break now like the popup; phone = mobile's real engine and sync code (`breakDone`, `syncAccount`) under Jest; Mac = SquatCore's real `Engine` and `SyncClient` under `swift test`.
       - Network off: each device counted its break right away (today 0 → 1) and queued it; the phone and the Mac went from 0 to 35 XP (Chrome's break scored 0 XP: the test camera shows nobody); a sync attempt failed and kept the queue; the server had 0 breaks.
