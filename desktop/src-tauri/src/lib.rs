@@ -487,9 +487,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<TrayUi> {
         .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, rect, .. } = event {
-                if let Err(err) = toggle_popup(tray.app_handle(), Some(rect)) {
-                    eprintln!("popup: {err}");
-                }
+                off_event_loop(tray.app_handle(), move |app| toggle_popup(app, Some(rect)));
             }
         })
         .build(app)?;
@@ -497,20 +495,28 @@ fn build_tray(app: &AppHandle) -> tauri::Result<TrayUi> {
 }
 
 fn on_menu(app: &AppHandle, id: &str) {
-    let done = match id {
-        "open" => toggle_popup(app, None),
-        "settings" => show_options(app),
-        "break-now" => Ok(post_to_background(app, "break-now")),
+    match id {
+        "open" => off_event_loop(app, |app| toggle_popup(app, None)),
+        "settings" => off_event_loop(app, show_options),
+        "break-now" => post_to_background(app, "break-now"),
         "pause" => {
             let paused = app.state::<Shell>().paused.load(Ordering::Relaxed);
-            Ok(post_to_background(app, if paused { "resume" } else { "pause" }))
+            post_to_background(app, if paused { "resume" } else { "pause" })
         }
-        "quit" => Ok(app.exit(0)),
-        _ => Ok(()),
-    };
-    if let Err(err) = done {
-        eprintln!("menu {id}: {err}");
+        "quit" => app.exit(0),
+        _ => {}
     }
+}
+
+/// Runs `work` on another thread. Tray and menu events arrive on the event loop, and building a
+/// window from there deadlocks on Windows (WebView2), so windows are built from here.
+fn off_event_loop(app: &AppHandle, work: impl FnOnce(&AppHandle) -> Result<(), String> + Send + 'static) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Err(err) = work(&app) {
+            eprintln!("window: {err}");
+        }
+    });
 }
 
 fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
@@ -550,9 +556,7 @@ fn debug_hooks(app: &AppHandle) {
                     return on_menu(&handle, &id);
                 }
                 let icon = handle.state::<Shell>().tray.lock().unwrap().as_ref().and_then(|tray| tray.icon.rect().ok().flatten());
-                if let Err(err) = toggle_popup(&handle, icon) {
-                    eprintln!("popup: {err}");
-                }
+                off_event_loop(&handle, move |app| toggle_popup(app, icon));
             });
             std::thread::sleep(Duration::from_secs(3));
         }

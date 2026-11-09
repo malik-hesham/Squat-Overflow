@@ -25,6 +25,8 @@ This is a proof of concept. "What has been checked" below says what has run and 
 | On-device pose (`lib/pose`, MediaPipe) | The same code and model, in the break window's webview |
 | Demo clips on youtube.com | Open in the user's browser. The app never loads a web page in its own windows |
 
+The app keeps the extension's Content Security Policy (`tauri.conf.json`), and it does real work: the vendored MediaPipe tries to send a log request to `odml.pa.googleapis.com`, and the policy blocks it here as it does in the extension.
+
 The shim covers the `chrome.*` calls the extension makes today (about 30). If the extension starts using a new one, add it to `shim/chrome-shim.js` and, if it needs the system, a command in `src-tauri/src/lib.rs`.
 
 ## What has been checked
@@ -35,6 +37,7 @@ On macOS 26 (Apple silicon), by running a debug build and reading the log (`SO_T
 - With setup done: the countdown reaches the menu bar and ticks every second in the last minute (`51s`, `50s`, …), from the hidden page.
 - A click on the icon opens the popup under it, with the level, next break, challenges and heatmap rendered.
 - Pause from the menu sets `pausedUntil` in the store and turns the label into Resume; Resume turns it back.
+- With the language set to Arabic, the menu labels, the tooltip, the popup and the Settings page are in Arabic.
 - The pose model loads in the app's webview with WebGL2 and analyses frames (a blank test frame, no camera).
 - No page error and no blocked request under the extension's own Content Security Policy.
 
@@ -44,11 +47,17 @@ The same checks pass in the packaged `.app` (`cargo tauri build --debug`), with 
 
 - **The packaged app's icon wasn't placed in the menu bar on the test Mac (macOS 26.6).** The system reported the icon at the bottom-left corner of the screen, which is where an item sits that isn't shown, and the popup opened there. The binary run straight from `target/debug` is placed correctly. On that Mac the saved setting `NSStatusItem VisibleCC Item-0` is `0` for other apps' icons too (the SwiftUI app `com.squatoverflow.bar`, UTM, Parallels) and `1` only for Apple's own, so this looks like the Mac's menu bar settings (System Settings › Menu Bar) and not the app. It isn't confirmed: nobody has looked at the screen, and the setting wasn't changed.
 
+On Linux, in a container (Debian 12, WebKitGTK 2.50, a virtual display, no GPU and no tray):
+
+- The app builds and `cargo test` passes.
+- `service-worker.js` runs, the countdown ticks, the popup opens as a window with its content rendered, and Pause works.
+- **The pose model doesn't run there as shipped.** WebKitGTK has WebGL2 on a canvas element but not on an `OffscreenCanvas`, and MediaPipe makes an `OffscreenCanvas` of its own, so both of its modes fail. Given a canvas element (MediaPipe's `canvas` option) both work: 35 ms a frame on the CPU. So a break on Linux needs `extension/lib/pose/detector.js` to pass a canvas where `OffscreenCanvas` has no WebGL2. That isn't done here: the detector is shared with Chrome, Firefox and the Mac app, and the change should be tested in each.
+
 **Not checked yet:**
 
 - **A break with the real camera, on any system.** `break.html` hasn't been opened in the app, so `getUserMedia`, the camera prompt, rep counting, voice cues and meme clips are untested here. The pieces under it (the page, the model, the messages) are checked above.
 - **Windows.** Nothing has been built or run on Windows. CI builds it (`.github/workflows/ci.yml`, job `desktop`) once the branch is pushed.
-- **Linux on a real desktop.** See the Linux line in "Open questions".
+- **Linux on a real desktop.** The container has no tray, camera or GPU, so the icon, its menu and a camera break are untested there. GNOME needs the AppIndicator extension to show any tray icon.
 - How the icon and title look. The checks above read logs, not the screen.
 
 ## One change in the extension
@@ -70,7 +79,7 @@ Things the extension does that this app doesn't, or does differently:
 
 ## Open questions
 
-- **Linux webview.** WebKitGTK decides whether the camera, WebGL2, speech and Ogg audio work, and it varies by distribution. A break needs to be tried on a real desktop (GNOME needs the AppIndicator extension to show any tray icon).
+- **Linux webview.** Besides the pose model (above), WebKitGTK decides whether the camera, speech and Ogg audio work, and it varies by distribution.
 - **Meme clips on older macOS.** They are Ogg Vorbis, which WebKit plays only in recent versions. The Mac app bundles AAC copies for this reason (`mobile/assets/sounds/memes`).
 - **This app and `macos/`.** On a Mac it does the same job as the SwiftUI app, with fewer gaps in some places (the 3D characters, Practice, the heatmap and themes come with the pages) and more in others (sign-in, meetings). Whether it replaces that app or only covers Windows and Linux is a product decision.
 
