@@ -59,6 +59,18 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+  deploy:
+    name: AWS deploy script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # deploy/aws-provision.sh against a fake AWS CLI; also checks nothing upgrades the Free plan.
+      - run: node --test 'deploy/tests/*.test.mjs'
+      - run: shellcheck deploy/aws-provision.sh deploy/tests/fake-aws/aws
+
   docker:
     name: Pose server image
     runs-on: ubuntu-latest

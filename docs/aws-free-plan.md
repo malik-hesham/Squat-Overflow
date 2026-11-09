@@ -11,7 +11,9 @@ extension ── wss://<DOMAIN>/ws, https://<DOMAIN> ──▶ EC2 instance (Ela
 
 ## What the Free plan covers
 
-AWS accounts on the **Free plan** get $100 in credits, plus up to $100 more for sign-up activities (launching EC2, creating a budget, …). The plan ends after **6 months or when the credits run out**, whichever comes first, and the account then closes unless you upgrade to the Paid plan. Check your own credit balance and end date under **Billing and Cost Management → Credits**.
+AWS accounts on the **Free plan** get $100 in credits, plus up to $100 more for sign-up activities (launching EC2, creating a budget, …). The plan ends after **6 months or when the credits run out**, whichever comes first, and the account then closes unless you upgrade to the Paid plan. Check your own credit balance and end date under **Billing and Cost Management → Credits**, or run `aws freetier get-account-plan-state --profile squat-overflow --region us-east-1`.
+
+**We stay on the Free plan.** Our account (`323036354551`) won't be upgraded to the Paid plan (see the root [CLAUDE.md](../CLAUDE.md)). So everything here has to fit the plan's credits and instance types, and the server has to move off before the plan ends.
 
 | Item | Choice | About per month |
 |------|--------|-----------------|
@@ -23,7 +25,7 @@ AWS accounts on the **Free plan** get $100 in credits, plus up to $100 more for 
 
 These are estimates; check them in the [AWS Pricing Calculator](https://calculator.aws/) for your region. There is no load balancer (~$18/month) and no RDS (~$15/month); together they would use up $100 of credits in about two months.
 
-> **Before month 6**, upgrade the account to the Paid plan or move the server (see [Moving off the instance](#moving-off-the-instance)). Store builds of the extension have the server's hostname built in, so if the account closes, every installed extension shows "offline".
+> **Before the plan's end date**, move the server to another account or provider (see [Moving off the instance](#moving-off-the-instance)). We don't upgrade this account, so it closes then, and the instance and its disk go with it. Store builds of the extension have the server's hostname built in, so a server that disappears shows "offline" in every installed extension; one that moved behind the same hostname keeps working.
 
 **Capacity:** every open break holds one WebSocket and one BlazePose detector. On this instance, plan for **2–4 breaks at the same time**, not the 4–6 of a dedicated 2 GB machine, because the CPU is burstable and Postgres shares the memory. `FORMCOACH_MAX_SESSIONS` in `.env` (3 by default here) enforces that: past it, new clients are closed with "server busy" and the break page shows "Coach busy". Raise it only if `latency_ms` in frame results stays low with that many breaks running.
 
@@ -32,6 +34,47 @@ These are estimates; check them in the [AWS Pricing Calculator](https://calculat
 Caddy needs a DNS name for the certificate, and the store build of the extension points at that name. **Use a domain you control** (e.g. `pose.yourcompany.com`). When the server moves later, you change one DNS record and installed extensions keep working with no store update. A name tied to the instance's IP can't move.
 
 ## 2. Launch the instance
+
+### With the CLI (recommended)
+
+[`deploy/aws-provision.sh`](../deploy/aws-provision.sh) does steps 1, 2 and 4 of the console list below, and it is safe to run again: it finds what it created by name and creates only what's missing. It checks that the account's Free plan is active, refuses instance types that aren't *Free tier eligible*, creates the $25 budget alert before anything that costs money, and never upgrades the plan.
+
+One-time CLI sign-in setup. Add this to `~/.aws/config`. Our IAM Identity Center is in `us-east-1`; the server runs in `eu-central-1`:
+
+```ini
+[sso-session squat-overflow]
+sso_start_url = https://d-9067642ac7.awsapps.com/start
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+
+[profile squat-overflow]
+sso_session = squat-overflow
+sso_account_id = 323036354551
+sso_role_name = <your permission set, e.g. AdministratorAccess>
+region = eu-central-1
+```
+
+(`aws configure sso --profile squat-overflow` asks the same questions and lists the permission sets you can pick from.) Then:
+
+```bash
+aws sso login --profile squat-overflow
+BUDGET_EMAIL=you@example.com bash deploy/aws-provision.sh
+```
+
+| Variable | Default | |
+|----------|---------|-|
+| `AWS_PROFILE` | `squat-overflow` | CLI profile to use |
+| `AWS_REGION` | the profile's region | Region for the instance |
+| `INSTANCE_TYPE` | `t4g.small` | Must be *Free tier eligible*; `t3.small` if `t4g.small` isn't |
+| `BUDGET_EMAIL` | (none) | Required the first time, for the budget alert |
+| `KEY_FILE` | `~/.ssh/squat-overflow.pem` | Where the new SSH key is saved. An existing file is never overwritten |
+| `MY_IP` | from checkip.amazonaws.com | The only address allowed to SSH in |
+
+The instance gets `CpuCredits=standard`. T instances default to *unlimited* credits, which bill extra when the CPU stays above baseline; with standard credits it slows down instead. The script prints the Elastic IP. Continue at step 3 of the console list (the DNS record), then [3. Install and start](#3-install-and-start).
+
+Tests: `node --test 'deploy/tests/*.test.mjs'` runs the script against a fake AWS CLI.
+
+### In the console
 
 In the AWS console, in one region (e.g. **eu-central-1, Frankfurt**):
 
@@ -136,7 +179,7 @@ All containers restart on their own after a crash or an instance reboot.
 
 ## Moving off the instance
 
-To upgrade to a bigger host, a managed setup (ECS on Fargate + ALB + RDS) or another provider, before the Free plan ends:
+Before the Free plan's end date (or sooner, if the server outgrows the instance), move to another host or provider. A managed setup (ECS on Fargate + ALB + RDS) doesn't fit in Free plan credits.
 
 1. Start the server on the new host with the same `AUTH_JWT_SECRET`, `GOOGLE_CLIENT_ID` and `FORMCOACH_ALLOWED_ORIGINS`, so users stay signed in.
 2. Take a backup (above) and restore it into the new database.

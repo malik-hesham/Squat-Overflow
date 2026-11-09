@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stand-in for the AWS CLI in deploy/tests. Logs every call to $FAKE_AWS_DIR/calls.log and answers
+# "aws <service> <command> ..." from $FAKE_AWS_DIR/<service>_<command>.out (stdout) and .exit (exit code).
+printf '%s\n' "$*" >>"$FAKE_AWS_DIR/calls.log"
+key="$1_$2"
+if [ -f "$FAKE_AWS_DIR/$key.out" ]; then cat "$FAKE_AWS_DIR/$key.out"; fi
+if [ -f "$FAKE_AWS_DIR/$key.exit" ]; then exit "$(cat "$FAKE_AWS_DIR/$key.exit")"; fi
+exit 0
