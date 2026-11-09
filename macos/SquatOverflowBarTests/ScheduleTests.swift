@@ -92,6 +92,12 @@ final class ScheduleTests: XCTestCase {
         XCTAssertEqual(AppModel.countdownSettings(signedIn: true, synced: synced)?.intervalMin, 30)
     }
 
+    func testBreakNowOpensTheExtensionsStartPage() {
+        // extension/start.html sends the popup's "break-now" message; no server or hosted page involved.
+        XCTAssertEqual(Config.startURL.absoluteString, "chrome-extension://lpkaoaegdjhciohkfidnmabjigidofnd/start.html")
+        XCTAssertEqual(Config.optionsURL.absoluteString, "chrome-extension://lpkaoaegdjhciohkfidnmabjigidofnd/options.html")
+    }
+
     func testIdTokenFromRedirect() {
         XCTAssertEqual(Auth.idToken(from: URL(string: "squatoverflow://auth?id_token=abc.def&authuser=0")!), "abc.def")
         XCTAssertNil(Auth.idToken(from: URL(string: "squatoverflow://auth?error=access_denied")!))

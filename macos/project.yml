@@ -13,8 +13,6 @@ settings:
     # The NestJS server (server/). Override per build:
     #   xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://pose.example.com
     SO_SERVER_URL: "http://127.0.0.1:8765"
-    # The Chrome extension's start page (PR #10, docs/start-break-link.md): opening it starts a break.
-    SO_START_URL: "https://hysvvrdopodlqvuxnvco.supabase.co/start/"
     # The extension's fixed ID, derived from the "key" in extension/manifest.json.
     SO_EXTENSION_ID: "lpkaoaegdjhciohkfidnmabjigidofnd"
     # The extension's web OAuth client (extension/config.js), so the server needs no new client.
@@ -33,7 +31,6 @@ targets:
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         SOServerURL: $(SO_SERVER_URL)
-        SOStartURL: $(SO_START_URL)
         SOExtensionID: $(SO_EXTENSION_ID)
         SOGoogleClientID: $(SO_GOOGLE_CLIENT_ID)
         NSAppTransportSecurity:

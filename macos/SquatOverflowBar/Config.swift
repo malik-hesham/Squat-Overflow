@@ -14,11 +14,11 @@ enum Config {
         return URL(string: raw) ?? URL(string: "http://127.0.0.1:8765")!
     }()
 
-    /// The page from PR #10 whose content script starts a break in the Chrome extension.
-    static let startURL = URL(string: string("SOStartURL", "https://hysvvrdopodlqvuxnvco.supabase.co/start/"))!
-
-    /// The extension's fixed ID (from the manifest "key"), for its options page.
+    /// The extension's fixed ID (from the manifest "key"), for its start and options pages.
     static let extensionID = string("SOExtensionID", "lpkaoaegdjhciohkfidnmabjigidofnd")
+
+    /// extension/start.html: sends the popup's "break-now" message, then closes its tab.
+    static var startURL: URL { URL(string: "chrome-extension://\(extensionID)/start.html")! }
 
     static var optionsURL: URL { URL(string: "chrome-extension://\(extensionID)/options.html")! }
 

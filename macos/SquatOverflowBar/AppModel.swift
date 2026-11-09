@@ -109,7 +109,7 @@ final class AppModel: ObservableObject {
         auth.signOut()
     }
 
-    /// Starts a break in the Chrome extension through the start page from PR #10.
+    /// Starts a break in the Chrome extension: extension/start.html does what the popup's Break now does.
     func breakNow() { openInChrome(Config.startURL) }
 
     /// Settings are edited in the extension; open its options page.
