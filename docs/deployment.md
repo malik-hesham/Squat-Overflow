@@ -1,52 +1,53 @@
 # Deployment and releases
 
-Squat Overflow has no hosted pose server. The release workflow ships the extension; you run the server yourself.
+The release workflow ships the extension. Breaks need no server: pose detection, rep counting and form scoring run in the extension (and in the mobile app), and camera frames never leave the device. The API server in `server/` is optional. It adds Google sign-in, the team leaderboard and cross-device sync, and you run it yourself.
 
 | Part | Where it runs | Deployed by |
 |------|---------------|-------------|
-| Pose server, sign-in, leaderboard and sync API (`server/`) | Any container host you choose, from `server/Dockerfile` | You (not automated) |
+| API server: sign-in, leaderboard and sync (`server/`, optional) | Any container host you choose, from `server/Dockerfile` | You (not automated) |
 | Leaderboard database | Postgres at `DATABASE_URL` | Schema migrations run when the server starts |
 | Extension (`extension/`) | Chrome Web Store | `scripts/publish-cws.mjs` in the release workflow |
 
 ```
 PR / push to main ── CI (.github/workflows/ci.yml)
                      server tests (incl. auth, leaderboard and migrations on in-process Postgres) · extension tests
-                     · store zip (only when POSE_SERVER_URL is set) · Docker image smoke test
+                     · build script tests · store zip (for API_URL, or local only) · Docker image smoke test
 
 tag vX.Y.Z ──────── Release (.github/workflows/release.yml)
-                     verify tag == manifest version and POSE_SERVER_URL is set → CI (builds the zip)
+                     verify tag == manifest version → CI (builds the zip)
                      → GitHub Release (+ zip) → Chrome Web Store (submit for review)
 ```
 
-## Running the pose server
+## Running the API server
 
-Build and run the image anywhere that can serve HTTPS and WebSockets (the extension needs `wss://` for a store build):
+Build and run the image anywhere that can serve HTTPS:
 
 ```bash
-docker build --build-arg VERSION=v0.4.0 -t squat-overflow-pose server
+docker build --build-arg VERSION=v0.4.0 -t squat-overflow-api server
 docker run -p 8080:8080 \
   -e FORMCOACH_ALLOWED_ORIGINS='chrome-extension://lpkaoaegdjhciohkfidnmabjigidofnd' \
   -e GOOGLE_CLIENT_ID='<the client ID in extension/config.js>' \
   -e DATABASE_URL='postgres://…' \
   -e AUTH_JWT_SECRET="$(openssl rand -base64 48)" \
-  squat-overflow-pose
+  squat-overflow-api
 ```
 
 | Variable | Purpose |
 |----------|---------|
-| `FORMCOACH_ALLOWED_ORIGINS` | Extension origins allowed to open the WebSocket, comma-separated. Start with the unpacked dev ID; add `chrome-extension://<store-id>` after the first store upload. |
+| `FORMCOACH_ALLOWED_ORIGINS` | Extension origins allowed to call the API (CORS), comma-separated. Start with the unpacked dev ID; add `chrome-extension://<store-id>` after the first store upload. |
 | `GOOGLE_CLIENT_ID` | Google sign-in ID tokens must be issued for this client. Must match `extension/config.js`. |
-| `DATABASE_URL` | Postgres 13+ for accounts, the leaderboard and sync. Use `sslmode=require` over the internet. Without it, pose detection works and those endpoints answer 503. |
+| `DATABASE_URL` | Postgres 13+ for accounts, the leaderboard and sync. Use `sslmode=require` over the internet. Without it, those endpoints answer 503. |
 | `AUTH_JWT_SECRET` | Signs session tokens. Changing it signs every user out; they sign in again with one click. |
-| `FORMCOACH_MAX_SESSIONS` | Open pose sessions per process, default `6`. Past it, new clients are closed with code 1013 "server busy": the break page shows "Coach busy" and the trainer shows "Server busy" and retries. `0` turns the cap off. |
 
 Put TLS in front of the container (a load balancer, reverse proxy or the host's own HTTPS) and check `https://<host>/health` and `https://<host>/privacy`.
 
 **On one machine:** [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) runs the server, Postgres and Caddy (automatic Let's Encrypt HTTPS) together. [aws-free-plan.md](aws-free-plan.md) walks through it on a single EC2 instance within the AWS Free plan's credits, including updates, rollback and backups.
 
-Every open break holds one WebSocket and one BlazePose detector, and inference for all sessions in a process shares one Node event loop. `FORMCOACH_MAX_SESSIONS` (default 6) caps sessions per process; add instances past that, and check `latency_ms` in frame results under load before raising it. The pose stream has no login (sign-in only gates the leaderboard), and the origin allowlist keeps web pages out but scripts can fake an Origin. The cap keeps a flood of connections from slowing the sessions already open, but it can't stop that flood from filling the slots; a per-IP connection limit at your host or proxy does that.
+Clients only call the server while the user is signed in. Signed out, or with the server down, breaks still run and are saved on the device; signed-in clients queue their breaks and upload them when the server is back.
 
-Deploy the server before tagging a release whose extension needs new server behaviour. **Keep the WebSocket protocol backward compatible** (add message fields, don't rename or remove them), because store updates wait for review and old extensions keep talking to the new server.
+Deploy the server before tagging a release whose extension needs new server behaviour. **Keep the API backward compatible** (add fields, don't rename or remove them), because store updates wait for review and old extensions keep talking to the new server.
+
+**Old extension builds:** versions before the on-device pose model streamed camera frames to the server over `/ws`, which this server no longer has. Ship the extension update first; until users have it, their breaks fall back to the manual instructions.
 
 ## Releasing a version
 
@@ -65,18 +66,20 @@ If a job fails, fix the cause on `main`, delete the tag (`git push --delete orig
 
 ## Local development
 
-"Load unpacked" on `extension/` talks to `ws://127.0.0.1:8765/ws` and `http://127.0.0.1:8765`, the local server from the README. Build a store zip locally with:
+"Load unpacked" on `extension/` runs breaks on its own and calls `http://127.0.0.1:8765`, the local API server from the README, for sign-in and sync. Build a store zip locally with:
 
 ```bash
-POSE_SERVER_URL=wss://pose.example.com/ws node scripts/build-extension.mjs
+node scripts/build-extension.mjs                                  # local only: no sign-in, leaderboard or sync
+API_URL=https://api.example.com node scripts/build-extension.mjs   # with your API server
 ```
 
-`POSE_SERVER_URL` is required. The command writes `dist/extension/` (load it unpacked to try the store build) and `dist/squat-overflow-<version>.zip`. The build differs from `extension/` in three ways (the type-checking files, `tsconfig.json`, `*.d.ts` and `node_modules/`, are left out too):
-- `config.js` points `POSE_SERVER_URL` at your server and `API_URL` at the same host over `https://`.
+The command writes `dist/extension/` (load it unpacked to try the store build) and `dist/squat-overflow-<version>.zip`. `API_URL` is optional and must be `https://`. The build differs from `extension/` like this:
+- `config.js`'s `API_URL` is your server, or `""` for a local-only build, which hides sign-in and the leaderboard and makes no requests of its own.
+- The manifest CSP `connect-src` loses the localhost entries and gains `API_URL`'s origin.
 - The manifest `key` is removed.
-- `tests/` is left out.
+- `tests/`, `scripts/` and the type-checking files (`tsconfig.json`, `*.d.ts`, `*.d.mts`, `node_modules/`) are left out.
 
-Both `wss://<host>` and `https://<host>` must be in the manifest CSP `connect-src`; the build fails if they aren't.
+The zip carries the MediaPipe runtime and pose model (`extension/lib/vendor/mediapipe/`, refreshed with `cd extension && npm run vendor`), so it is about 10 MB. `node --test 'scripts/tests/*.test.mjs'` checks the build.
 
 ## Database migrations
 
@@ -86,18 +89,17 @@ Demo data for the leadliaison.com board: `psql "$DATABASE_URL" -f server/scripts
 
 ## One-time setup
 
-You need admin access to the GitHub repo and owner access to the Google Cloud and Chrome Web Store accounts, plus a running pose server (above). Do the steps in this order.
+You need admin access to the GitHub repo and owner access to the Google Cloud and Chrome Web Store accounts. For sign-in, the leaderboard and sync you also need a running API server (above). Do the steps in this order.
 
-### 1. Point the extension at your server
-1. Add `wss://<host>` and `https://<host>` to `connect-src` in `extension/manifest.json`.
-2. In **Settings → Secrets and variables → Actions → Variables**, set `POSE_SERVER_URL` to `wss://<host>/ws`. CI builds the store zip only while it is set, and releases fail without it.
+### 1. Point the extension at your API server (optional)
+In **Settings → Secrets and variables → Actions → Variables**, set `API_URL` to `https://<host>`. It replaces the old `POSE_SERVER_URL` variable, which you can delete. Without `API_URL`, CI and releases build a local-only zip.
 
 ### 2. GitHub
 In **Settings → Environments**, create `production`. Optionally, add yourself as a required reviewer so every store submission waits for a click. Then add:
 
 | Kind | Name | Value |
 |------|------|-------|
-| Variable | `POSE_SERVER_URL` | `wss://<host>/ws` (repository variable, step 1) |
+| Variable | `API_URL` | `https://<host>` (repository variable, step 1; optional) |
 | Secret | `CWS_SERVICE_ACCOUNT_JSON` | Service-account JSON key from step 4 |
 | Variable | `CWS_PUBLISHER_ID` | Developer Dashboard → Publisher → Settings |
 | Variable | `CWS_ITEM_ID` | The store item ID (= extension ID) from step 3. While this is empty, releases skip the store job. |
@@ -105,7 +107,7 @@ In **Settings → Environments**, create `production`. Optionally, add yourself 
 ### 3. Chrome Web Store: first upload (manual)
 The API can't create a store item, so the first version is uploaded by hand:
 1. Register a developer account at https://chrome.google.com/webstore/devconsole (one-time fee).
-2. Run `POSE_SERVER_URL=wss://<host>/ws node scripts/build-extension.mjs`, then click **Add new item** and upload `dist/squat-overflow-<version>.zip`.
+2. Run `API_URL=https://<host> node scripts/build-extension.mjs` (or with no `API_URL` for a local-only build), then click **Add new item** and upload `dist/squat-overflow-<version>.zip`.
 3. Fill in the **Store listing** and **Privacy** tabs from `CHROMEWEBSTORE.md`. Add screenshots. Replace the placeholder contact email in `server/static/privacy.html` first; the policy URL is `https://<host>/privacy`.
 4. Note the **item ID**: it is the store extension ID. Then:
    - Set `CWS_ITEM_ID` (step 2).
@@ -122,8 +124,8 @@ The API can't create a store item, so the first version is uploaded by hand:
 
 | Part | How |
 |------|-----|
-| Pose server | Redeploy the previous image on your host. |
+| API server | Redeploy the previous image on your host. |
 | Database | Add a new migration that reverts the change and deploy it. Don't edit or delete applied migrations. An older server image ignores migrations it doesn't know, so roll the server back only to a release whose code works with the current schema. |
 | Extension | Developer Dashboard → the item → roll back to the previous published version (the API has a `rollback` method too), or publish a fixed higher version. |
 
-Camera frames go to whichever server the extension points at. They are processed in memory and never stored. See `server/static/privacy.html`.
+Camera frames are processed on the device and never sent to any server. See `server/static/privacy.html`.

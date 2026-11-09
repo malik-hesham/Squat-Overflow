@@ -6,8 +6,8 @@ The code is done and pushed in PR #11 (`feat/nestjs-pose-server`). These steps a
 
 - [ ] Open Google Cloud Console → **APIs & Services → Credentials**.
 - [ ] Open the extension's **web** OAuth client: `977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com`.
-- [ ] Under **Authorized redirect URIs**, add `https://<pose server host>/auth/mobile-callback`.
-      There is no hosted server any more, so this needs a pose server you run with public HTTPS
+- [ ] Under **Authorized redirect URIs**, add `https://<API server host>/auth/mobile-callback`.
+      There is no hosted server, so this needs the API server (`server/`) running with public HTTPS
       (see `docs/deployment.md`), and `API_URL` in `extension/config.js` pointed at it for the
       mobile build. The default `http://127.0.0.1:8765` can't be a Google redirect from a device.
 - [ ] Save. Google can take a few minutes to apply the change.
@@ -16,13 +16,13 @@ Until this is saved, mobile sign-in fails with Google's `redirect_uri_mismatch` 
 
 ## 2. Deploy the server
 
-The relay page (`GET /auth/mobile-callback`) only exists on this branch. Releases no longer deploy the server.
+The relay page (`GET /auth/mobile-callback`) is on the API server. Releases don't deploy the server.
 
 - [ ] Merge PR #11 into `main`.
-- [ ] Deploy `server/` from this code to your host (`docs/deployment.md`, "Running the pose server").
+- [ ] Deploy `server/` from this code to your host (`docs/deployment.md`, "Running the API server").
 - [ ] Check that the page is live. This should print `200`:
       ```bash
-      curl -s -o /dev/null -w "%{http_code}\n" https://<pose server host>/auth/mobile-callback
+      curl -s -o /dev/null -w "%{http_code}\n" https://<API server host>/auth/mobile-callback
       ```
 
 ## 3. Rebuild the mobile dev client
