@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- No Dock icon, like the SwiftUI menu bar app (macos/SquatOverflowBar/Info.plist) -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Your camera is used only to count reps during a break, on this Mac. Nothing is recorded or sent.</string>
+</dict>
+</plist>

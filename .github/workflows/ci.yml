@@ -89,3 +89,28 @@ jobs:
           curl -fsS localhost:8080/privacy | grep -q "privacy policy"
       - if: failure()
         run: docker logs api || true
+
+  desktop:
+    name: Desktop app (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The three systems desktop/ runs on. Windows 10 and 11 use the same build.
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Linux libraries (webview, tray, idle time)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libx11-dev libxss-dev
+      # The app embeds the extension's files, so they have to be in desktop/web/ before it compiles.
+      - run: node desktop/scripts/sync-web.mjs
+      - run: cargo test --locked
+        working-directory: desktop/src-tauri
+      - run: cargo build --locked
+        working-directory: desktop/src-tauri

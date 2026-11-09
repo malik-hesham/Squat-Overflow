@@ -9,14 +9,16 @@
  */
 import { FilesetResolver, PoseLandmarker } from "../vendor/mediapipe/vision_bundle.mjs";
 
-const VENDOR = new URL("../vendor/mediapipe/", import.meta.url).href;
+// No slash at the end: MediaPipe adds "/vision_wasm_internal.js" to it itself, and a "//" in the
+// address is a file the desktop app's (desktop/) file server doesn't find.
+const VENDOR = new URL("../vendor/mediapipe", import.meta.url).href;
 
 /**
  * @param {"GPU" | "CPU"} delegate
  * @returns {import("../vendor/mediapipe/vision_bundle.mjs").PoseLandmarkerOptions}
  */
 const options = (delegate) => ({
-  baseOptions: { modelAssetPath: `${VENDOR}pose_landmarker_lite.task`, delegate },
+  baseOptions: { modelAssetPath: `${VENDOR}/pose_landmarker_lite.task`, delegate },
   runningMode: "VIDEO",
   numPoses: 1,
   outputSegmentationMasks: false,

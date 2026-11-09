@@ -1,0 +1,4 @@
+# The extension's files, copied here by scripts/sync-web.mjs
+web/
+src-tauri/target/
+src-tauri/gen/
