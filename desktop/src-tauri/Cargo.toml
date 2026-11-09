@@ -1,0 +1,23 @@
+[package]
+name = "squat-overflow-desktop"
+version = "0.1.0"
+description = "Squat Overflow in the status bar: the browser extension's pages in a Rust shell"
+edition = "2021"
+publish = false
+
+[lib]
+# Not the binary's name: on Windows the two would write the same .pdb
+name = "squat_overflow_desktop_lib"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "time"] }
+# Seconds since the last keyboard or mouse input, for chrome.idle.queryState
+user-idle = "0.6"
+# Opens demo clips in the user's browser
+open = "5"

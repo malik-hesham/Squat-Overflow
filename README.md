@@ -35,6 +35,10 @@ Blurred mode blurs the on-screen preview. The pose model runs in the extension, 
 
 `mobile/` is the same product as a React Native app (Expo + React Native Reusables). Pose detection runs on the phone with MediaPipe and the same model file, and it reuses the extension's pose analysis, XP, schedule, challenge and leaderboard logic from `extension/lib`. See [mobile/README.md](mobile/README.md).
 
+## Desktop app (macOS, Windows, Linux): proof of concept
+
+`desktop/` is a status bar app with a Rust shell (Tauri). It runs the extension's own pages and `service-worker.js`, unchanged, behind a small `chrome.*` shim, so it has no rules of its own to keep in step. See [desktop/README.md](desktop/README.md) for what has been checked and what hasn't.
+
 ## Tests
 
 ```bash
