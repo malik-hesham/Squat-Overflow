@@ -11,9 +11,10 @@ final class PoseServerIntegrationTests: XCTestCase {
     private var url: URL { URL(string: Config.poseURL)! }
 
     private func requireServer() async throws {
-        let health = Config.serverURL.appendingPathComponent("health")
+        let server = try XCTUnwrap(Config.serverURL, "no server URL in this build")
+        let health = server.appendingPathComponent("health")
         let ok = (try? await URLSession.shared.data(from: health)).map { ($0.1 as? HTTPURLResponse)?.statusCode == 200 } ?? false
-        try XCTSkipUnless(ok, "no pose server at \(Config.serverURL)")
+        try XCTSkipUnless(ok, "no pose server at \(server)")
     }
 
     func testTheCatalogHasEveryPainArea() async throws {

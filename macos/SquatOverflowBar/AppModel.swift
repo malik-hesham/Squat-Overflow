@@ -123,14 +123,14 @@ final class AppModel: ObservableObject, EngineHost {
     // MARK: Sync and the board
 
     func runSync() async {
-        guard session != nil else { return }
+        guard session != nil, Config.serverURL != nil else { return }
         let out = await syncer.syncNow()
         if out.ok {
             lastSync = Date()
             error = nil
             if out.scheduleChanged || out.lastBreakAt != nil { engine.afterSync(scheduleChanged: out.scheduleChanged, lastBreakAt: out.lastBreakAt) }
         } else if out.reason != "signed-out" {
-            error = out.reason == "offline" ? "Can't reach \(Config.serverURL.host ?? "the server")." : "Sync failed (\(out.reason ?? "?"))."
+            error = out.reason == "offline" ? "Can't reach \(Config.serverURL?.host ?? "the server")." : "Sync failed (\(out.reason ?? "?"))."
         }
         await loadBoard()
         changed()

@@ -85,8 +85,10 @@ cd macos && xcodegen && xcodebuild -scheme SquatOverflowBar test
 The server URL is the `SO_SERVER_URL` build setting. It defaults to `http://127.0.0.1:8765` (start it with `cd server && npm run start:dev`). It's used for sign-in, sync and the leaderboard. The pose WebSocket defaults to the same host at `/ws` (`ws://`, or `wss://` for an `https://` server). It can be changed under Settings → Advanced, like the extension's Pose server URL. To build against another server:
 
 ```bash
-cd macos && xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://pose.example.com
+cd macos && xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://api.example.com
 ```
+
+Built with `SO_SERVER_URL=` (empty), the app is local only, like an extension build with no `API_URL`: no sign-in, no team board, no sync requests.
 
 `SO_GOOGLE_CLIENT_ID` in `project.yml` can be overridden the same way.
 

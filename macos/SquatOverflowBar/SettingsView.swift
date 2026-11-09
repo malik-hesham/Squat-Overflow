@@ -159,7 +159,7 @@ struct SettingsView: View {
                     Spacer()
                     Button(t("signOut")) { model.signOut() }
                 }
-            } else {
+            } else if Config.serverURL != nil { // a local-only build has nothing to sign in to
                 HStack {
                     Text(t("notSignedIn")).font(.caption).foregroundStyle(.secondary)
                     Spacer()
