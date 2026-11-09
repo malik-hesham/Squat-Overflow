@@ -29,8 +29,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>SOExtensionID</key>
-	<string>$(SO_EXTENSION_ID)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Your camera is used only to count reps during a break and is never recorded.</string>
 	<key>SOGoogleClientID</key>
 	<string>$(SO_GOOGLE_CLIENT_ID)</string>
 	<key>SOServerURL</key>

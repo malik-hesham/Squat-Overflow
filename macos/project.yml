@@ -5,16 +5,20 @@ options:
     macOS: "14.0"
   createIntermediateGroups: true
 
+packages:
+  # The extension's rules, ported to Swift and tested against the extension's own answers.
+  SquatCore:
+    path: SquatCore
+
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
-    # The NestJS server (server/). Override per build:
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "2"
+    # The NestJS server (server/): sign-in, sync, the leaderboard, and the pose WebSocket at /ws.
+    # Override per build:
     #   xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://pose.example.com
     SO_SERVER_URL: "http://127.0.0.1:8765"
-    # The extension's fixed ID, derived from the "key" in extension/manifest.json.
-    SO_EXTENSION_ID: "lpkaoaegdjhciohkfidnmabjigidofnd"
     # The extension's web OAuth client (extension/config.js), so the server needs no new client.
     SO_GOOGLE_CLIENT_ID: "977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com"
 
@@ -24,14 +28,21 @@ targets:
     platform: macOS
     sources:
       - path: SquatOverflowBar
+      # The extension's meme clips (extension/sounds/memes) as AAC: macOS can't play Ogg Vorbis.
+      # The mobile app converted them already; both apps play the same files.
+      - path: ../mobile/assets/sounds/memes
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: SquatCore
     info:
       path: SquatOverflowBar/Info.plist
       properties:
         CFBundleDisplayName: Squat Overflow
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.healthcare-fitness
+        NSCameraUsageDescription: Your camera is used only to count reps during a break and is never recorded.
         SOServerURL: $(SO_SERVER_URL)
-        SOExtensionID: $(SO_EXTENSION_ID)
         SOGoogleClientID: $(SO_GOOGLE_CLIENT_ID)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
@@ -52,6 +63,7 @@ targets:
       - path: SquatOverflowBarTests
     dependencies:
       - target: SquatOverflowBar
+      - package: SquatCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.squatoverflow.bar.tests

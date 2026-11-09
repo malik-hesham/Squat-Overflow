@@ -19,7 +19,6 @@ import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, 
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
 import { CLOSE_BUSY, closeStatus } from "../lib/server-status.js";
-import { startBreakFromLink } from "../lib/start-link.js";
 import { readFileSync, readdirSync } from "node:fs";
 
 /** @typedef {import("../lib/vendor/three.js").Mesh} Mesh  what the avatar scene traversals below look at */
@@ -933,31 +932,6 @@ pending.push(
     assert.deepEqual(saved.at(-1), { done: 0, unscored: 0, reps: 0 });
   })(),
 );
-pending.push(
-  (async () => {
-    // start.html (opened by the Mac menu bar app's Break now) does what the popup's Break now does.
-    const sent = [];
-    let closed = 0;
-    const started = await startBreakFromLink({ send: async (m) => (sent.push(m), { ok: true }), closeTab: async () => void closed++ });
-    assert.equal(started, true);
-    assert.deepEqual(sent, [{ type: "break-now" }]);
-    assert.equal(closed, 1);
-    const failing = [async () => ({ ok: false, error: "boom" }), async () => undefined, async () => { throw new Error("no worker"); }];
-    for (const send of failing) {
-      let shut = 0;
-      assert.equal(await startBreakFromLink({ send, closeTab: async () => void shut++ }), false);
-      assert.equal(shut, 0, "the tab stays open so the error can show");
-    }
-  })(),
-);
-check("start link: start.html runs start.js, is translated, and no website can open it", () => {
-  const html = readFileSync(new URL("../start.html", import.meta.url), "utf8");
-  assert.match(html, /<script type="module" src="start\.js"><\/script>/);
-  for (const key of ["startingBreak", "startFailed"]) assert.ok(translationKeys("en").includes(key), `missing ${key}`);
-  const manifest = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
-  const exposed = (manifest.web_accessible_resources ?? []).flatMap((r) => r.resources);
-  assert.ok(!exposed.some((r) => r === "start.html" || r.includes("*")), "web pages must not be able to load start.html");
-});
 check("pose socket: close code 1013 means the server is busy, any other close means offline", () => {
   assert.equal(CLOSE_BUSY, 1013); // the pose server's FORMCOACH_MAX_SESSIONS cap
   assert.equal(closeStatus(1013), "busy");
