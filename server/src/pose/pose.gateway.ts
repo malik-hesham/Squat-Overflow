@@ -16,7 +16,7 @@ import { CATALOG, DEFAULT_EXERCISE } from '../analysis/exercises';
 import { CONNECTIONS } from '../analysis/geometry';
 import { Session } from '../analysis/session';
 import { exerciseCatalog } from '../catalog';
-import { MAX_FRAME_BYTES, WS_MAX_PAYLOAD, originAllowed } from '../config';
+import { MAX_FRAME_BYTES, WS_MAX_PAYLOAD, maxSessions, originAllowed } from '../config';
 import { encodeMask } from './mask';
 import { PoseEngine, decodeImage, warmUp, type Landmarks } from './pose-engine';
 import { pyRepr, type ClientPayload } from './protocol';
@@ -45,6 +45,9 @@ class Connection {
 
 const error = (message: string): Reply => ({ type: 'error', message });
 
+/** WebSocket close code 1013 "Try Again Later": the server is at its session cap. */
+export const CLOSE_BUSY = 1013;
+
 @WebSocketGateway({
   path: '/ws',
   maxPayload: WS_MAX_PAYLOAD,
@@ -55,6 +58,9 @@ const error = (message: string): Reply => ({ type: 'error', message });
 export class PoseGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
   private readonly logger = new Logger(PoseGateway.name);
   private readonly connections = new WeakMap<WebSocket, Connection>();
+  /** Read when the gateway is created; an invalid FORMCOACH_MAX_SESSIONS stops the server from starting. */
+  private readonly maxSessions = maxSessions();
+  private sessions = 0;
 
   async onModuleInit(): Promise<void> {
     const started = performance.now();
@@ -63,6 +69,14 @@ export class PoseGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   }
 
   handleConnection(client: WebSocket): void {
+    if (this.sessions >= this.maxSessions) {
+      // Closed after the handshake rather than refused in it, so the client sees why (browsers
+      // hide a refused handshake's status). No "ready", no Connection, no slot taken.
+      this.logger.warn(`session cap (${this.maxSessions}) reached; closing a new client`);
+      client.close(CLOSE_BUSY, 'server busy');
+      return;
+    }
+    this.sessions++;
     this.connections.set(client, new Connection());
     client.send(
       JSON.stringify({ type: 'ready', exercises: exerciseCatalog(), connections: CONNECTIONS, exercise: DEFAULT_EXERCISE }),
@@ -70,8 +84,11 @@ export class PoseGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   }
 
   handleDisconnect(client: WebSocket): void {
-    this.connections.get(client)?.close();
+    const conn = this.connections.get(client);
+    if (!conn) return; // a client closed for the cap never took a slot
+    conn.close();
     this.connections.delete(client);
+    this.sessions--;
   }
 
   private conn(client: WebSocket): Connection {

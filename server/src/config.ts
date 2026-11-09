@@ -6,6 +6,22 @@ export const MAX_FRAME_BYTES = 2 * 1024 * 1024;
 export const WS_MAX_PAYLOAD = 3_000_000;
 
 /**
+ * Open pose sessions one process accepts. Each holds a WebSocket and, once frames arrive, a
+ * BlazePose detector, and inference for all of them shares one event loop, so past ~6 every
+ * session slows down. Clients over the cap are closed with 1013 (Try Again Later).
+ */
+export const DEFAULT_MAX_SESSIONS = 6;
+
+/** FORMCOACH_MAX_SESSIONS: a whole number, 0 = no cap, unset = DEFAULT_MAX_SESSIONS. Throws on anything else. */
+export function maxSessions(raw: string | undefined = process.env.FORMCOACH_MAX_SESSIONS): number {
+  const value = (raw ?? '').trim();
+  if (value === '') return DEFAULT_MAX_SESSIONS;
+  if (!/^\d+$/.test(value)) throw new Error(`FORMCOACH_MAX_SESSIONS must be a whole number (0 = no cap), got ${JSON.stringify(raw)}`);
+  const n = Number(value);
+  return n === 0 ? Infinity : n;
+}
+
+/**
  * Comma-separated list of exact origins, e.g. "chrome-extension://abcdef...". When set, it
  * replaces the defaults entirely. Unset = accept any Chrome or Firefox extension and loopback
  * pages (the VS Code extension serves its pages from http://127.0.0.1:<port>). Other web pages

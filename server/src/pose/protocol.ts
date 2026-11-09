@@ -20,6 +20,9 @@
  *                                                 carries "calibration": {"status": ...}
  *                     {"type": "error", ...}
  *
+ * A server at its session cap (FORMCOACH_MAX_SESSIONS) accepts the handshake and closes the
+ * socket at once with code 1013 "Try Again Later", reason "server busy", before "ready".
+ *
  * The client should keep one frame in flight at a time (send the next frame when the
  * previous result arrives); that gives natural back-pressure.
  *

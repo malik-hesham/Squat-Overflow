@@ -25,8 +25,12 @@ export async function startServer(): Promise<Server> {
 export class Client {
   private readonly queue: unknown[] = [];
   private readonly waiters: ((msg: unknown) => void)[] = [];
+  private readonly closedPromise: Promise<{ code: number; reason: string }>;
 
   private constructor(readonly socket: WebSocket) {
+    this.closedPromise = new Promise((resolve) =>
+      socket.once('close', (code, reason) => resolve({ code, reason: reason.toString() })),
+    );
     socket.on('message', (data) => {
       const msg = JSON.parse(data.toString());
       const waiter = this.waiters.shift();
@@ -61,6 +65,16 @@ export class Client {
 
   close(): void {
     this.socket.close();
+  }
+
+  /** Resolves with the close code and reason once the socket has closed, from either side. */
+  closed(): Promise<{ code: number; reason: string }> {
+    return this.closedPromise;
+  }
+
+  /** The first thing the server does after the handshake: send a message, or close the socket. */
+  firstEvent(): Promise<{ message: unknown } | { code: number; reason: string }> {
+    return Promise.race([this.receive().then((message) => ({ message })), this.closed()]);
   }
 }
 

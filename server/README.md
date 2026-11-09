@@ -34,6 +34,7 @@ Environment variables:
 | `FORMCOACH_PORT` | `8765` (`8080` in Docker) | |
 | `FORMCOACH_HOST` | `127.0.0.1` (`0.0.0.0` in Docker) | |
 | `FORMCOACH_ALLOWED_ORIGINS` | unset | Comma-separated exact origins; replaces the extension + loopback default |
+| `FORMCOACH_MAX_SESSIONS` | `6` | Open `/ws` sessions per process; clients past it are closed with 1013 "server busy". `0` = no cap. Anything but a whole number stops the server from starting |
 | `FORMCOACH_VERSION` | `dev` | Set from the Docker `VERSION` build arg |
 | `FORMCOACH_TF_BACKEND` | `wasm` | `cpu` falls back to the pure-JS kernels |
 | `DATABASE_URL` | unset | Postgres for accounts and the leaderboard; migrations run at startup |
