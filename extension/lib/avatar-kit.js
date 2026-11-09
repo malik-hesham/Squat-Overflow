@@ -122,6 +122,7 @@ export class Limb {
 
   // `pts`: screen points (fewer than rel.length hides the rest); `s`: radius
   // scale in pixels; `z`: depth, or one per point.
+  /** @param {number | number[]} [z] */
   set(pts, s, z = 0) {
     const zi = (i) => (typeof z === "number" ? z : z[Math.min(i, z.length - 1)]);
     this.balls.forEach((b, i) => {
@@ -251,13 +252,14 @@ export function decal(parent, poly, mat, ell, opts) {
 // A head: a group scaled to the tracked head radius, so everything on it is in
 // head units (radius ~1). Feature positions use (fx right, fy down), like the pose.
 export class Head {
+  /** @param {number[]} [radii] [rx, ry, rz] */
   constructor(parent, mat, radii = [1, 1, 1]) {
     this.radii = radii;
     this.ell = { c: [0, 0, 0], r: radii };
     this.group = new THREE.Group();
     parent.add(this.group);
     this.mesh = mesh(this.group, GEO.smooth, mat);
-    this.mesh.scale.set(...radii);
+    this.mesh.scale.set(radii[0], radii[1], radii[2]);
   }
 
   // The point on the head's front surface at (fx, fy), in head units.

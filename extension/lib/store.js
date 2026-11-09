@@ -1,5 +1,6 @@
 import { POSE_SERVER_URL } from "../config.js";
 import { currentAreas } from "./routine.js";
+import { OUTBOX_KEY, DIRTY_KEY, breakEvent, addToOutbox, changedSharedKeys, markDirty } from "./sync-core.js";
 
 export const SETTINGS_DEFAULTS = {
   intervalMin: 60,
@@ -25,24 +26,51 @@ export const SETTINGS_DEFAULTS = {
 const PROFILE_KEY = "profile";
 const SCHEDULE_KEY = "schedule";
 const LOG_KEY = "breakLog";
-const LOG_MAX = 500;
+export const LOG_MAX = 500;
 const CATALOG_KEY = "exerciseCatalog";
 const MEME_TURNS_KEY = "memeTurns";
 
 const local = chrome.storage.local;
+
+/**
+ * @typedef {object} Profile
+ * @property {string} playerId
+ * @property {string} secret
+ * @property {number} xp
+ * @property {number} streak
+ * @property {string | null} lastStreakDay  dayKey() of the last day that counted for the streak
+ * @property {string | null} lastBreakDay   dayKey() of the last finished break
+ * @property {number} weekXp
+ * @property {string | null} week           isoWeek() that weekXp belongs to
+ * @property {string[]} badges
+ * @property {object | null} daily
+ * @property {object | null} weekly
+ */
+
+/** @typedef {ReturnType<typeof import("./schedule.js").initialSchedule>} Schedule */
 
 export async function getSettings() {
   const settings = { ...SETTINGS_DEFAULTS, ...(await local.get(Object.keys(SETTINGS_DEFAULTS))) };
   return { ...settings, areas: currentAreas(settings.areas) };
 }
 
-export function saveSettings(patch) {
-  return local.set(patch);
+/**
+ * Saves settings. Shared settings whose value changed are marked with the time of the change,
+ * so the next sync sends them (lib/sync.js); settings pulled from the server skip this.
+ */
+export async function saveSettings(patch, now = Date.now()) {
+  const keys = changedSharedKeys(await getSettings(), patch);
+  if (!keys.length) return local.set(patch);
+  const { [DIRTY_KEY]: dirty } = await local.get(DIRTY_KEY);
+  return local.set({ ...patch, [DIRTY_KEY]: markDirty(dirty ?? {}, keys, now) });
 }
 
+/** @returns {Promise<Profile>} */
 export async function getProfile() {
+  /** @type {{ [PROFILE_KEY]?: Profile }} */
   const { [PROFILE_KEY]: stored } = await local.get(PROFILE_KEY);
   if (stored?.playerId) return stored;
+  /** @type {Profile} */
   const profile = {
     playerId: crypto.randomUUID(),
     secret: crypto.randomUUID(),
@@ -64,7 +92,9 @@ export function setProfile(profile) {
   return local.set({ [PROFILE_KEY]: profile });
 }
 
+/** @returns {Promise<Schedule>} */
 export async function getSchedule() {
+  /** @type {{ [SCHEDULE_KEY]?: Schedule }} */
   const { [SCHEDULE_KEY]: s } = await local.get(SCHEDULE_KEY);
   return { windowId: null, lastKey: null, breakCount: 0, ...s };
 }
@@ -78,13 +108,31 @@ export async function readLog() {
   return Array.isArray(log) ? log : [];
 }
 
-export async function appendLog(entry) {
-  const log = await readLog();
-  log.push(entry);
-  await local.set({ [LOG_KEY]: log.slice(-LOG_MAX) });
+export async function readOutbox() {
+  const { [OUTBOX_KEY]: outbox } = await local.get(OUTBOX_KEY);
+  return Array.isArray(outbox) ? outbox : [];
+}
+
+/**
+ * Logs a finished break and queues it for sync as an event with a fresh id; `areas` are the pain
+ * areas the break worked on.
+ */
+export async function appendLog(entry, { areas = [] } = {}) {
+  const id = crypto.randomUUID();
+  const [log, outbox] = await Promise.all([readLog(), readOutbox()]);
+  log.push({ ...entry, id });
+  await local.set({
+    [LOG_KEY]: log.slice(-LOG_MAX),
+    [OUTBOX_KEY]: addToOutbox(outbox, [breakEvent(entry, { id, areas })]),
+  });
+}
+
+export function setLog(log) {
+  return local.set({ [LOG_KEY]: log.slice(-LOG_MAX) });
 }
 
 export async function getCatalog() {
+  /** @type {{ [CATALOG_KEY]?: { exercises?: unknown, connections?: unknown } }} */
   const { [CATALOG_KEY]: catalog } = await local.get(CATALOG_KEY);
   return Array.isArray(catalog?.exercises) ? catalog.exercises : [];
 }

@@ -1,53 +1,70 @@
-import { SUPABASE_URL, SUPABASE_KEY } from "../config.js";
+import { API_URL, SYNC_ENABLED } from "../config.js";
 import { levelFor, isoWeek } from "./xp.js";
 import { getSession } from "./session.js";
 
-const DEFAULT_CFG = { url: SUPABASE_URL, key: SUPABASE_KEY, session: getSession };
+/**
+ * Where the board lives, how to get a signed-in session, and whether sync is on (then the server
+ * writes my row from synced breaks and settings); tests pass their own.
+ * @typedef {{ url: string, session: () => Promise<{ accessToken: string } | null>, sync?: boolean }} BoardConfig
+ */
+/** @type {BoardConfig} */
+const DEFAULT_CFG = { url: API_URL, session: getSession, sync: SYNC_ENABLED };
 const AVATAR_RE = /^[a-z]{2,20}$/;
 
-async function rpc(fn, body, cfg, session) {
-  const res = await fetch(`${cfg.url}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: { apikey: cfg.key, Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+function call(method, path, cfg, session, body) {
+  return fetch(`${cfg.url}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${fn} ${res.status}`);
-  return res.json();
 }
 
-export function toPayload(profile, settings, remove, now = Date.now()) {
+export function toPayload(profile, settings, now = Date.now()) {
   const week = isoWeek(now);
   const current = profile.week === week;
   return {
-    p_name: settings.name,
-    p_xp: profile.xp,
-    p_level: levelFor(profile.xp).level,
-    p_streak: profile.streak,
-    p_week_xp: current ? profile.weekXp : 0,
-    p_week: week,
-    p_delete: remove,
-    p_avatar: AVATAR_RE.test(settings.avatar ?? "") ? settings.avatar : "bunny",
+    name: settings.name,
+    xp: profile.xp,
+    level: levelFor(profile.xp).level,
+    streak: profile.streak,
+    weekXp: current ? profile.weekXp : 0,
+    week,
+    avatar: AVATAR_RE.test(settings.avatar ?? "") ? settings.avatar : "bunny",
   };
 }
 
+/**
+ * Puts my score on my company's board, or with `remove` takes it off. Resolves false on any
+ * failure. With sync on there is nothing to put: the server keeps the row up to date itself.
+ */
 export async function submitScore(profile, settings, { remove = false } = {}, cfg = DEFAULT_CFG) {
-  if (!cfg.url || !cfg.key) return false;
+  if (!cfg.url) return false;
   if (!remove && settings.mode !== "competitive") return false;
+  if (!remove && cfg.sync) return true;
   try {
     const session = await cfg.session();
     if (!session) return false;
-    return (await rpc("submit_score", toPayload(profile, settings, remove), cfg, session)) === true;
+    const res = remove
+      ? await call("DELETE", "/leaderboard/me", cfg, session)
+      : await call("PUT", "/leaderboard/me", cfg, session, toPayload(profile, settings));
+    return res.ok;
   } catch {
     return false;
   }
 }
 
+/** My company's board for "week" or "all", or null when it can't be loaded. */
 export async function fetchBoard(period, cfg = DEFAULT_CFG) {
-  if (!cfg.url || !cfg.key) return null;
+  if (!cfg.url) return null;
   try {
     const session = await cfg.session();
     if (!session) return null;
-    const rows = await rpc("leaderboard", { p_period: period }, cfg, session);
+    const res = await call("GET", `/leaderboard?period=${encodeURIComponent(period)}`, cfg, session);
+    if (!res.ok) return null;
+    const rows = await res.json();
     return Array.isArray(rows) ? rows : null;
   } catch {
     return null;

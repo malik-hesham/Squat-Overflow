@@ -1,0 +1,82 @@
+# Pose server + Postgres + Caddy (automatic HTTPS) on one host, e.g. a single EC2 instance
+# on the AWS Free plan. Setup, updates, backups and rollback: docs/aws-free-plan.md.
+#
+#   cp .env.example .env      # fill it in
+#   VERSION=v0.4.0 docker compose up -d --build
+name: squat-overflow
+
+x-logging: &logging
+  # Keep container logs from filling the small disk.
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  pose:
+    build:
+      context: ../server
+      args:
+        VERSION: ${VERSION:-dev}
+    # Each VERSION is kept as its own local image, so rolling back needs no rebuild.
+    image: squat-overflow-pose:${VERSION:-dev}
+    restart: unless-stopped
+    environment:
+      FORMCOACH_ALLOWED_ORIGINS: ${FORMCOACH_ALLOWED_ORIGINS:?set FORMCOACH_ALLOWED_ORIGINS in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in .env}
+      # Lower than the server's default of 6: on a small burstable instance shared with Postgres.
+      FORMCOACH_MAX_SESSIONS: ${FORMCOACH_MAX_SESSIONS:-3}
+      # Same Docker network, so no TLS. Migrations run when the server starts.
+      DATABASE_URL: postgres://squat:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/squat
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging: *logging
+
+  db:
+    # Stay on 17: the postgres:18 image moved its data directory, so this volume path would break.
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: squat
+      POSTGRES_DB: squat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # Sized for a 2 GB instance shared with the pose server. The server's pool uses at most 5 connections.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U squat -d squat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80" # Let's Encrypt HTTP challenge and the redirect to HTTPS
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificates; keep it so restarts don't hit Let's Encrypt rate limits
+      - caddy_config:/config
+    depends_on:
+      - pose
+    logging: *logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

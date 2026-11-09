@@ -250,7 +250,8 @@ export function create(requested, fitness = {}) {
     },
     dispose() {
       scene.traverse((o) => {
-        if (o.geometry && !isShared(o.geometry)) o.geometry.dispose();
+        const { geometry } = /** @type {Partial<THREE.Mesh>} */ (o); // meshes have one, groups and lights don't
+        if (geometry && !isShared(geometry)) geometry.dispose();
       });
       for (const m of mats.all) m.dispose();
     },

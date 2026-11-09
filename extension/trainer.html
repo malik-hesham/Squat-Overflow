@@ -47,7 +47,7 @@
         <div class="placeholder" id="placeholder">
           <p class="ph-title">Camera is off</p>
           <p class="ph-sub">Pick an exercise and press <strong>Start</strong>. Frames are analysed by the
-            Python server on this computer and never leave it.</p>
+            pose server on this computer and never leave it.</p>
         </div>
         <div class="hud" id="hud" hidden>
           <div class="hud-reps"><span id="hudReps">0</span><small>reps</small></div>
@@ -96,7 +96,7 @@
         </div>
         <label class="toggle"><input type="checkbox" id="voice"> Voice cues</label>
         <label class="toggle"><input type="checkbox" id="angle3d"> 3D angles (any camera angle)</label>
-        <p class="hint">Measures real joint angles from MediaPipe's 3D world landmarks, so a knee
+        <p class="hint">Measures real joint angles from the pose model's 3D world landmarks, so a knee
           bending towards the camera still reads right. The chart shows 2D and 3D side by side.</p>
         <label class="toggle"><input type="checkbox" id="privacy"> Sensitive mode (hide me on screen)</label>
         <fieldset class="styles" id="privacyStyles" hidden>
@@ -166,7 +166,7 @@
           <span>WebSocket URL</span>
           <input id="serverUrl" type="text" spellcheck="false">
         </label>
-        <p class="hint">Start it with <code>python app.py</code> in the <code>server</code> folder.</p>
+        <p class="hint">Start it with <code>npm run start:dev</code> in the <code>server</code> folder.</p>
       </details>
     </aside>
   </main>

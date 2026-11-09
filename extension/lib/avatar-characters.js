@@ -30,11 +30,15 @@ import {
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // A ball in a parent's local space (y up); `s` is a radius or [rx, ry, rz].
-function ball(parent, mat, [x, y, z], s, geo = GEO.sphere) {
+/**
+ * @param {number[]} pos [x, y, z]
+ * @param {number | number[]} s
+ */
+function ball(parent, mat, pos, s, geo = GEO.sphere) {
   const m = mesh(parent, geo, mat);
-  m.position.set(x, y, z);
+  m.position.set(pos[0], pos[1], pos[2]);
   if (typeof s === "number") m.scale.setScalar(s);
-  else m.scale.set(...s);
+  else m.scale.set(s[0], s[1], s[2]);
   return m;
 }
 

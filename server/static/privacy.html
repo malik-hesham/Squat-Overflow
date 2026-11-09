@@ -26,7 +26,7 @@
   <ul>
     <li>During a break, and only after you allow camera access, the extension sends small JPEG frames (about 480 pixels wide) from your webcam to the Squat Overflow pose server over an encrypted connection (WSS).</li>
     <li>The server finds body landmarks in each frame, sends back joint positions and a rep count, and then discards the frame. Frames are processed in memory only. They are never written to disk, logged, stored, or shared.</li>
-    <li>The server runs on Fly.io in Frankfurt, Germany.</li>
+    <li>The server is the one set in the extension: your own computer by default, or a server your team runs.</li>
     <li>When the camera is off, or you skip the camera, nothing is sent.</li>
     <li>Blurred mode and the avatar characters change only the preview on your own screen. The server still needs the unblurred frame to find your pose.</li>
   </ul>
@@ -37,13 +37,13 @@
   <h2>Sign in with Google (optional)</h2>
   <ul>
     <li>Signing in is optional, and you need it only for Competitive mode. The extension asks Google for your basic profile (name, email address and profile picture).</li>
-    <li>That sign-in is passed to our account service (Supabase Auth). It keeps an account record with your Google account ID, email address, name and picture, so your leaderboard entry is tied to your verified work email.</li>
+    <li>That sign-in is checked by our server (the same one that runs pose detection), which keeps an account record in its database with your Google account ID, email address, name and picture, so your leaderboard entry is tied to your verified work email.</li>
     <li>The sign-in session is stored in the extension's local storage. Signing out in Settings removes it from your device, but the account record stays until you ask us to delete it.</li>
   </ul>
 
   <h2>Leaderboard (Competitive mode only)</h2>
   <ul>
-    <li>In Competitive mode, the extension sends these to the leaderboard database (hosted by Supabase): the display name you choose, your XP, level, streak, weekly XP and chosen avatar.</li>
+    <li>In Competitive mode, the extension sends these to our server, which stores them in its leaderboard database: the display name you choose, your XP, level, streak, weekly XP and chosen avatar.</li>
     <li>The server adds your company domain (for example <code>example.com</code>), taken from your signed-in work email. Personal addresses such as gmail.com can't join a leaderboard.</li>
     <li>It never sends form scores, break history or camera data.</li>
     <li>Only signed-in people from the same company domain can see the leaderboard. They see your name, level, XP, streak and avatar.</li>

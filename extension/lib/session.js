@@ -1,12 +1,15 @@
-import { SUPABASE_URL, SUPABASE_KEY, GOOGLE_CLIENT_ID } from "../config.js";
+import { API_URL, GOOGLE_CLIENT_ID } from "../config.js";
 import { buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "./auth.js";
 
 const KEY = "auth";
 
-async function token(grant, body) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=${grant}`, {
+/** @typedef {ReturnType<typeof toSession>} Session */
+
+/** POSTs to the pose server's auth API (/auth/google or /auth/refresh) and maps the reply to a stored session. */
+export async function requestSession(path, body, base = API_URL) {
+  const res = await fetch(`${base}${path}`, {
     method: "POST",
-    headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`auth ${res.status}`);
@@ -21,7 +24,8 @@ export async function signIn({ calendar = false } = {}) {
   });
   const google = redirect ? parseSignInResponse(redirect, Date.now()) : null;
   if (!google) throw new Error("Google sign-in was cancelled");
-  const session = await token("id_token", { provider: "google", id_token: google.idToken, access_token: google.accessToken, nonce });
+  // Google got the hash of the nonce; the server checks the token's nonce against this raw one.
+  const session = await requestSession("/auth/google", { id_token: google.idToken, nonce });
   await chrome.storage.local.set({
     [KEY]: session,
     ...(calendar ? { calendar: { connected: true, token: google.accessToken, expiresAt: google.expiresAt } } : {}),
@@ -30,11 +34,12 @@ export async function signIn({ calendar = false } = {}) {
 }
 
 export async function getSession() {
+  /** @type {{ [KEY]?: Session }} */
   const { [KEY]: stored } = await chrome.storage.local.get(KEY);
   if (!stored?.accessToken) return null;
   if (stored.expiresAt - Date.now() > 60_000) return stored;
   try {
-    const next = await token("refresh_token", { refresh_token: stored.refreshToken });
+    const next = await requestSession("/auth/refresh", { refresh_token: stored.refreshToken });
     await chrome.storage.local.set({ [KEY]: next });
     return next;
   } catch {

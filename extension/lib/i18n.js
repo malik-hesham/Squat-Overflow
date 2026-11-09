@@ -125,6 +125,8 @@ const EN = {
   fallbackText: "Follow the instructions below and press Done when finished. No XP this time.",
   coachOffline: "Coach offline",
   offlineText: "Can't reach the pose server. Follow the instructions below and press Done when finished.",
+  coachBusy: "Coach busy",
+  busyText: "The pose server is full right now. Follow the instructions below and press Done when finished.",
   deniedText: "Camera access is blocked or missing. Follow the instructions below and press Done when finished.",
   cameraLook: "Camera look",
   demoTitle: "Exercise demo",
@@ -173,11 +175,7 @@ const EN = {
   tomorrow: "Tomorrow",
   gapFits: "☕ {n}-min gap · break fits",
   noMeetings: "No meetings in the next 24 hours",
-  signInTitle: "Join your team's leaderboard",
-  signInWhy: "Sign in with your work Google account. Your company comes from your email, so only teammates see your scores.",
   continueGoogle: "Continue with Google",
-  signInCalendar: "Also hold breaks during my Google Calendar meetings",
-  skipSignIn: "Skip for now (Personal mode only)",
   signInFailed: "Couldn't sign in with Google. Try again.",
   signedInAs: "Signed in as {email}",
   signOut: "Sign out",
@@ -311,6 +309,8 @@ const AR = {
   fallbackText: "اتبع التعليمات أدناه واضغط «تم» عند الانتهاء. لا نقاط XP هذه المرة.",
   coachOffline: "المدرب غير متصل",
   offlineText: "تعذّر الوصول إلى خادم الوضعية. اتبع التعليمات أدناه واضغط «تم» عند الانتهاء.",
+  coachBusy: "المدرب مشغول",
+  busyText: "خادم الوضعية ممتلئ حاليًا. اتبع التعليمات أدناه واضغط «تم» عند الانتهاء.",
   deniedText: "الوصول إلى الكاميرا محظور أو غير متوفر. اتبع التعليمات أدناه واضغط «تم» عند الانتهاء.",
   cameraLook: "مظهر الكاميرا",
   demoTitle: "عرض توضيحي للتمرين",
@@ -493,11 +493,7 @@ const AR = {
   tomorrow: "غدًا",
   gapFits: "☕ فجوة {n} دقيقة · تكفي لاستراحة",
   noMeetings: "لا اجتماعات خلال الساعات الأربع والعشرين القادمة",
-  signInTitle: "انضم إلى لوحة متصدري فريقك",
-  signInWhy: "سجّل الدخول بحساب Google الخاص بعملك. تُحدَّد شركتك من بريدك، لذا لا يرى نتائجك إلا زملاؤك.",
   continueGoogle: "المتابعة باستخدام Google",
-  signInCalendar: "أوقف الاستراحات أيضًا أثناء اجتماعاتي في تقويم Google",
-  skipSignIn: "تخطَّ الآن (الوضع الشخصي فقط)",
   signInFailed: "تعذّر تسجيل الدخول باستخدام Google. حاول مرة أخرى.",
   signedInAs: "تم تسجيل الدخول باسم {email}",
   signOut: "تسجيل الخروج",
@@ -550,22 +546,23 @@ export function applyLang(lang) {
   const root = document.documentElement;
   root.lang = lang;
   root.dir = lang === "ar" ? "rtl" : "ltr";
-  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(lang, el.dataset.i18n);
+  for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll("[data-i18n]"))) el.textContent = t(lang, el.dataset.i18n);
   for (const [sel, data, attr] of [
     ["[data-i18n-placeholder]", "i18nPlaceholder", "placeholder"],
     ["[data-i18n-title]", "i18nTitle", "title"],
     ["[data-i18n-aria]", "i18nAria", "aria-label"],
   ]) {
-    for (const el of document.querySelectorAll(sel)) el.setAttribute(attr, t(lang, el.dataset[data]));
+    for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(sel))) el.setAttribute(attr, t(lang, el.dataset[data]));
   }
 }
 
+/** @param {(lang: string) => void} [onChange] called with the new language when it changes */
 export async function initLang(onChange = () => location.reload()) {
   const { lang } = await chrome.storage.local.get("lang");
   const resolved = resolveLang(lang, navigator.language);
   applyLang(resolved);
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && "lang" in changes) onChange(changes.lang.newValue);
+    if (area === "local" && "lang" in changes) onChange(/** @type {string} */ (changes.lang.newValue));
   });
   return resolved;
 }

@@ -1,18 +1,10 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-.pytest_cache/
-
 # OS
 .DS_Store
 
 # Build output
 dist/
 
-# Supabase CLI
-supabase/.temp/
-supabase/.branches/
-
 node_modules/
+
+# Server secrets for deploy/docker-compose.yml
+deploy/.env

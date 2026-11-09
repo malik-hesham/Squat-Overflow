@@ -2,8 +2,9 @@ name: Release
 
 # Push a tag that matches extension/manifest.json "version" to ship everything:
 #   git tag v0.4.0 && git push origin v0.4.0
-# Order: tests -> DB migrations -> pose server on Fly.io -> GitHub Release -> Chrome Web Store.
-# One-time setup (secrets, Fly app, first store upload) is in docs/deployment.md.
+# Order: tests + store zip -> GitHub Release -> Chrome Web Store. The pose server is not deployed
+# from here; run it yourself (docs/deployment.md) and set the POSE_SERVER_URL variable to it.
+# One-time setup (variables, secrets, first store upload) is in docs/deployment.md.
 on:
   push:
     tags: ["v*"]
@@ -29,58 +30,22 @@ jobs:
             echo "::error::Tag $TAG does not match extension/manifest.json version $version (expected v$version)"
             exit 1
           fi
+      - env:
+          POSE_SERVER_URL: ${{ vars.POSE_SERVER_URL }}
+        run: |
+          if [ -z "$POSE_SERVER_URL" ]; then
+            echo "::error::Set the POSE_SERVER_URL repository variable (wss://<your server>/ws); the store zip is built for it. See docs/deployment.md."
+            exit 1
+          fi
 
   ci:
     name: CI
     needs: verify
     uses: ./.github/workflows/ci.yml
 
-  migrate-db:
-    name: Apply Supabase migrations
-    needs: ci
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-    steps:
-      - uses: actions/checkout@v7
-      # Same CLI version as the CI job. CLI v3 renames --linked to --remote.
-      - uses: supabase/setup-cli@v3
-        with:
-          version: 2.122.1
-      - run: supabase link --project-ref "$PROJECT_REF"
-      - run: supabase db push --linked --yes
-
-  deploy-server:
-    name: Deploy pose server to Fly.io
-    needs: migrate-db
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://squat-overflow-pose.fly.dev/health
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      TAG: ${{ github.ref_name }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master, 2026-10-30
-      - working-directory: server
-        run: flyctl deploy --remote-only --build-arg VERSION="$TAG"
-      - name: Live server reports the new version
-        run: |
-          app=$(sed -n 's/^app = "\(.*\)"$/\1/p' server/fly.toml)
-          for _ in $(seq 1 20); do
-            live=$(curl -fsS "https://$app.fly.dev/health" | jq -r .version) && [ "$live" = "$TAG" ] && exit 0
-            sleep 6
-          done
-          echo "::error::https://$app.fly.dev/health reports version '${live:-none}', expected $TAG"
-          exit 1
-
   github-release:
     name: GitHub Release
-    needs: deploy-server
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -102,7 +67,7 @@ jobs:
 
   publish-cws:
     name: Submit to Chrome Web Store
-    needs: deploy-server
+    needs: ci
     # Skipped until the store item exists and CWS_ITEM_ID is set (see docs/deployment.md).
     if: vars.CWS_ITEM_ID != ''
     runs-on: ubuntu-latest
