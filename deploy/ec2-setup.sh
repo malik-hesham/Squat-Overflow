@@ -5,7 +5,7 @@
 # See docs/aws-free-plan.md.
 set -euo pipefail
 
-# Swap: the image build (npm ci + tsc) and BlazePose share 2 GB of RAM with Postgres.
+# Swap: the image build (npm ci + tsc) shares the RAM with Postgres and the running server.
 if ! swapon --show | grep -q /swapfile; then
   sudo fallocate -l 2G /swapfile
   sudo chmod 600 /swapfile

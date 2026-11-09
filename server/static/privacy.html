@@ -18,34 +18,39 @@
 <body>
 <main>
   <h1>Squat Overflow privacy policy</h1>
-  <p class="updated">Last updated: 7 November 2026</p>
+  <p class="updated">Last updated: 9 November 2026</p>
 
   <p>Squat Overflow is a browser extension that reminds you to take short movement breaks and uses your webcam to count and score the exercises in each break. This page explains what data it handles, where that data goes, and how to remove it.</p>
 
   <h2>Camera frames</h2>
   <ul>
-    <li>During a break, and only after you allow camera access, the extension sends small JPEG frames (about 480 pixels wide) from your webcam to the Squat Overflow pose server over an encrypted connection (WSS).</li>
-    <li>The server finds body landmarks in each frame, sends back joint positions and a rep count, and then discards the frame. Frames are processed in memory only. They are never written to disk, logged, stored, or shared.</li>
-    <li>The server is the one set in the extension: your own computer by default, or a server your team runs.</li>
-    <li>When the camera is off, or you skip the camera, nothing is sent.</li>
-    <li>Blurred mode and the avatar characters change only the preview on your own screen. The server still needs the unblurred frame to find your pose.</li>
+    <li>During a break, and only after you allow camera access, the extension reads frames from your webcam and finds your body landmarks on your own computer, with a pose model that ships inside the extension (Google's MediaPipe). It counts reps and scores form there too.</li>
+    <li>Camera frames are processed on your device and never sent anywhere: not to our server, not to Google, not to anyone. They are never written to disk, logged or stored.</li>
+    <li>Blurred mode and the avatar characters change the preview on your own screen.</li>
   </ul>
 
   <h2>Data stored on your device</h2>
-  <p>Your settings, schedule, XP, level, streak, badges, challenges and break history are kept in the extension's local storage on your computer. They are not sent anywhere except as described below. Uninstalling the extension deletes them.</p>
+  <p>Your settings, schedule, XP, level, streak, badges, challenges and break history are kept in the extension's local storage on your computer. They are not sent anywhere unless you sign in, as described below. Uninstalling the extension deletes them.</p>
 
   <h2>Sign in with Google (optional)</h2>
   <ul>
-    <li>Signing in is optional, and you need it only for Competitive mode. The extension asks Google for your basic profile (name, email address and profile picture).</li>
-    <li>That sign-in is checked by our server (the same one that runs pose detection), which keeps an account record in its database with your Google account ID, email address, name and picture, so your leaderboard entry is tied to your verified work email.</li>
+    <li>Signing in is optional. You need it only for Competitive mode and for syncing your progress between devices. The extension asks Google for your basic profile (name, email address and profile picture).</li>
+    <li>That sign-in is checked by our server, which keeps an account record in its database with your Google account ID, email address, name and picture, so your leaderboard entry is tied to your verified work email.</li>
     <li>The sign-in session is stored in the extension's local storage. Signing out in Settings removes it from your device, but the account record stays until you ask us to delete it.</li>
+  </ul>
+
+  <h2>Sync between your devices (signed in only)</h2>
+  <ul>
+    <li>While you are signed in, the extension and the Squat Overflow apps send our server each finished break (its time, day, reps, moves, form score, XP, and whether it was completed), your shared settings (break interval, areas, active hours, workdays and similar preferences), and your badges and challenges. The server keeps them for your account, so your other signed-in devices show the same progress.</li>
+    <li>Signed out, nothing is synced: everything stays on the device.</li>
+    <li>Camera data is never part of it.</li>
   </ul>
 
   <h2>Leaderboard (Competitive mode only)</h2>
   <ul>
     <li>In Competitive mode, the extension sends these to our server, which stores them in its leaderboard database: the display name you choose, your XP, level, streak, weekly XP and chosen avatar.</li>
     <li>The server adds your company domain (for example <code>example.com</code>), taken from your signed-in work email. Personal addresses such as gmail.com can't join a leaderboard.</li>
-    <li>It never sends form scores, break history or camera data.</li>
+    <li>The leaderboard never shows form scores, break history or camera data.</li>
     <li>Only signed-in people from the same company domain can see the leaderboard. They see your name, level, XP, streak and avatar.</li>
     <li>Switching back to Personal mode, or signing out, deletes your leaderboard entry. Do this before you uninstall, or contact us to have the entry removed.</li>
   </ul>
@@ -58,7 +63,7 @@
   </ul>
 
   <h2>Exercise demo videos</h2>
-  <p>During a break, the window can show a short demo clip. The clip is embedded from YouTube's privacy-enhanced mode (youtube-nocookie.com), through a page on the pose server. YouTube receives the request like any embedded video.</p>
+  <p>During a break, the window can offer a short demo clip. Nothing is loaded from YouTube until you click it; the clip then opens on youtube.com in a small window, and YouTube receives the request like any visit to its site.</p>
 
   <h2>What we don't do</h2>
   <ul>

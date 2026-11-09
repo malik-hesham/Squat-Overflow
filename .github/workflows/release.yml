@@ -2,8 +2,9 @@ name: Release
 
 # Push a tag that matches extension/manifest.json "version" to ship everything:
 #   git tag v0.4.0 && git push origin v0.4.0
-# Order: tests + store zip -> GitHub Release -> Chrome Web Store. The pose server is not deployed
-# from here; run it yourself (docs/deployment.md) and set the POSE_SERVER_URL variable to it.
+# Order: tests + store zip -> GitHub Release -> Chrome Web Store. The optional API server (sign-in,
+# team board, sync) is not deployed from here; run it yourself (docs/deployment.md) and set the
+# API_URL variable to it, or leave API_URL unset for a local-only extension.
 # One-time setup (variables, secrets, first store upload) is in docs/deployment.md.
 on:
   push:
@@ -28,13 +29,6 @@ jobs:
           version=$(node -p "require('./extension/manifest.json').version")
           if [ "$TAG" != "v$version" ]; then
             echo "::error::Tag $TAG does not match extension/manifest.json version $version (expected v$version)"
-            exit 1
-          fi
-      - env:
-          POSE_SERVER_URL: ${{ vars.POSE_SERVER_URL }}
-        run: |
-          if [ -z "$POSE_SERVER_URL" ]; then
-            echo "::error::Set the POSE_SERVER_URL repository variable (wss://<your server>/ws); the store zip is built for it. See docs/deployment.md."
             exit 1
           fi
 

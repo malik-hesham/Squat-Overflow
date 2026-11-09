@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   server:
-    name: Pose server tests
+    name: API server tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -51,13 +51,13 @@ jobs:
       # (macos/SquatCore). A rule changed here needs fresh fixtures and a green `swift test`.
       - name: Mac parity fixtures match the extension
         run: node macos/scripts/parity-fixtures.mjs --check
-      # The store zip is built for the server in the POSE_SERVER_URL variable; without it there is no zip.
-      - if: vars.POSE_SERVER_URL != ''
-        env:
-          POSE_SERVER_URL: ${{ vars.POSE_SERVER_URL }}
+      - run: node --test 'scripts/tests/*.test.mjs'
+      # The pose model runs in the extension, so the zip always builds. With the API_URL variable set
+      # (https://<your API server>) it also has sign-in, the team board and sync; without, it's local only.
+      - env:
+          API_URL: ${{ vars.API_URL }}
         run: node scripts/build-extension.mjs
-      - if: vars.POSE_SERVER_URL != ''
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: extension-zip
           path: dist/*.zip
@@ -76,18 +76,16 @@ jobs:
       - run: shellcheck deploy/aws-provision.sh deploy/tests/fake-aws/aws
 
   docker:
-    name: Pose server image
+    name: API server image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: docker build --build-arg VERSION=ci -t squat-overflow-pose server
-      - name: BlazePose loads inside the image
-        run: docker run --rm squat-overflow-pose node -e "require('./dist/pose/pose-engine.js').PoseEngine.create().then((e) => { e.close(); console.log('pose engine ok'); })"
+      - run: docker build --build-arg VERSION=ci -t squat-overflow-api server
       - name: Server answers /health and /privacy
         run: |
-          docker run -d --name pose -p 8080:8080 squat-overflow-pose
+          docker run -d --name api -p 8080:8080 squat-overflow-api
           for _ in $(seq 1 30); do curl -fsS localhost:8080/health -o health.json && break; sleep 1; done
-          node -e "const b = require('./health.json'); if (!b.ok || b.version !== 'ci') throw new Error('version ' + b.version); console.log(b.exercises.length, 'exercises')"
+          node -e "const b = require('./health.json'); if (!b.ok || b.version !== 'ci') throw new Error('version ' + b.version); console.log('api server', b.version)"
           curl -fsS localhost:8080/privacy | grep -q "privacy policy"
       - if: failure()
-        run: docker logs pose || true
+        run: docker logs api || true

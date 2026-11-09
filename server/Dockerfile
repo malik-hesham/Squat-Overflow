@@ -1,4 +1,4 @@
-# Pose server image; runs on any container host (see docs/deployment.md).
+# API server image (sign-in, leaderboard, sync); runs on any container host (see docs/deployment.md).
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -15,8 +15,6 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
-# The BlazePose models are committed under models/, so nothing is downloaded at boot.
-COPY models ./models
 COPY static ./static
 
 USER node
