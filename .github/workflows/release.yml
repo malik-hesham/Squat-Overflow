@@ -2,8 +2,9 @@ name: Release
 
 # Push a tag that matches extension/manifest.json "version" to ship everything:
 #   git tag v0.4.0 && git push origin v0.4.0
-# Order: tests -> pose server on Fly.io (it applies DB migrations at startup) -> GitHub Release -> Chrome Web Store.
-# One-time setup (secrets, Fly app, first store upload) is in docs/deployment.md.
+# Order: tests + store zip -> GitHub Release -> Chrome Web Store. The pose server is not deployed
+# from here; run it yourself (docs/deployment.md) and set the POSE_SERVER_URL variable to it.
+# One-time setup (variables, secrets, first store upload) is in docs/deployment.md.
 on:
   push:
     tags: ["v*"]
@@ -29,51 +30,22 @@ jobs:
             echo "::error::Tag $TAG does not match extension/manifest.json version $version (expected v$version)"
             exit 1
           fi
+      - env:
+          POSE_SERVER_URL: ${{ vars.POSE_SERVER_URL }}
+        run: |
+          if [ -z "$POSE_SERVER_URL" ]; then
+            echo "::error::Set the POSE_SERVER_URL repository variable (wss://<your server>/ws); the store zip is built for it. See docs/deployment.md."
+            exit 1
+          fi
 
   ci:
     name: CI
     needs: verify
     uses: ./.github/workflows/ci.yml
 
-  deploy-server:
-    name: Deploy pose server to Fly.io
-    needs: ci
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://squat-overflow-pose.fly.dev/health
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      TAG: ${{ github.ref_name }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master, 2026-10-30
-      - working-directory: server
-        run: flyctl deploy --remote-only --build-arg VERSION="$TAG"
-      - name: Live server reports the new version
-        run: |
-          app=$(sed -n 's/^app = "\(.*\)"$/\1/p' server/fly.toml)
-          for _ in $(seq 1 20); do
-            live=$(curl -fsS "https://$app.fly.dev/health" | jq -r .version) && [ "$live" = "$TAG" ] && break
-            sleep 6
-          done
-          if [ "$live" != "$TAG" ]; then
-            echo "::error::https://$app.fly.dev/health reports version '${live:-none}', expected $TAG"
-            exit 1
-          fi
-      - name: Leaderboard API has its database
-        run: |
-          # Without a token the API answers 401; 503 means DATABASE_URL (or another secret) is missing.
-          app=$(sed -n 's/^app = "\(.*\)"$/\1/p' server/fly.toml)
-          code=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/leaderboard?period=all")
-          if [ "$code" != "401" ]; then
-            echo "::error::https://$app.fly.dev/leaderboard answered $code, expected 401. Check the Fly secrets in docs/deployment.md."
-            exit 1
-          fi
-
   github-release:
     name: GitHub Release
-    needs: deploy-server
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -95,7 +67,7 @@ jobs:
 
   publish-cws:
     name: Submit to Chrome Web Store
-    needs: deploy-server
+    needs: ci
     # Skipped until the store item exists and CWS_ITEM_ID is set (see docs/deployment.md).
     if: vars.CWS_ITEM_ID != ''
     runs-on: ubuntu-latest

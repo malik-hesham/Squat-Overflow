@@ -2,11 +2,12 @@
 // Builds the Chrome Web Store package: dist/extension/ (loadable unpacked) and
 // dist/squat-overflow-<version>.zip (what the store and GitHub Releases get).
 //
-//   node scripts/build-extension.mjs
-//   POSE_SERVER_URL=wss://example.fly.dev/ws node scripts/build-extension.mjs
+//   POSE_SERVER_URL=wss://pose.example.com/ws node scripts/build-extension.mjs
+//
+// There is no hosted default: POSE_SERVER_URL is required and must be a wss:// server you run.
 //
 // Differences from the extension/ folder you load unpacked:
-//  - config.js points at the hosted pose server instead of localhost, and its sign-in and
+//  - config.js points at POSE_SERVER_URL instead of localhost, and its sign-in and
 //    leaderboard API (API_URL) at the same host over https;
 //  - manifest.json has no "key" (the store rejects it on a first upload and assigns its own ID);
 //  - tests/, package.json and the type-checking files (tsconfig.json, *.d.ts, node_modules/) are left out.
@@ -20,7 +21,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "extension");
 const DIST = join(ROOT, "dist");
 const OUT = join(DIST, "extension");
-const DEFAULT_SERVER_URL = "wss://squat-overflow-pose.fly.dev/ws";
 const EXCLUDED = new Set(["tests", "package.json", "package-lock.json", "tsconfig.json", "node_modules", ".DS_Store"]);
 const SERVER_LINE = /^export const POSE_SERVER_URL = ".*";$/gm;
 const API_LINE = /^export const API_URL = ".*";$/gm;
@@ -30,7 +30,8 @@ function fail(message) {
   process.exit(1);
 }
 
-const serverUrl = process.env.POSE_SERVER_URL || DEFAULT_SERVER_URL;
+const serverUrl = process.env.POSE_SERVER_URL;
+if (!serverUrl) fail("set POSE_SERVER_URL to your pose server, e.g. POSE_SERVER_URL=wss://pose.example.com/ws");
 let server;
 try {
   server = new URL(serverUrl);

@@ -26,7 +26,7 @@
   <ul>
     <li>During a break, and only after you allow camera access, the extension sends small JPEG frames (about 480 pixels wide) from your webcam to the Squat Overflow pose server over an encrypted connection (WSS).</li>
     <li>The server finds body landmarks in each frame, sends back joint positions and a rep count, and then discards the frame. Frames are processed in memory only. They are never written to disk, logged, stored, or shared.</li>
-    <li>The server runs on Fly.io in Frankfurt, Germany.</li>
+    <li>The server is the one set in the extension: your own computer by default, or a server your team runs.</li>
     <li>When the camera is off, or you skip the camera, nothing is sent.</li>
     <li>Blurred mode and the avatar characters change only the preview on your own screen. The server still needs the unblurred frame to find your pose.</li>
   </ul>

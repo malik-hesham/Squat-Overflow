@@ -37,7 +37,7 @@
     "identity"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://squat-overflow-pose.fly.dev wss://*.trycloudflare.com wss://squat-overflow-pose.fly.dev https://www.googleapis.com https://oauth2.googleapis.com"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:* wss://*.trycloudflare.com https://www.googleapis.com https://oauth2.googleapis.com"
   },
   "browser_specific_settings": {
     "gecko": {

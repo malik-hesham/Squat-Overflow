@@ -6,24 +6,23 @@ The code is done and pushed in PR #11 (`feat/nestjs-pose-server`). These steps a
 
 - [ ] Open Google Cloud Console → **APIs & Services → Credentials**.
 - [ ] Open the extension's **web** OAuth client: `977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com`.
-- [ ] Under **Authorized redirect URIs**, add:
-      `https://squat-overflow-pose.fly.dev/auth/mobile-callback`
+- [ ] Under **Authorized redirect URIs**, add `https://<pose server host>/auth/mobile-callback`.
+      There is no hosted server any more, so this needs a pose server you run with public HTTPS
+      (see `docs/deployment.md`), and `API_URL` in `extension/config.js` pointed at it for the
+      mobile build. The default `http://127.0.0.1:8765` can't be a Google redirect from a device.
 - [ ] Save. Google can take a few minutes to apply the change.
 
 Until this is saved, mobile sign-in fails with Google's `redirect_uri_mismatch` error.
 
 ## 2. Deploy the server
 
-The relay page (`GET /auth/mobile-callback`) only exists on this branch.
+The relay page (`GET /auth/mobile-callback`) only exists on this branch. Releases no longer deploy the server.
 
 - [ ] Merge PR #11 into `main`.
-- [ ] Tag a release. The tag must match `extension/manifest.json`'s version, which is `0.4.0` now. Bump the version first if `v0.4.0` already exists.
-      ```bash
-      git tag v0.4.0 && git push origin v0.4.0
-      ```
+- [ ] Deploy `server/` from this code to your host (`docs/deployment.md`, "Running the pose server").
 - [ ] Check that the page is live. This should print `200`:
       ```bash
-      curl -s -o /dev/null -w "%{http_code}\n" https://squat-overflow-pose.fly.dev/auth/mobile-callback
+      curl -s -o /dev/null -w "%{http_code}\n" https://<pose server host>/auth/mobile-callback
       ```
 
 ## 3. Rebuild the mobile dev client

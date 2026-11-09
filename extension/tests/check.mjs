@@ -320,11 +320,13 @@ check("leaderboard payload maps fields without id, secret or company, zeroes sta
   assert.equal(stale.weekXp, 0);
 });
 
-check("leaderboard API is the hosted pose server, and the manifest CSP lets pages reach it", () => {
-  assert.equal(API_URL, "https://squat-overflow-pose.fly.dev");
+check("leaderboard API is the local pose server, and the manifest CSP lets pages reach it", () => {
+  assert.equal(API_URL, "http://127.0.0.1:8765");
   const manifest = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
   const connectSrc = manifest.content_security_policy.extension_pages.match(/connect-src([^;]*)/)[1].trim().split(/\s+/);
-  assert.ok(connectSrc.includes(new URL(API_URL).origin), "CSP connect-src misses the API origin");
+  const api = new URL(API_URL);
+  assert.ok(connectSrc.includes(`${api.protocol}//${api.hostname}:*`), "CSP connect-src misses the API origin");
+  assert.ok(!connectSrc.some((src) => src.includes("fly.dev")), "CSP still allows the old Fly.io host");
   assert.ok(!connectSrc.some((src) => src.includes("supabase")), "CSP still allows Supabase");
 });
 

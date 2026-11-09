@@ -1,4 +1,4 @@
-# Pose server image for Fly.io (see fly.toml and docs/deployment.md).
+# Pose server image; runs on any container host (see docs/deployment.md).
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./

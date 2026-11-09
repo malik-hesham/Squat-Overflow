@@ -32,7 +32,7 @@ cd macos && xcodebuild -scheme SquatOverflowBar test
 The server URL is the `SO_SERVER_URL` build setting. It defaults to `http://127.0.0.1:8765` (start it with `cd server && npm run start:dev`). To build against another server:
 
 ```bash
-cd macos && xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://squat-overflow-pose.fly.dev
+cd macos && xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://pose.example.com
 ```
 
 `SO_START_URL`, `SO_EXTENSION_ID` and `SO_GOOGLE_CLIENT_ID` in `project.yml` can be overridden the same way.

@@ -47,8 +47,13 @@ jobs:
       - run: npm run typecheck
         working-directory: extension
       - run: node extension/tests/check.mjs
-      - run: node scripts/build-extension.mjs
-      - uses: actions/upload-artifact@v7
+      # The store zip is built for the server in the POSE_SERVER_URL variable; without it there is no zip.
+      - if: vars.POSE_SERVER_URL != ''
+        env:
+          POSE_SERVER_URL: ${{ vars.POSE_SERVER_URL }}
+        run: node scripts/build-extension.mjs
+      - if: vars.POSE_SERVER_URL != ''
+        uses: actions/upload-artifact@v7
         with:
           name: extension-zip
           path: dist/*.zip
