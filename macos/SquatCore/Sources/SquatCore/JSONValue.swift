@@ -1,7 +1,7 @@
 import Foundation
 
 /// Any JSON value. Used where the extension passes loosely typed objects around: the server's
-/// settings document, catalog entries' demo clips, and wire messages from the pose server.
+/// settings document, catalog entries' demo clips, and messages from the pose gateway (extension/lib/pose/gateway.js).
 public enum JSONValue: Codable, Equatable, Sendable {
     case null
     case bool(Bool)

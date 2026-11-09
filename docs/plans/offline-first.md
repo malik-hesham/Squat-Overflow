@@ -17,7 +17,7 @@ Every item is done test-first (`/tdd-workflow`): a failing test, the minimum cod
 
 | | Chrome extension | Mobile | Mac menu bar |
 |---|---|---|---|
-| Pose model | Server: TF.js BlazePose lite over `WS /ws` (JPEG frames in, landmarks out) | On the phone: MediaPipe `pose_landmarker_lite.task` (`modules/squat-pose`) | No camera |
+| Pose model | Server: TF.js BlazePose lite over `WS /ws` (JPEG frames in, landmarks out) | On the phone: MediaPipe `pose_landmarker_lite.task` (`modules/squat-pose`) | Server, since PR #21 (`PoseSocket.swift`) |
 | Rep counting, form, calibration | Server: `server/src/analysis/` | On the phone: a separate TS port in `mobile/src/pose/analysis/` | none |
 | Exercise catalog, demo clips | Server: `ready` message, `GET /health`, `GET /embed/:id` | `mobile/src/pose/analysis/catalog.ts`, `demos.ts` | none |
 | Privacy blur mask | Server: `server/src/pose/mask.ts` (PNG data URL) | `expo-blur` (`src/pose/privacy.ts`) | none |
@@ -97,8 +97,10 @@ So the analysis exists twice (server and mobile), and the extension can't run a 
       Docs: `README.md`, `server/README.md`, `docs/deployment.md`, `docs/aws-free-plan.md`, `CHROMEWEBSTORE.md`, `server/static/privacy.html` and the manifest description say camera frames never leave the device and the server is only for optional sign-in, leaderboard and sync. `TODO.md`: the redirect URI is on the API server.
       verify: `node --test 'deploy/tests/*.test.mjs'` (14 pass); server tests still 113 after the privacy page edit.
 
+- [x] 13. Mac app breaks on the device (added after PR #21 gave the Mac app camera-coached breaks over the pose server's `/ws`). Done, option A: `macos/SquatOverflowBar/PoseBridge.swift` runs `extension/lib/pose` and the vendored MediaPipe in a web view that is never shown (`PoseWeb/bridge.html`, served from the app bundle through a `squatpose://` scheme handler, since modules and WASM don't load from `file://`). It speaks the old server's messages (JPEG frames in, JSON out, the mask as a PNG data URL), so `SquatCore.PoseLink` is unchanged. `extension/lib/pose/detector.js` now takes any image source (an `ImageBitmap` here). The catalog is bundled: `macos/scripts/parity-fixtures.mjs` exports `exerciseCatalog()` to `SquatCore/Resources/catalog.json` next to `i18n.json`. Ported from the extension: no `serverUrl` setting (`Store.dropRetiredKeys()` at launch), close 1011 = "Coach unavailable", no busy state, the demo opens on youtube.com from a button. Tests: `SquatOverflowBarTests/PoseBridgeTests.swift` starts the real model on a blank frame (about 5 s); `swift test` 141, app 8.
+
 - [ ] 12. End-to-end check.
-      With the network off: finish a break in Chrome, on the phone and in the VS Code extension; XP, streak and today's count update in each. Sign in on two clients, go online: each offline break uploads once and shows on the other client.
+      With the network off: finish a break in Chrome, on the phone, in the Mac app and in the VS Code extension; XP, streak and today's count update in each. Sign in on two clients, go online: each offline break uploads once and shows on the other client.
 
 Items 2 and 3 depend on item 1. Items 4 and 5 depend on 2 and 3. Item 6 can run after item 4. Items 7–10 depend only on item 6. Item 11 comes last before 12.
 

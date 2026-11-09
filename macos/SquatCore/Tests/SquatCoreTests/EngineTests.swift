@@ -42,7 +42,7 @@ final class EngineTests: XCTestCase {
     }
 
     override func setUp() async throws {
-        store = Store(MemoryStore(), defaultServerUrl: "ws://127.0.0.1:8765/ws")
+        store = Store(MemoryStore())
         host = FakeHost()
         now = at(9, 10, 5)
         engine = Engine(store: store, host: host, clock: { [unowned self] in self.now })

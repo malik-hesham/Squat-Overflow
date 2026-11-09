@@ -2,10 +2,11 @@
 // Expected outputs for the Mac app's Swift ports of the extension's rules, computed by the
 // extension's own modules (extension/lib). The Swift tests in macos/SquatCore replay every case
 // and must get the same answer, so a rule changed in the extension fails the Mac tests until the
-// port follows. Also exports the extension's i18n strings, which the Mac app bundles as-is.
+// port follows. Also exports the extension's i18n strings and exercise catalog (lib/pose), which the
+// Mac app bundles as-is.
 //
-//   node macos/scripts/parity-fixtures.mjs           writes both files
-//   node macos/scripts/parity-fixtures.mjs --check   exits 1 if either file is out of date
+//   node macos/scripts/parity-fixtures.mjs           writes the files
+//   node macos/scripts/parity-fixtures.mjs --check   exits 1 if any file is out of date
 //
 // Local-time rules (day keys, ISO weeks, active hours) run in Europe/Berlin so the cases cross
 // daylight-saving changes; the Swift tests use the same zone.
@@ -26,7 +27,7 @@ const activity = await lib("activity.js");
 const memes = await lib("memes.js");
 const syncCore = await lib("sync-core.js");
 const i18n = await lib("i18n.js");
-const serverStatus = await lib("server-status.js");
+const pose = await lib("pose/index.js");
 const badges = await lib("badges.js");
 // store.js reads chrome.storage only when called; a stub lets its constants load.
 globalThis.chrome = { storage: { local: {} } };
@@ -35,6 +36,7 @@ const auth = await lib("auth.js");
 
 const OUT = join(ROOT, "macos", "SquatCore", "Tests", "SquatCoreTests", "Fixtures", "parity.json");
 const STRINGS_OUT = join(ROOT, "macos", "SquatCore", "Sources", "SquatCore", "Resources", "i18n.json");
+const CATALOG_OUT = join(ROOT, "macos", "SquatCore", "Sources", "SquatCore", "Resources", "catalog.json");
 
 // Deterministic randomness (mulberry32), so the file only changes when a rule does.
 let seed = 0x5eed;
@@ -335,9 +337,10 @@ for (const kind of Object.keys(memes.MEMES)) {
 }
 for (const total of [0, 1, 2, 3, 6, 7, 12, 17, 18, 30]) for (const clips of [1, 2, 3]) add("memes.repMarks", [total, clips], memes.repMarks(total, clips));
 
-// ---------------------------------------------------------------- server-status.js, badges.js
+// ---------------------------------------------------------------- lib/pose, badges.js
 
-for (const code of [1000, 1001, 1006, 1011, 1013]) add("serverStatus.closeStatus", [code], serverStatus.closeStatus(code));
+// The catalog itself ships as Resources/catalog.json; this pins its order.
+add("pose.catalogKeys", [], pose.exerciseCatalog().map((e) => e.key));
 for (const lang of ["en", "ar"]) {
   for (const id of ["daily:variety", "daily:high_five", "daily:clean_form", "daily:early_mover", "daily:no_excuses", "daily:mystery", "weekly:Neck tension", "weekly:Eyes"]) {
     add("badges.badgeLabel", [id, lang], badges.badgeLabel(id, lang));
@@ -469,6 +472,7 @@ const sorted = Object.fromEntries(Object.keys(cases).sort().map((k) => [k, cases
 const files = [
   [OUT, `${JSON.stringify({ tz: process.env.TZ, generatedBy: "macos/scripts/parity-fixtures.mjs", catalogs, cases: sorted })}\n`],
   [STRINGS_OUT, `${JSON.stringify(strings, null, 1)}\n`],
+  [CATALOG_OUT, `${JSON.stringify(pose.exerciseCatalog(), null, 1)}\n`],
 ];
 
 if (process.argv.includes("--check")) {

@@ -1,7 +1,7 @@
 import Foundation
 
-/// One exercise of the pose server's catalog, as the "ready" message sends it
-/// (server/src/catalog.ts) and extension/lib/store.js caches it.
+/// One exercise of the catalog: exerciseCatalog() in extension/lib/pose/catalog.js, also what the
+/// pose gateway's "ready" message sends.
 public struct Exercise: Codable, Equatable, Sendable {
     public var key: String
     public var label: String
@@ -23,4 +23,13 @@ public struct Exercise: Codable, Equatable, Sendable {
         case key, label, metric, category, camera, stance, demo
         case howTo = "how_to"
     }
+}
+
+extension Exercise {
+    /// The office catalog, exported from extension/lib/pose by macos/scripts/parity-fixtures.mjs.
+    public static let catalog: [Exercise] = {
+        guard let url = Bundle.module.url(forResource: "catalog", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([Exercise].self, from: data)) ?? []
+    }()
 }

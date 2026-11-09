@@ -3,8 +3,9 @@
  * as the phone (mobile/modules/squat-pose), loaded from lib/vendor/mediapipe/. Nothing leaves the
  * device: the runtime, the WASM and the model are all files of the extension.
  *
- * Browser-only (it needs a video element and WebGL or WASM). `detect` returns what
- * lib/pose/gateway.js expects.
+ * Browser-only (it needs WebGL or WASM). A frame is a video element (the extension's pages) or any
+ * other image source with a width and height, such as an ImageBitmap (the Mac app's PoseBridge,
+ * macos/SquatOverflowBar/PoseWeb). `detect` returns what lib/pose/gateway.js expects.
  */
 import { FilesetResolver, PoseLandmarker } from "../vendor/mediapipe/vision_bundle.mjs";
 
@@ -35,13 +36,13 @@ export async function createDetector() {
 
   return {
     /**
-     * @param {HTMLVideoElement} video
+     * @param {HTMLVideoElement | ImageBitmap} frame
      * @param {number} ms
      * @param {{ mask: boolean }} opts
      */
-    async detect(video, ms, { mask }) {
-      const width = video.videoWidth;
-      const height = video.videoHeight;
+    async detect(frame, ms, { mask }) {
+      const width = "videoWidth" in frame ? frame.videoWidth : frame.width;
+      const height = "videoHeight" in frame ? frame.videoHeight : frame.height;
       if (!width || !height) throw new Error("no video frame yet");
       if (mask !== masks) {
         await landmarker.setOptions({ outputSegmentationMasks: mask });
@@ -52,7 +53,7 @@ export async function createDetector() {
       /** @type {import("./gateway.js").Detection} */
       let found = { width, height, landmarks: null, world: null, mask: null };
       // The result, and the mask's pixels, are only valid inside the callback: copy them out.
-      landmarker.detectForVideo(video, t, (res) => {
+      landmarker.detectForVideo(frame, t, (res) => {
         const lms = res.landmarks[0];
         const world = res.worldLandmarks[0];
         const m = res.segmentationMasks?.[0];

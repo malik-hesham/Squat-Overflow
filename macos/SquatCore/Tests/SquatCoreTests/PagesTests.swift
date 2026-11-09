@@ -20,7 +20,6 @@ final class PagesTests: XCTestCase {
     func valid() -> Settings {
         var s = Settings()
         s.areas = ["Knees"]
-        s.serverUrl = "ws://127.0.0.1:8765/ws"
         return s
     }
 
@@ -55,11 +54,6 @@ final class PagesTests: XCTestCase {
         XCTAssertEqual(problem({ $0.mode = "competitive"; $0.name = "Sam" }, email: "sam@gmail.com"), I18n.t("en", "errCompany"))
         XCTAssertEqual(problem({ $0.mode = "competitive"; $0.name = "Sam" }, email: nil), I18n.t("en", "errCompany"))
         XCTAssertNil(problem({ $0.mode = "competitive"; $0.name = "Sam" }, email: "sam@acme.io"))
-    }
-
-    func testServerMustBeAWebSocketURL() {
-        XCTAssertEqual(problem { $0.serverUrl = "http://127.0.0.1:8765" }, I18n.t("en", "errServer"))
-        XCTAssertNil(problem { $0.serverUrl = "wss://pose.example.com/ws" })
     }
 
     func testIntervalPresets() {

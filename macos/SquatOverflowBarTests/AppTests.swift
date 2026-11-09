@@ -5,9 +5,13 @@ import XCTest
 /// The app's own wiring. The rules it runs (schedule, XP, routine, sync, the break itself) are
 /// tested in SquatCore against the extension's answers.
 final class AppTests: XCTestCase {
-    func testThePoseSocketIsTheServersWS() {
-        XCTAssertEqual(Config.poseURL(for: URL(string: "http://127.0.0.1:8765")!), "ws://127.0.0.1:8765/ws")
-        XCTAssertEqual(Config.poseURL(for: URL(string: "https://pose.example.com")!), "wss://pose.example.com/ws")
+    /// The extension's pose code and model ship inside the app, so a break needs no network.
+    func testThePoseModelShipsInTheApp() {
+        for path in ["PoseWeb/bridge.html", "PoseWeb/bridge.js", "pose/gateway.js", "pose/detector.js",
+                     "mediapipe/vision_bundle.mjs", "mediapipe/vision_wasm_internal.wasm", "mediapipe/pose_landmarker_lite.task"] {
+            XCTAssertNotNil(PoseBridge.resource(path), "\(path) is missing from the app")
+        }
+        XCTAssertNil(PoseBridge.resource("pose/../../Info.plist"), "the scheme handler serves only its own folders")
     }
 
     func testEveryMemeClipIsBundled() {

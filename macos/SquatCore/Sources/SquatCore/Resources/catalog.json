@@ -1,0 +1,642 @@
+[
+ {
+  "key": "neck_tilt",
+  "label": "Neck side tilt",
+  "metric": "Head tilt",
+  "camera": "front",
+  "category": "Neck tension",
+  "how_to": "Ear towards shoulder, back to centre, then the other side. Each side is a rep.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "gBL3gYNtun0",
+   "seconds": 13,
+   "channel": "Armin Moridi",
+   "title": "Neck Side to Side Tilt Active Stretch",
+   "url": "https://www.youtube.com/watch?v=gBL3gYNtun0"
+  }
+ },
+ {
+  "key": "head_turn",
+  "label": "Look over your shoulder",
+  "metric": "Head turn",
+  "camera": "front",
+  "category": "Neck tension",
+  "how_to": "Turn your head slowly to one side, back to centre, then the other side.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "TBjOVrkpBy0",
+   "seconds": 16,
+   "channel": "Wibbi",
+   "title": "Sitting, active cervical rotation",
+   "url": "https://www.youtube.com/watch?v=TBjOVrkpBy0"
+  }
+ },
+ {
+  "key": "chin_to_chest",
+  "label": "Chin to chest",
+  "metric": "Chin drop",
+  "camera": "front",
+  "category": "Neck tension",
+  "how_to": "Sit tall, slowly lower your chin towards your chest, then lift your head back up.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "jpW6X3zffuM",
+   "seconds": 15,
+   "channel": "NeuStrength",
+   "title": "Chin to Chest Stretch",
+   "url": "https://www.youtube.com/watch?v=jpW6X3zffuM"
+  }
+ },
+ {
+  "key": "shoulder_shrug",
+  "label": "Shoulder shrugs",
+  "metric": "Ear height",
+  "camera": "front",
+  "category": "Neck tension",
+  "how_to": "Lift both shoulders up towards your ears, hold for a moment, then let them drop.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "9tFavSFK7UY",
+   "seconds": 13,
+   "channel": "Kara Shaffer Moves",
+   "title": "Seated Shoulder Shrugs",
+   "url": "https://www.youtube.com/watch?v=9tFavSFK7UY"
+  }
+ },
+ {
+  "key": "chin_tuck",
+  "label": "Chin tuck",
+  "metric": "Head forward",
+  "camera": "side",
+  "category": "Neck tension",
+  "how_to": "Sit tall, let your head glide forward, then pull your chin straight back into a double chin.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "kUuU2augcxg",
+   "seconds": 15,
+   "channel": "Heafner Health Physical Therapy",
+   "title": "Seated Cervical Retraction Repeated",
+   "url": "https://www.youtube.com/watch?v=kUuU2augcxg"
+  }
+ },
+ {
+  "key": "cross_swing",
+  "label": "Arm open & cross",
+  "metric": "Arm opening",
+  "camera": "front",
+  "category": "Rounded shoulders",
+  "how_to": "Open your arms wide, then hug them across your chest.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "FBg8ilWkEK8",
+   "seconds": 14,
+   "channel": "Dr. Christy Lee",
+   "title": "Arm Swings - Hugs",
+   "url": "https://www.youtube.com/watch?v=FBg8ilWkEK8"
+  }
+ },
+ {
+  "key": "wy_raise",
+  "label": "W to Y raise",
+  "metric": "Elbow angle",
+  "camera": "front",
+  "category": "Rounded shoulders",
+  "how_to": "Arms in a W with your shoulder blades squeezed, slide them up into a Y, then back to the W.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "HBCE9Ek0jLw",
+   "seconds": 10,
+   "channel": "Powered By Movement Physical Therapy & Performance",
+   "title": "Seated Wall Angel for Thoracic Mobility",
+   "url": "https://www.youtube.com/watch?v=HBCE9Ek0jLw"
+  }
+ },
+ {
+  "key": "shoulder_roll",
+  "label": "Backward shoulder rolls",
+  "metric": "Ear height",
+  "camera": "front",
+  "category": "Rounded shoulders",
+  "how_to": "Roll both shoulders up towards your ears, back, and down. Each roll is a rep.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "c-UmFZ8A_1Q",
+   "seconds": 11,
+   "channel": "Lift Your Life Academy",
+   "title": "Backward Shoulder Rolls",
+   "url": "https://www.youtube.com/watch?v=c-UmFZ8A_1Q"
+  }
+ },
+ {
+  "key": "thoracic_extension",
+  "label": "Chair-back extension",
+  "metric": "Torso lean",
+  "camera": "side",
+  "category": "Rounded shoulders",
+  "how_to": "Hands behind your head, gently arch your upper back over the top of your chair, then sit tall.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "qtFE6CHGK5Q",
+   "seconds": 17,
+   "channel": "Phyx Physio",
+   "title": "Thoracic Extension Over Chair",
+   "url": "https://www.youtube.com/watch?v=qtFE6CHGK5Q"
+  }
+ },
+ {
+  "key": "clasp_opener",
+  "label": "Clasped-hands chest opener",
+  "metric": "Arm lift",
+  "camera": "side",
+  "category": "Rounded shoulders",
+  "how_to": "Clasp your hands behind your back, squeeze your shoulder blades, lift your hands away, then lower.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "kxvUpG69uUc",
+   "seconds": 7,
+   "channel": "Reps and Steps",
+   "title": "Chest Stretch (Hands Behind Back) | Open Your Chest & Improve Posture",
+   "url": "https://www.youtube.com/watch?v=kxvUpG69uUc"
+  }
+ },
+ {
+  "key": "seated_row",
+  "label": "Seated rows",
+  "metric": "Elbow angle",
+  "camera": "side",
+  "category": "Upper back",
+  "how_to": "Arms straight in front, pull the elbows back and squeeze the shoulder blades.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "zw3fZKVS4tQ",
+   "seconds": 5,
+   "channel": "LiftSpan",
+   "title": "Best Back Exercises To Do At Home: Seated Row with Band",
+   "url": "https://www.youtube.com/watch?v=zw3fZKVS4tQ"
+  }
+ },
+ {
+  "key": "t_raise",
+  "label": "T-raise",
+  "metric": "Arm height",
+  "camera": "front",
+  "category": "Upper back",
+  "how_to": "Lift both arms out to the sides to shoulder height, squeeze your shoulder blades, then lower.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "XPPfnSEATJA",
+   "seconds": 18,
+   "channel": "National Academy of Sports Medicine (NASM)",
+   "title": "How to do a Dumbbell Lateral Raise",
+   "url": "https://www.youtube.com/watch?v=XPPfnSEATJA"
+  }
+ },
+ {
+  "key": "desk_punch",
+  "label": "Desk punches",
+  "metric": "Elbow angle",
+  "camera": "side",
+  "category": "Upper back",
+  "how_to": "Fists by your chest, punch straight forward, then pull back.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "FyaEGllqGDc",
+   "seconds": 12,
+   "channel": "A Pocket Full of Exercise",
+   "title": "Seated Punches",
+   "url": "https://www.youtube.com/watch?v=FyaEGllqGDc"
+  }
+ },
+ {
+  "key": "rhomboid_stretch",
+  "label": "Upper back stretch",
+  "metric": "Torso lean",
+  "camera": "side",
+  "category": "Upper back",
+  "how_to": "Clasp your hands in front, push them forward and round your upper back, then sit tall.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "IxAI_7vL-aw",
+   "seconds": 15,
+   "channel": "Patient Exercises",
+   "title": "Rhomboid and Middle Trap Stretch - Clasped Hands",
+   "url": "https://www.youtube.com/watch?v=IxAI_7vL-aw"
+  }
+ },
+ {
+  "key": "desk_row",
+  "label": "One-arm desk row",
+  "metric": "Elbow angle",
+  "camera": "side",
+  "category": "Upper back",
+  "how_to": "Lean on the desk with your far hand, pull the other elbow back to your ribs, then lower it.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "gzDJWs1kTlQ",
+   "seconds": 14,
+   "channel": "Felicia Soria",
+   "title": "Chair Single Arm Row",
+   "url": "https://www.youtube.com/watch?v=gzDJWs1kTlQ"
+  }
+ },
+ {
+  "key": "scaption",
+  "label": "Scaption raise",
+  "metric": "Arm height",
+  "camera": "front",
+  "category": "Shoulder & rotator cuff",
+  "how_to": "Thumbs up, raise both straight arms slightly forward of your sides to shoulder height, then lower.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "pPenE8MnVgU",
+   "seconds": 12,
+   "channel": "Triumph Physio",
+   "title": "Shoulder Scaption | Rotator Cuff strengthening",
+   "url": "https://www.youtube.com/watch?v=pPenE8MnVgU"
+  }
+ },
+ {
+  "key": "front_raise",
+  "label": "Front arm raise",
+  "metric": "Arm height",
+  "camera": "side",
+  "category": "Shoulder & rotator cuff",
+  "how_to": "Lift a straight arm forward to shoulder height, then lower it.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "E-E0EqERFBg",
+   "seconds": 11,
+   "channel": "OPEX Fitness",
+   "title": "Dumbbell Front Raise",
+   "url": "https://www.youtube.com/watch?v=E-E0EqERFBg"
+  }
+ },
+ {
+  "key": "overhead_reach",
+  "label": "Overhead reach",
+  "metric": "Arm height",
+  "camera": "front",
+  "category": "Shoulder & rotator cuff",
+  "how_to": "Reach both arms up towards the ceiling, then lower them.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "JLWVzoM9cxQ",
+   "seconds": 11,
+   "channel": "The Diary of a Physio",
+   "title": "Overhead Reaches - Sitting Home Health Exercise",
+   "url": "https://www.youtube.com/watch?v=JLWVzoM9cxQ"
+  }
+ },
+ {
+  "key": "external_rotation",
+  "label": "Elbows-in outward rotation",
+  "metric": "Arm opening",
+  "camera": "front",
+  "category": "Shoulder & rotator cuff",
+  "how_to": "Elbows tucked at your sides and bent, rotate both hands out wide, then back in front of you.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "PzX0v9JQJVA",
+   "seconds": 13,
+   "channel": "E3 Rehab Exercise Library",
+   "title": "Banded Bilateral Shoulder External Rotation",
+   "url": "https://www.youtube.com/watch?v=PzX0v9JQJVA"
+  }
+ },
+ {
+  "key": "cross_body_stretch",
+  "label": "Cross-body shoulder stretch",
+  "metric": "Arm across",
+  "camera": "front",
+  "category": "Shoulder & rotator cuff",
+  "how_to": "Bring one arm across your chest, hug it in with the other hand, release, then switch arms.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "RcQM08F8xvI",
+   "seconds": 12,
+   "channel": "Personalized Orthopedics",
+   "title": "POPB Crossover Arm Stretch",
+   "url": "https://www.youtube.com/watch?v=RcQM08F8xvI"
+  }
+ },
+ {
+  "key": "seated_side_bend",
+  "label": "Seated side bend",
+  "metric": "Shoulder tilt",
+  "camera": "front",
+  "category": "Lower back",
+  "how_to": "Sit tall, lean to one side, back to centre, then the other side.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "G6MnSiYRYkU",
+   "seconds": 12,
+   "channel": "A Pocket Full of Exercise",
+   "title": "Seated Side Bend",
+   "url": "https://www.youtube.com/watch?v=G6MnSiYRYkU"
+  }
+ },
+ {
+  "key": "knee_to_chest",
+  "label": "Seated knee hug",
+  "metric": "Hip angle",
+  "camera": "side",
+  "category": "Lower back",
+  "how_to": "Sit tall, hug one knee up towards your chest, lower it, then switch legs.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "MwFslmc6k0U",
+   "seconds": 15,
+   "channel": "E3 Rehab Exercise Library",
+   "title": "Seated Single Knee to Chest",
+   "url": "https://www.youtube.com/watch?v=MwFslmc6k0U"
+  }
+ },
+ {
+  "key": "hip_hinge",
+  "label": "Hip hinge",
+  "metric": "Torso lean",
+  "camera": "side",
+  "category": "Lower back",
+  "how_to": "Soft knees, push your hips back and tip your chest forward, then stand tall.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "RNgwXYQ4F0s",
+   "seconds": 13,
+   "channel": "KP Movement Institute",
+   "title": "Level 1 (Beginner) - Bodyweight Hip Hinge | No Gym Required",
+   "url": "https://www.youtube.com/watch?v=RNgwXYQ4F0s"
+  }
+ },
+ {
+  "key": "standing_side_bend",
+  "label": "Standing side bend",
+  "metric": "Torso tilt",
+  "camera": "front",
+  "category": "Lower back",
+  "how_to": "Stand tall, slide one hand down your leg, back to centre, then the other side.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "8dAH_w94pDU",
+   "seconds": 8,
+   "channel": "Nexoft Fitness",
+   "title": "Standing Side Bend",
+   "url": "https://www.youtube.com/watch?v=8dAH_w94pDU"
+  }
+ },
+ {
+  "key": "back_extension",
+  "label": "Standing back extension",
+  "metric": "Torso lean",
+  "camera": "side",
+  "category": "Lower back",
+  "how_to": "Stand tall with your hands on your lower back, gently lean back, then return.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "IAMfLvZqAhs",
+   "seconds": 14,
+   "channel": "Performance Driven Physical Therapy",
+   "title": "Standing Back Extension",
+   "url": "https://www.youtube.com/watch?v=IAMfLvZqAhs"
+  }
+ },
+ {
+  "key": "wrist_flex",
+  "label": "Wrist flex & extend",
+  "metric": "Wrist angle",
+  "camera": "side",
+  "category": "Wrist & hand",
+  "how_to": "Arm out in front, bend the hand up or down, then straighten it.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "TjYzzl_RbbM",
+   "seconds": 17,
+   "channel": "Husky Orthopaedics",
+   "title": "Exercise and Arthritis: Wrist flexion and extension",
+   "url": "https://www.youtube.com/watch?v=TjYzzl_RbbM"
+  }
+ },
+ {
+  "key": "extensor_stretch",
+  "label": "Wrist extensor stretch",
+  "metric": "Wrist angle",
+  "camera": "side",
+  "category": "Wrist & hand",
+  "how_to": "Arm straight out, palm down. Gently bend the hand down with your other hand, then release.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "tySyj745A0A",
+   "seconds": 14,
+   "channel": "South Sherbrook Therapy Inc.",
+   "title": "Forearm (Wrist) Extensor Stretch",
+   "url": "https://www.youtube.com/watch?v=tySyj745A0A"
+  }
+ },
+ {
+  "key": "flexor_stretch",
+  "label": "Wrist flexor stretch",
+  "metric": "Wrist angle",
+  "camera": "side",
+  "category": "Wrist & hand",
+  "how_to": "Arm straight out, palm up. Gently pull your fingers back with your other hand, then release.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "z_C50jktRbU",
+   "seconds": 13,
+   "channel": "South Sherbrook Therapy Inc.",
+   "title": "Forearm (Wrist) Flexor Stretch",
+   "url": "https://www.youtube.com/watch?v=z_C50jktRbU"
+  }
+ },
+ {
+  "key": "prayer_stretch",
+  "label": "Prayer stretch",
+  "metric": "Wrist angle",
+  "camera": "front",
+  "category": "Wrist & hand",
+  "how_to": "Palms together in front of your chest, lower your hands until the wrists stretch, then lift them.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "_x9CCeFtuZ4",
+   "seconds": 10,
+   "channel": "Dr. Aliyyah Alidina",
+   "title": "Prayer Stretch for Carpal Tunnel",
+   "url": "https://www.youtube.com/watch?v=_x9CCeFtuZ4"
+  }
+ },
+ {
+  "key": "nerve_glide",
+  "label": "Median nerve glide",
+  "metric": "Elbow angle",
+  "camera": "front",
+  "category": "Wrist & hand",
+  "how_to": "Hands by your shoulders, palms up. Straighten both arms out to the sides, palms out, then bend back.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "frl-Ca2aYV8",
+   "seconds": 17,
+   "channel": "Resilience RX",
+   "title": "Standing Median Nerve Glide | Waukesha's Best Physical Therapy",
+   "url": "https://www.youtube.com/watch?v=frl-Ca2aYV8"
+  }
+ },
+ {
+  "key": "seated_knee_ext",
+  "label": "Seated leg extension",
+  "metric": "Knee angle",
+  "camera": "side",
+  "category": "Knees",
+  "how_to": "Sit tall, straighten one leg out in front, lower it, then switch.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "grE0Gbhh7pg",
+   "seconds": 15,
+   "channel": "GLORY SPORT PHYSIO",
+   "title": "Extensión de rodilla sentado - Seated knee extension | Rehab rodilla",
+   "url": "https://www.youtube.com/watch?v=grE0Gbhh7pg"
+  }
+ },
+ {
+  "key": "heel_slide",
+  "label": "Seated heel slide",
+  "metric": "Knee angle",
+  "camera": "side",
+  "category": "Knees",
+  "how_to": "Feet flat, slide one foot back under your chair to bend the knee, slide it forward, then switch.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "g-BVnc8mE9Y",
+   "seconds": 15,
+   "channel": "CafePhysio",
+   "title": "Seated Heel Slides",
+   "url": "https://www.youtube.com/watch?v=g-BVnc8mE9Y"
+  }
+ },
+ {
+  "key": "sit_to_stand",
+  "label": "Sit to stand",
+  "metric": "Knee angle",
+  "camera": "side",
+  "category": "Knees",
+  "how_to": "Stand up from your chair and sit back down without using your hands.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "Dg20pIkkzh8",
+   "seconds": 16,
+   "channel": "NHS University Hospitals Plymouth Physiotherapy",
+   "title": "Sit to stand",
+   "url": "https://www.youtube.com/watch?v=Dg20pIkkzh8"
+  }
+ },
+ {
+  "key": "mini_squat",
+  "label": "Mini squat",
+  "metric": "Knee angle",
+  "camera": "side",
+  "category": "Knees",
+  "how_to": "Hold the desk if you like and bend the knees a little, then stand tall.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "NDdzXVxrh-U",
+   "seconds": 17,
+   "channel": "Trak Videos",
+   "title": "45 - Mini squat",
+   "url": "https://www.youtube.com/watch?v=NDdzXVxrh-U"
+  }
+ },
+ {
+  "key": "hamstring_curl",
+  "label": "Standing hamstring curl",
+  "metric": "Knee angle",
+  "camera": "side",
+  "category": "Knees",
+  "how_to": "Hold the desk, bring one heel towards your seat, lower it, then switch legs.",
+  "stance": "standing",
+  "demo": {
+   "youtube_id": "PpnhMmx56ag",
+   "seconds": 12,
+   "channel": "Concept Move",
+   "title": "Rehab Exercise - Standing Hamstring Curl Body weight",
+   "url": "https://www.youtube.com/watch?v=PpnhMmx56ag"
+  }
+ },
+ {
+  "key": "palming",
+  "label": "Palming",
+  "metric": "Hand height",
+  "camera": "front",
+  "category": "Eyes",
+  "how_to": "Rub your palms warm, cup them over your closed eyes for a slow breath, then lower your hands.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "G1za5_1eCIw",
+   "seconds": 7,
+   "channel": "Dr. Sunil Dachepalli - Orthopaedic Surgeon",
+   "title": "Palming | Target: Eyes and Facial Muscles Relaxation",
+   "url": "https://www.youtube.com/watch?v=G1za5_1eCIw"
+  }
+ },
+ {
+  "key": "temple_massage",
+  "label": "Temple massage",
+  "metric": "Hand height",
+  "camera": "front",
+  "category": "Eyes",
+  "how_to": "Close your eyes, rub small slow circles on your temples with your fingertips, then lower your hands.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "1-hVj9Zqcjk",
+   "seconds": 17,
+   "channel": "Benefit Corporate Health",
+   "title": "Tension Headache? Try this Temple Massage",
+   "url": "https://www.youtube.com/watch?v=1-hVj9Zqcjk"
+  }
+ },
+ {
+  "key": "look_far",
+  "label": "Look into the distance",
+  "metric": "Head turn",
+  "camera": "front",
+  "category": "Eyes",
+  "how_to": "Turn to something far away, like a window, focus on it for a slow breath, then turn back.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "6Qgp1eXmXkg",
+   "seconds": 17,
+   "channel": "Low Vision Calgary - Neuro-Concussion Optometry",
+   "title": "20 20 20 Rule - Digital Eye Strain",
+   "url": "https://www.youtube.com/watch?v=6Qgp1eXmXkg"
+  }
+ },
+ {
+  "key": "near_far_focus",
+  "label": "Near-far focus",
+  "metric": "Elbow angle",
+  "camera": "side",
+  "category": "Eyes",
+  "how_to": "Thumb up at arm's length, keep it sharp as you bring it slowly to your nose, then push it back out.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "rkZqDNQvblc",
+   "seconds": 19,
+   "channel": "Brain Balance Achievement Center of Bergen County",
+   "title": "Near Far Focusing",
+   "url": "https://www.youtube.com/watch?v=rkZqDNQvblc"
+  }
+ },
+ {
+  "key": "eye_track_vertical",
+  "label": "Thumb tracking",
+  "metric": "Arm height",
+  "camera": "side",
+  "category": "Eyes",
+  "how_to": "Head still, follow your thumb with your eyes as you raise a straight arm up high, then lower it.",
+  "stance": "seated",
+  "demo": {
+   "youtube_id": "3Iu4tlovL-E",
+   "seconds": 15,
+   "channel": "Glycemia Anti Diabetic Clinic",
+   "title": "Exercise 1 - Eye up and down",
+   "url": "https://www.youtube.com/watch?v=3Iu4tlovL-E"
+  }
+ }
+]

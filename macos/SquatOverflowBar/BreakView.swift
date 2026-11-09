@@ -1,6 +1,5 @@
 import SquatCore
 import SwiftUI
-import WebKit
 
 /// extension/break.html as SwiftUI. Everything it shows comes from SquatCore.BreakSession.
 struct BreakView: View {
@@ -135,12 +134,7 @@ private struct BreakContent: View {
 
     private var routine: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                stage
-                if let url = session.demoURL {
-                    DemoWebView(url: url).frame(width: 280).clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-            }
+            stage
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.manualHowTo ?? (session.moves.indices.contains(session.index) ? session.moves[session.index].howTo : ""))
@@ -152,6 +146,10 @@ private struct BreakContent: View {
                 Spacer()
                 if session.canSwap {
                     Button(t("swap")) { session.swap() }.help(t("swapTitle"))
+                }
+                // Like the extension: the clip opens on youtube.com, and only on a click.
+                if let url = session.demoURL, let label = session.demoLabel {
+                    Button(label) { NSWorkspace.shared.open(url) }
                 }
             }
             HStack(spacing: 16) {
@@ -282,22 +280,5 @@ private struct PreviewImage: View {
         if let image = holder.preview {
             Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fit)
         }
-    }
-}
-
-/// The demo clip, through the pose server's /embed page (like the extension's iframe).
-private struct DemoWebView: NSViewRepresentable {
-    let url: URL
-
-    func makeNSView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.mediaTypesRequiringUserActionForPlayback = []
-        let view = WKWebView(frame: .zero, configuration: config)
-        view.load(URLRequest(url: url))
-        return view
-    }
-
-    func updateNSView(_ view: WKWebView, context: Context) {
-        if view.url != url { view.load(URLRequest(url: url)) }
     }
 }

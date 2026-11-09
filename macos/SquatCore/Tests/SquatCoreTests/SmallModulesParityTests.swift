@@ -26,10 +26,6 @@ final class SmallModulesParityTests: XCTestCase {
         checkParity("memes.repMarks") { try json(Memes.repMarks(totalReps: try $0[0].as_(), clips: try $0[1].as_())) }
     }
 
-    func testCloseCode1013MeansBusy() {
-        checkParity("serverStatus.closeStatus") { .string(PoseStatus.closeStatus(try $0[0].as_()).rawValue) }
-    }
-
     func testBadgeLabels() {
         checkParity("badges.badgeLabel") { .string(Badges.label(try $0[0].as_(), lang: try $0[1].as_())) }
     }

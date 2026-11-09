@@ -2,8 +2,8 @@ import AVFoundation
 import CoreImage
 import SquatCore
 
-/// The webcam: frames for the pose server (480 px wide JPEG, quality 0.7, like
-/// extension/lib/pose-client.js) and the mirrored preview.
+/// The webcam: frames for the pose model (480 px wide JPEG, quality 0.7, which PoseBridge decodes
+/// in its web view) and the mirrored preview. Frames never leave the Mac.
 final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     static let captureWidth: CGFloat = 480
     static let jpegQuality: CGFloat = 0.7

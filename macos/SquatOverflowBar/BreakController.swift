@@ -4,7 +4,8 @@ import SquatCore
 import SwiftUI
 
 /// One break window (extension/break.html as a native window). It owns the camera, the pose
-/// socket and the sounds, and runs a SquatCore.BreakSession, which holds the break's rules.
+/// model (PoseBridge: the extension's lib/pose, on this Mac) and the sounds, and runs a
+/// SquatCore.BreakSession, which holds the break's rules.
 @MainActor
 final class BreakController: NSObject, NSWindowDelegate, BreakSessionHost {
     static let size = NSSize(width: 980, height: 760) // BREAK_WINDOW in extension/service-worker.js
@@ -17,7 +18,7 @@ final class BreakController: NSObject, NSWindowDelegate, BreakSessionHost {
     private var session: BreakSession?
     private let camera = Camera()
     private lazy var renderer = PreviewRenderer(context: camera.context)
-    private var socket: PoseSocket?
+    private var socket: PoseBridge?
     private var link: PoseLink?
     private var sounds: Sounds?
     private var ticker: Timer?
@@ -50,18 +51,15 @@ final class BreakController: NSObject, NSWindowDelegate, BreakSessionHost {
         window?.makeKeyAndOrderFront(nil)
     }
 
-    /// init() in extension/break.js: settings, the catalog from the server (or the cached one), then the routine.
+    /// init() in extension/break.js: settings, lib/pose's catalog (bundled), then the routine.
     private func load() async {
         let store = model.store
         let settings = store.settings()
         let lang = I18n.resolveLang(settings.lang, browserLang: Locale.preferredLanguages.first)
         privacy = settings.privacy
         sounds = Sounds(store: store, lang: lang)
-        var catalog: [Exercise] = []
-        if let url = URL(string: settings.serverUrl) { catalog = await PoseSocket.fetchCatalog(url) }
-        if catalog.isEmpty { catalog = store.catalog() } else { store.cacheCatalog(catalog) }
         guard window != nil else { return } // closed while loading
-        let s = BreakSession(settings: settings, schedule: store.schedule(), catalog: catalog, manual: manual, lang: lang,
+        let s = BreakSession(settings: settings, schedule: store.schedule(), catalog: Exercise.catalog, manual: manual, lang: lang,
                              online: model.online, host: self)
         session = s
         holder.session = s
@@ -72,22 +70,21 @@ final class BreakController: NSObject, NSWindowDelegate, BreakSessionHost {
 
     func startPose() async -> Bool {
         guard await Camera.requestAccess(), camera.start() else { return false }
-        guard let url = URL(string: model.store.settings().serverUrl) else { return false }
-        let socket = PoseSocket()
+        let socket = PoseBridge()
         let link = PoseLink(
             privacy: privacy,
             send: { [weak socket] in socket?.send($0) },
             now: { CACurrentMediaTime() },
             onFrame: { [weak self] in self?.session?.frame($0) },
             onStatus: { [weak self] in self?.session?.poseStatus($0) },
-            onCatalog: { [weak self] in self?.model.store.cacheCatalog($0) })
+            onCatalog: { _ in }) // the catalog is bundled (Exercise.catalog)
         socket.onOpen = { [weak link] in link?.opened() }
         socket.onText = { [weak link] in link?.received($0) }
         socket.onClose = { [weak link] in link?.closed(code: $0) }
         self.socket = socket
         self.link = link
         link.start()
-        socket.connect(url)
+        socket.connect()
         ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -97,7 +94,7 @@ final class BreakController: NSObject, NSWindowDelegate, BreakSessionHost {
         return true
     }
 
-    /// 30 times a second: draw the preview, and hand the server a frame when its slot is free.
+    /// 30 times a second: draw the preview, and hand the pose model a frame when its slot is free.
     private func tick() {
         guard let frame = camera.latest else { return }
         if let link, link.wantsFrame, !encoding {

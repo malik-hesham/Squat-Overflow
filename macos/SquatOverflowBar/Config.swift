@@ -26,17 +26,6 @@ enum Config {
         return base.appendingPathComponent(path)
     }
 
-    /// The pose WebSocket on a server: http → ws, https → wss, path /ws. The extension's
-    /// POSE_SERVER_URL has the same shape; it's the default for the `serverUrl` setting.
-    static func poseURL(for server: URL) -> String {
-        var c = URLComponents(url: server, resolvingAgainstBaseURL: false) ?? URLComponents()
-        c.scheme = c.scheme == "https" ? "wss" : "ws"
-        c.path = "/ws"
-        return c.string ?? "ws://127.0.0.1:8765/ws"
-    }
-
-    static var poseURL: String { serverURL.map { poseURL(for: $0) } ?? "ws://127.0.0.1:8765/ws" }
-
     static let googleClientID = string(
         "SOGoogleClientID", "977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com")
 

@@ -13,7 +13,7 @@ final class AppModel: ObservableObject, EngineHost {
     static let underTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     let auth = Auth()
-    let store = Store(underTests ? MemoryStore() : FileStore(url: Config.storeURL), defaultServerUrl: Config.poseURL)
+    let store = Store(underTests ? MemoryStore() : FileStore(url: Config.storeURL))
     private(set) var engine: Engine!
     private(set) lazy var api = ServerAPI(auth: auth)
     private lazy var syncer = SyncClient(store: store, transport: api, clock: Self.nowMs)
@@ -40,6 +40,7 @@ final class AppModel: ObservableObject, EngineHost {
     nonisolated static func nowMs() -> Millis { LocalTime.millis(Date()) }
 
     init() {
+        store.dropRetiredKeys() // the pose server's URL and catalog, from before the model ran here
         session = auth.session
         engine = Engine(store: store, host: self, clock: Self.nowMs)
         UILang.current = lang
