@@ -47,6 +47,10 @@ jobs:
       - run: npm run typecheck
         working-directory: extension
       - run: node extension/tests/check.mjs
+      # The Mac app ports these rules to Swift and its tests replay the extension's answers
+      # (macos/SquatCore). A rule changed here needs fresh fixtures and a green `swift test`.
+      - name: Mac parity fixtures match the extension
+        run: node macos/scripts/parity-fixtures.mjs --check
       # The store zip is built for the server in the POSE_SERVER_URL variable; without it there is no zip.
       - if: vars.POSE_SERVER_URL != ''
         env:

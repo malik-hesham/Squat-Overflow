@@ -1,160 +1,171 @@
+import SquatCore
 import SwiftUI
 
+/// The menu bar window: extension/popup.html, natively.
 struct MenuView: View {
     @EnvironmentObject private var model: AppModel
 
+    private var lang: String { model.lang }
+    private func t(_ key: String, _ vars: [String: Any] = [:]) -> String { I18n.t(lang, key, vars) }
+
     var body: some View {
+        let settings = model.settings
+        let profile = model.store.profile()
+        let schedule = model.store.schedule()
+        let nowMs = LocalTime.millis(model.now)
         VStack(alignment: .leading, spacing: 12) {
-            if let session = model.session {
-                signedIn(session)
+            me(settings, profile)
+            if !settings.setupDone {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(t("finishSetup")).font(.callout)
+                    Button(t("openSetup"), action: model.openSettings)
+                }
             } else {
-                signedOut
+                next(schedule, settings, nowMs)
             }
+            stats(profile, schedule, nowMs)
+            challenges(Challenges.withPeriods(profile, now: nowMs))
+            HStack {
+                Button(action: model.breakNow) { Label(t("breakNow"), systemImage: "figure.strengthtraining.functional").frame(maxWidth: .infinity) }
+                    .buttonStyle(.borderedProminent)
+                Button(schedule.pausedUntil > nowMs ? t("resume") : t("pause"), action: model.togglePause)
+                    .disabled(!settings.setupDone)
+            }
+            team
             if let error = model.error {
                 Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            footer
+            HStack {
+                Button(t("settings"), action: model.openSettings)
+                Spacer()
+                Button("Quit") { NSApp.terminate(nil) }
+            }
+            .buttonStyle(.link)
+            .font(.callout)
         }
         .padding(14)
-        .frame(width: 300)
-        .task { await model.refresh() } // every time the menu opens
+        .frame(width: 320)
+        .environment(\.layoutDirection, lang == "ar" ? .rightToLeft : .leftToRight)
+        .task { await model.loadBoard() }
     }
 
-    // MARK: Signed out
-
-    private var signedOut: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Squat Overflow").font(.headline)
-
-            nextBreak
-
-            breakNowButton
-
-            // Optional, like the extension's Options → Profile: everything above works signed out.
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Sign in to sync your schedule and see your level, streak and team board.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button {
-                    model.signIn()
-                } label: {
-                    HStack {
-                        if model.signingIn { ProgressView().controlSize(.small) }
-                        Text("Continue with Google")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .disabled(model.signingIn)
-            }
-        }
-    }
-
-    private var breakNowButton: some View {
-        Button(action: model.breakNow) {
-            Label("Break now", systemImage: "figure.walk").frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .help("Opens the break in Chrome")
-    }
-
-    // MARK: Signed in
-
-    @ViewBuilder
-    private func signedIn(_ session: Session) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(model.settings?.name.isEmpty == false ? model.settings!.name : (session.name.isEmpty ? "Squat Overflow" : session.name))
-                .font(.headline)
-            Text(session.email).font(.caption).foregroundStyle(.secondary)
-        }
-
-        if let p = model.profile {
-            progress(p)
-            HStack(spacing: 16) {
-                stat("🔥", "\(p.streak)", p.streak == 1 ? "day streak" : "days streak")
-                stat("✅", "\(p.todayBreaks)", "today")
-                stat("⚡️", "\(p.weekXp)", "XP this week")
-            }
-        } else {
-            ProgressView().controlSize(.small)
-        }
-
-        nextBreak
-
-        breakNowButton
-
-        team
-    }
-
-    private func progress(_ p: Profile) -> some View {
-        let lvl = Levels.progress(xp: p.xp)
+    private func me(_ settings: SquatCore.Settings, _ profile: Profile) -> some View {
+        let lv = XP.levelFor(xp: profile.xp)
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Level \(p.level) · \(p.levelName)").font(.subheadline.weight(.semibold))
+                Text(settings.name.isEmpty ? t("you") : settings.name).font(.headline)
                 Spacer()
-                Text(lvl.next.map { "\(p.xp) / \($0) XP" } ?? "\(p.xp) XP")
+                Text(lv.next.map { t("xpOf", ["xp": profile.xp, "next": $0]) } ?? t("xpMax", ["xp": profile.xp]))
                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             }
-            ProgressView(value: min(max(lvl.fraction, 0), 1)).tint(.green)
+            Text(t("level", ["n": lv.level, "name": I18n.levelName(lang, lv.level, fallback: lv.name)])).font(.subheadline)
+            ProgressView(value: min(max(lv.progress, 0), 1)).tint(.green)
         }
     }
 
-    private func stat(_ icon: String, _ value: String, _ label: String) -> some View {
+    private func next(_ schedule: ScheduleState, _ settings: SquatCore.Settings, _ nowMs: Millis) -> some View {
+        let time = { (t: Millis) in LocalTime.date(t).formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(I18n.locale(lang))) }
+        let day = { (t: Millis) in LocalTime.date(t).formatted(Date.FormatStyle().weekday(.abbreviated).locale(I18n.locale(lang))) }
+        return VStack(alignment: .leading, spacing: 2) {
+            Label(Popup.nextText(schedule: schedule, settings: settings, now: nowMs, lang: lang, time: time, weekday: day), systemImage: "timer")
+                .font(.callout)
+            if let shifted = Popup.shiftedText(schedule: schedule, settings: settings, now: nowMs, lang: lang, time: time) {
+                Text(shifted).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func stats(_ profile: Profile, _ schedule: ScheduleState, _ nowMs: Millis) -> some View {
+        HStack(spacing: 16) {
+            stat("\(Popup.todayBreaks(model.store.log(), now: nowMs))", t("breaksToday"))
+            stat("\(schedule.skipsInRow)", t("skipsInRow"))
+            stat("\(profile.streak)", t("dayStreak"))
+        }
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(icon) \(value)").font(.body.weight(.semibold)).monospacedDigit()
+            Text(value).font(.title3.weight(.semibold)).monospacedDigit()
             Text(label).font(.caption2).foregroundStyle(.secondary)
         }
     }
 
-    @ViewBuilder
-    private var nextBreak: some View {
-        if let next = model.nextBreak {
-            let left = next.timeIntervalSince(model.now)
-            HStack {
-                Image(systemName: "timer")
-                Text(left <= 0 ? "Time to move" : "Next break in \(Schedule.countdownText(left))")
-                Spacer()
-                Text(next, format: Date.FormatStyle(date: Calendar.current.isDateInToday(next) ? .omitted : .abbreviated, time: .shortened))
-                    .foregroundStyle(.secondary)
+    /// renderChallenges() in extension/popup.js.
+    private func challenges(_ p: Profile) -> some View {
+        let d = p.daily!
+        let w = p.weekly!
+        func progress(_ id: String) -> (Int, Int, String) {
+            switch id {
+            case "variety": return (d.areas.count, 3, t("unitAreas"))
+            case "high_five": return (d.breaks, 5, t("unitBreaks"))
+            case "clean_form": return (d.done.contains(id) ? 1 : 0, 1, t("unitCleanForm"))
+            case "early_mover": return (d.done.contains(id) ? 1 : 0, 1, t("unitEarly"))
+            default: return (d.run, 3, t("unitNoSkips"))
             }
-            .font(.callout)
         }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(t("challenges")).font(.subheadline.weight(.semibold))
+            ForEach(d.ids, id: \.self) { id in
+                let c = Challenges.dailyPool.first { $0.id == id }!
+                let (have, need, unit) = progress(id)
+                tile(Badges.challengeIcon(id), I18n.nameText(lang, "challenge.\(id)", fallback: c.name), c.bonus, have, need, unit, d.done.contains(id))
+            }
+            let area = I18n.areaName(lang, w.area)
+            tile("🏅", t("areaWeek", ["area": area]), Challenges.weeklyBonus, w.count, Challenges.weeklyTarget,
+                 t("unitAreaExercises", ["area": area]), w.done)
+            if !p.badges.isEmpty {
+                Text(p.badges.map { Badges.label($0, lang: lang) }.joined(separator: "  ")).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func tile(_ icon: String, _ name: String, _ bonus: Int, _ have: Int, _ need: Int, _ unit: String, _ done: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(icon)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(name).font(.caption.weight(.semibold))
+                    Spacer()
+                    Text(done ? "✓" : "\(min(have, need))/\(need)").font(.caption2).monospacedDigit()
+                    Text("+\(bonus)").font(.caption2.bold())
+                }
+                ProgressView(value: min(1, Double(have) / Double(need))).tint(done ? .green : .accentColor)
+            }
+        }
+        .help("\(name) · \(min(have, need))/\(need) \(unit) · +\(bonus)")
     }
 
     @ViewBuilder
     private var team: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Team this week").font(.subheadline.weight(.semibold))
-            if !model.boardLoaded {
-                ProgressView().controlSize(.small)
-            } else if model.board.isEmpty {
-                Text("No team board yet. It needs a company email and Competitive mode.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            } else {
-                ForEach(model.board) { row in
-                    HStack {
-                        Text("\(row.rank).").monospacedDigit().frame(width: 20, alignment: .trailing)
-                        Text(row.name).lineLimit(1)
-                        Spacer()
-                        Text("\(row.xp) XP").monospacedDigit().foregroundStyle(.secondary)
+            HStack {
+                Text(t("leaderboard")).font(.subheadline.weight(.semibold))
+                Text(t("thisWeek")).font(.caption).foregroundStyle(.secondary)
+            }
+            if let msg = model.boardMessage {
+                Text(msg).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if model.session == nil {
+                    Button {
+                        model.signIn()
+                    } label: {
+                        HStack {
+                            if model.signingIn { ProgressView().controlSize(.small) }
+                            Text(t("continueGoogle"))
+                        }
                     }
-                    .font(.callout.weight(row.isMe ? .semibold : .regular))
+                    .disabled(model.signingIn)
                 }
             }
-        }
-    }
-
-    // MARK: Footer
-
-    private var footer: some View {
-        HStack {
-            Button("Open settings", action: model.openSettings)
-            if model.session != nil {
-                Button("Sign out", action: model.signOut)
+            ForEach(model.board) { row in
+                HStack {
+                    Text("#\(row.rank)").monospacedDigit().frame(width: 28, alignment: .leading)
+                    Text(row.name).lineLimit(1)
+                    Spacer()
+                    Text("\(row.xp) XP · 🔥\(row.streak)").monospacedDigit().foregroundStyle(.secondary)
+                }
+                .font(.callout.weight(row.isMe ? .semibold : .regular))
             }
-            Spacer()
-            Button("Quit") { NSApp.terminate(nil) }
         }
-        .buttonStyle(.link)
-        .font(.callout)
     }
 }

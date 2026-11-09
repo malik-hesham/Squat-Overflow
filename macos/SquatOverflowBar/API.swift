@@ -1,45 +1,50 @@
 import Foundation
+import SquatCore
 
-enum APIError: LocalizedError {
-    case http(Int)
-
-    var errorDescription: String? {
-        switch self {
-        case .http(let code): "The server answered \(code)."
-        }
-    }
-}
-
-/// Authenticated GETs against the server. A 401 refreshes the access token once and retries.
+/// The signed-in server API. A 401 refreshes the access token once and retries. Used by sync
+/// (SquatCore.SyncClient) and for the team leaderboard.
 @MainActor
-struct API {
+final class ServerAPI: SyncTransport {
     let auth: Auth
 
-    func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
-        var c = URLComponents(url: Config.serverURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
-        if !query.isEmpty { c.queryItems = query }
-        let url = c.url!
+    init(auth: Auth) { self.auth = auth }
 
+    func userId() async -> String? { auth.session?.userId }
+
+    func call(_ method: String, _ path: String, _ body: JSONValue?) async throws -> JSONValue? {
+        guard let url = URL(string: Config.serverURL.absoluteString + path) else { throw HTTPStatusError(status: 400) }
         let token = try await auth.accessToken()
-        let (data, status) = try await send(url, token)
+        var (data, status) = try await send(method, url, body, token)
         if status == 401 {
             let fresh = try await auth.refreshed(after: token)
-            let (retryData, retryStatus) = try await send(url, fresh)
-            return try decode(retryData, retryStatus)
+            (data, status) = try await send(method, url, body, fresh)
         }
-        return try decode(data, status)
+        guard (200..<300).contains(status) else { throw HTTPStatusError(status: status) }
+        if status == 204 || data.isEmpty { return nil }
+        return try JSONDecoder().decode(JSONValue.self, from: data)
     }
 
-    private func send(_ url: URL, _ token: String) async throws -> (Data, Int) {
+    private func send(_ method: String, _ url: URL, _ body: JSONValue?, _ token: String) async throws -> (Data, Int) {
         var req = URLRequest(url: url)
+        req.httpMethod = method
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.timeoutInterval = 20
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONEncoder().encode(body)
+        }
+        req.timeoutInterval = 15
         let (data, res) = try await URLSession.shared.data(for: req)
         return (data, (res as? HTTPURLResponse)?.statusCode ?? 0)
     }
 
-    private func decode<T: Decodable>(_ data: Data, _ status: Int) throws -> T {
-        guard (200..<300).contains(status) else { throw APIError.http(status) }
-        return try JSONDecoder().decode(T.self, from: data)
+    /// My company's board, or nil when it can't be loaded (fetchBoard() in extension/lib/leaderboard.js).
+    func board(period: String) async -> [BoardRow]? {
+        guard let value = try? await call("GET", "/leaderboard?period=\(period)", nil) else { return nil }
+        return try? value.decode([BoardRow].self)
+    }
+
+    /// Takes my row off the board, when leaving Competitive mode (submitScore(remove: true)).
+    func leaveBoard() async {
+        _ = try? await call("DELETE", "/leaderboard/me", nil)
     }
 }
