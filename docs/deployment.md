@@ -38,7 +38,7 @@ docker run -p 8080:8080 \
 | `GOOGLE_CLIENT_ID` | Google sign-in ID tokens must be issued for this client. Must match `extension/config.js`. |
 | `DATABASE_URL` | Postgres 13+ for accounts, the leaderboard and sync. Use `sslmode=require` over the internet. Without it, pose detection works and those endpoints answer 503. |
 | `AUTH_JWT_SECRET` | Signs session tokens. Changing it signs every user out; they sign in again with one click. |
-| `FORMCOACH_MAX_SESSIONS` | Open pose sessions per process, default `6`. Past it, new clients are closed with code 1013 "server busy" (the extension shows "offline" and the trainer retries). `0` turns the cap off. |
+| `FORMCOACH_MAX_SESSIONS` | Open pose sessions per process, default `6`. Past it, new clients are closed with code 1013 "server busy": the break page shows "Coach busy" and the trainer shows "Server busy" and retries. `0` turns the cap off. |
 
 Put TLS in front of the container (a load balancer, reverse proxy or the host's own HTTPS) and check `https://<host>/health` and `https://<host>/privacy`.
 

@@ -334,8 +334,15 @@ function onFrame(msg) {
   }
 }
 
+/** Fallback title and text for each status that ends the coached break. */
+const FALLBACK = {
+  offline: ["coachOffline", "offlineText"],
+  busy: ["coachBusy", "busyText"],
+  "camera-denied": ["cameraUnavailable", "deniedText"],
+};
+
 function onStatus(status) {
-  if (status !== "offline" && status !== "camera-denied") return;
+  if (!Object.hasOwn(FALLBACK, status)) return;
   if (state.finished) return;
   endPositioning();
   setStarting(false);
@@ -343,8 +350,9 @@ function onStatus(status) {
   els.fallback.hidden = false;
   els.demoPane.hidden = true;
   els.demoFrame.removeAttribute("src");
-  els.fallbackTitle.textContent = t(state.lang, status === "offline" ? "coachOffline" : "cameraUnavailable");
-  els.fallbackText.textContent = t(state.lang, status === "offline" ? "offlineText" : "deniedText");
+  const [title, text] = FALLBACK[status];
+  els.fallbackTitle.textContent = t(state.lang, title);
+  els.fallbackText.textContent = t(state.lang, text);
 }
 
 function confetti() {

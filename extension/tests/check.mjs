@@ -18,6 +18,7 @@ import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
+import { CLOSE_BUSY, closeStatus } from "../lib/server-status.js";
 import { readFileSync, readdirSync } from "node:fs";
 
 /** @typedef {import("../lib/vendor/three.js").Mesh} Mesh  what the avatar scene traversals below look at */
@@ -931,6 +932,16 @@ pending.push(
     assert.deepEqual(saved.at(-1), { done: 0, unscored: 0, reps: 0 });
   })(),
 );
+check("pose socket: close code 1013 means the server is busy, any other close means offline", () => {
+  assert.equal(CLOSE_BUSY, 1013); // the pose server's FORMCOACH_MAX_SESSIONS cap
+  assert.equal(closeStatus(1013), "busy");
+  for (const code of [1000, 1001, 1006, 1011, 1012]) assert.equal(closeStatus(code), "offline");
+});
+check("i18n: the break page has its own title and text for a busy server", () => {
+  const keys = translationKeys("en");
+  for (const key of ["coachBusy", "busyText"]) assert.ok(keys.includes(key), `missing ${key}`);
+  assert.notEqual(t("en", "busyText"), t("en", "offlineText"));
+});
 check("i18n: every English string has an Arabic translation", () => {
   const ar = new Set(translationKeys("ar"));
   const missing = translationKeys("en").filter((k) => !ar.has(k));

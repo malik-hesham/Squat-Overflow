@@ -1,3 +1,4 @@
+import { closeStatus } from "./server-status.js";
 import { cacheCatalog } from "./store.js";
 
 const CAPTURE_WIDTH = 480;
@@ -82,10 +83,10 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
         pump();
       }
     });
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (ev) => {
       if (st.ws !== ws) return;
       st.ws = null;
-      if (st.running) onStatus("offline");
+      if (st.running) onStatus(closeStatus(ev.code)); // "busy" when the server is at its session cap
     });
   }
 
@@ -313,5 +314,7 @@ export function fetchCatalog(serverUrl, timeoutMs = 3000) {
       }
     });
     ws.addEventListener("error", () => finish([]));
+    // A clean close fires no "error", e.g. 1013 from a server at its session cap: don't wait out the timer.
+    ws.addEventListener("close", () => finish([]));
   });
 }

@@ -300,11 +300,12 @@ function connect() {
       console.error("Bad message from server:", err);
     }
   });
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", (ev) => {
     if (state.ws !== ws) return; // closed on purpose
     state.ws = null;
     state.inflightSince = 0;
-    setConn("error", "Server offline · run npm run start:dev in server/");
+    // 1013 = CLOSE_BUSY in lib/server-status.js: the server is at its session cap.
+    setConn("error", ev.code === 1013 ? "Server busy · try again in a moment" : "Server offline · run npm run start:dev in server/");
     if (state.running) {
       state.reconnectTimer = setTimeout(connect, state.reconnectDelay);
       state.reconnectDelay = Math.min(state.reconnectDelay * 2, 5000);
