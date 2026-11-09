@@ -1,7 +1,7 @@
 // The coached camera: front camera frames go through MediaPipe on-device
 // (modules/squat-pose), the landmarks through the same rep counting and form
-// scoring the Python server did (src/pose/analysis), and each result reaches
-// the break screen as one FrameResult, like the extension's WebSocket frames.
+// scoring as the extension (extension/lib/pose via src/pose/analysis), and each
+// result reaches the break screen as one FrameResult, like the extension's frames.
 import { BlurTargetView, BlurView } from 'expo-blur';
 import * as React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
@@ -158,7 +158,7 @@ function LiveCoach({ device, exercise, active, privacy, onFrame, onStatus }: Pro
   });
 
   // A model that never answers (or a camera that never starts) falls back to
-  // the instructions, like the extension when its pose server is unreachable.
+  // the instructions, like the extension when its pose model can't start.
   React.useEffect(() => {
     if (!active) return;
     started.current = Date.now();

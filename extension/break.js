@@ -1,5 +1,6 @@
-import { getSettings, saveSettings, getSchedule, getCatalog, getProfile, getActivity, readLog, getMemeTurns, setMemeTurns } from "./lib/store.js";
-import { createPoseClient, fetchCatalog } from "./lib/pose-client.js";
+import { getSettings, saveSettings, getSchedule, getProfile, getActivity, readLog, getMemeTurns, setMemeTurns } from "./lib/store.js";
+import { createPoseClient } from "./lib/pose-client.js";
+import { exerciseCatalog } from "./lib/pose/index.js";
 import { AREAS, BREAK_REPS, buildRoutine, swapMove, needsPositioning, nextOpenMove } from "./lib/routine.js";
 import { breakXp, levelFor } from "./lib/xp.js";
 import { canSnooze, showWarning, warningHours } from "./lib/schedule.js";
@@ -14,6 +15,7 @@ import { createMemePlayer, repMarks } from "./lib/memes.js";
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
 const YOUTUBE_ID = /^[\w-]{11}$/;
+const DEMO_WINDOW = { width: 480, height: 400 };
 
 /** @param {string} id */
 const $ = (id) => document.getElementById(id);
@@ -23,14 +25,13 @@ const $ = (id) => document.getElementById(id);
  * @typedef {Record<string, HTMLElement> & {
  *   voice: HTMLInputElement, memes: HTMLInputElement,
  *   done: HTMLButtonElement, snooze: HTMLButtonElement, skip: HTMLButtonElement, warnSnooze: HTMLButtonElement,
- *   demoFrame: HTMLIFrameElement,
  * }} Els
  */
 const els = /** @type {Els} */ (Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
-    "lastScore", "cue", "howto", "hint", "demoPane", "demoFrame", "swap", "summary", "confetti", "total", "lines", "levelUp",
+    "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "memes", "lookBtn", "lookName",
     "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
@@ -44,6 +45,7 @@ const state = {
   progress: [],
   i: 0,
   client: null,
+  demoWindowId: null,
   finished: false,
   positioning: false,
   positionTimer: 0,
@@ -336,8 +338,7 @@ function onFrame(msg) {
 
 /** Fallback title and text for each status that ends the coached break. */
 const FALLBACK = {
-  offline: ["coachOffline", "offlineText"],
-  busy: ["coachBusy", "busyText"],
+  unavailable: ["coachUnavailable", "unavailableText"],
   "camera-denied": ["cameraUnavailable", "deniedText"],
 };
 
@@ -348,8 +349,7 @@ function onStatus(status) {
   setStarting(false);
   els.lookBtn.hidden = els.lookGrid.hidden = true;
   els.fallback.hidden = false;
-  els.demoPane.hidden = true;
-  els.demoFrame.removeAttribute("src");
+  els.demo.hidden = true;
   const [title, text] = FALLBACK[status];
   els.fallbackTitle.textContent = t(state.lang, title);
   els.fallbackText.textContent = t(state.lang, text);
@@ -448,17 +448,41 @@ async function leave(action) {
   closeWindow();
 }
 
-function demoUrl(move) {
-  if (!move.demo || !YOUTUBE_ID.test(move.demo.youtube_id) || !navigator.onLine || !els.fallback.hidden) return null;
-  const origin = new URL(state.settings.serverUrl.replace(/^ws/, "http")).origin;
-  return `${origin}/embed/${move.demo.youtube_id}`;
+// Demo clips open on youtube.com in a small popup, like the trainer's: YouTube refuses embeds from
+// extension pages (no Referer, Error 153). Nothing is loaded from YouTube until the user clicks, and
+// the button is hidden while offline, the only part of a break that needs the network.
+function validDemo(move) {
+  return move?.demo && YOUTUBE_ID.test(move.demo.youtube_id) && navigator.onLine && els.fallback.hidden ? move.demo : null;
 }
 
 function showDemo(move) {
-  const url = demoUrl(move);
-  els.demoPane.hidden = !url;
-  if (url && els.demoFrame.getAttribute("src") !== url) els.demoFrame.src = url;
-  if (!url) els.demoFrame.removeAttribute("src");
+  const demo = validDemo(move);
+  els.demo.hidden = !demo;
+  if (!demo) return;
+  els.demo.textContent = t(state.lang, "watchDemo", { n: demo.seconds });
+  els.demo.title = t(state.lang, "demoCredit", { channel: demo.channel || "YouTube" });
+}
+
+// One popup for all demos, so stepping through moves doesn't pile up windows.
+async function openDemo() {
+  const demo = validDemo(state.moves[state.i]);
+  if (!demo) return;
+  const url = `https://www.youtube.com/watch?v=${demo.youtube_id}`;
+  if (state.demoWindowId != null) {
+    try {
+      const [tab] = await chrome.tabs.query({ windowId: state.demoWindowId });
+      await chrome.tabs.update(tab.id, { url, active: true });
+      await chrome.windows.update(state.demoWindowId, { focused: true });
+      return;
+    } catch {
+      state.demoWindowId = null; // the user closed it
+    }
+  }
+  try {
+    state.demoWindowId = (await chrome.windows.create({ url, type: "popup", ...DEMO_WINDOW })).id;
+  } catch {
+    window.open(url, "_blank", "noopener");
+  }
 }
 
 function swap(ev) {
@@ -478,7 +502,7 @@ async function startRoutine(withMeme = false) {
   els.routine.hidden = false;
   els.actions.hidden = false;
   if (!state.moves.length) {
-    onStatus("offline");
+    onStatus("unavailable");
     els.title.textContent = t(state.lang, "timeToMove");
     els.howto.textContent = t(state.lang, "manualHowto");
     els.swap.hidden = true;
@@ -487,7 +511,6 @@ async function startRoutine(withMeme = false) {
   showMove(0);
   const { settings } = state;
   state.client = createPoseClient({
-    serverUrl: settings.serverUrl,
     video: els.video,
     canvas: els.canvas,
     privacy: settings.privacy,
@@ -511,9 +534,7 @@ async function init() {
   state.settings = settings;
   state.sounds = createMemePlayer(memeTurns, setMemeTurns);
   state.fitness = await loadFitness(settings.workdays);
-  let catalog = await fetchCatalog(settings.serverUrl);
-  if (!catalog.length) catalog = await getCatalog();
-  state.catalog = catalog.map((e) => ({
+  state.catalog = exerciseCatalog().map((e) => ({
     ...e,
     label: exerciseText(state.lang, e.key, "label", e.label),
     how_to: exerciseText(state.lang, e.key, "how_to", e.how_to),
@@ -532,6 +553,8 @@ async function init() {
   els.skip.addEventListener("click", () => leave("skip"));
   els.back.addEventListener("click", closeWindow);
   els.swap.addEventListener("click", swap);
+  els.demo.addEventListener("click", openDemo);
+  for (const ev of ["online", "offline"]) window.addEventListener(ev, () => showDemo(state.moves[state.i]));
   els.voice.checked = settings.voice;
   els.voice.addEventListener("change", onVoiceChange);
   els.memes.checked = settings.memes;

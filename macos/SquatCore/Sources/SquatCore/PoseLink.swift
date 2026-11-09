@@ -1,6 +1,6 @@
 import Foundation
 
-/// One "frame" reply from the pose server (server/src/analysis/session.ts).
+/// One "frame" reply from the pose gateway (extension/lib/pose/gateway.js).
 public struct PoseFrame: Equatable, Sendable {
     public struct RepEvent: Equatable, Sendable {
         public var score: Double
@@ -40,7 +40,8 @@ extension PoseFrame {
     }
 }
 
-/// The pose server conversation, ported from createPoseClient() in extension/lib/pose-client.js:
+/// The pose conversation, ported from createPoseClient() in extension/lib/pose-client.js. The other
+/// end is the extension's own lib/pose gateway, running on this Mac (PoseBridge in the app):
 /// one camera frame in flight at a time (the next goes when the reply arrives), a 3 s watchdog for
 /// a lost reply, the exercise and privacy mask settings, and close codes. The app owns the socket
 /// and the camera and feeds events in; this decides what to send and what each reply means.
@@ -114,7 +115,7 @@ public final class PoseLink {
         sendJSON(["type": .string("privacy"), "enabled": .bool(privacy)])
     }
 
-    /// The socket closed. 1013: the server is at its session cap ("busy"); anything else: "offline".
+    /// The socket closed. 1011: the pose model couldn't start ("unavailable"); anything else: "offline".
     public func closed(code: Int) {
         open = false
         inflightSince = nil

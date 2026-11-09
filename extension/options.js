@@ -1,4 +1,5 @@
 import { getSettings, saveSettings, getProfile } from "./lib/store.js";
+import { API_URL } from "./config.js";
 import { Avatar } from "./avatar.js";
 import { AREAS } from "./lib/routine.js";
 import { scheduleSettingsChanged, weekOrder } from "./lib/schedule.js";
@@ -62,7 +63,6 @@ function read() {
     privacy: input("privacy").checked,
     mode,
     name: input("name").value.trim(),
-    serverUrl: input("serverUrl").value.trim(),
   };
 }
 
@@ -75,7 +75,6 @@ function problem(s) {
     if (!s.name || s.name.length > 40) return t(lang, "errName");
     if (!companyFromEmail(session?.user?.email)) return t(lang, "errCompany");
   }
-  if (!/^wss?:\/\//.test(s.serverUrl)) return t(lang, "errServer");
   return "";
 }
 
@@ -189,7 +188,6 @@ async function init() {
   input("privacy").checked = initial.privacy;
   radios("mode").forEach((r) => (r.checked = r.value === initial.mode));
   input("name").value = initial.name;
-  input("serverUrl").value = initial.serverUrl;
   radios("lang").forEach((r) => (r.checked = r.value === (LANGS.includes(initial.lang) ? initial.lang : "auto")));
   $("langs").addEventListener("change", (ev) => saveSettings({ lang: /** @type {HTMLInputElement} */ (ev.target).value }));
   render();
@@ -253,7 +251,7 @@ function renderAccount() {
   $("accountEmail").textContent = session ? t(lang, "signedInAs", { email }) : "";
   $("accountEmail").hidden = !session;
   $("signOut").hidden = !session;
-  $("accountSignIn").hidden = Boolean(session);
+  $("accountSignIn").hidden = Boolean(session) || !API_URL; // a local-only build has no API server to sign in to
 }
 
 async function startSignIn(calendar, errorId) {

@@ -4,7 +4,6 @@
 // Config
 // ---------------------------------------------------------------------------
 const DEFAULTS = {
-  serverUrl: globalThis.POSE_SERVER_URL ?? "ws://127.0.0.1:8765/ws", // set by avatar-global.js from config.js
   exercise: "neck_tilt",
   voice: false,
   privacy: false,
@@ -14,8 +13,6 @@ const DEFAULTS = {
   breakEnabled: true, // read by the service worker too (desk break coach)
   breakInterval: 50,
 };
-const CAPTURE_WIDTH = 480; // frames are downscaled before sending
-const JPEG_QUALITY = 0.7;
 const INFLIGHT_TIMEOUT_MS = 3000; // resend if a result never arrives
 const HISTORY_SAMPLES = 300; // angle chart window (~20 s at 15 fps)
 const CUE_HOLD_MS = 700; // keep a cue on screen briefly to avoid flicker
@@ -23,53 +20,6 @@ const MIN_VIS = 0.5;
 const PRIVACY_DOWNSCALE = 24; // blur strength: preview is shrunk by this factor, then scaled back up
 const MASK_MAX_AGE_MS = 500; // older person masks are distrusted; the whole frame is blurred instead
 
-// Used only on the very first run with the server offline. The server's catalog
-// (the 40 office exercises, five per pain area) is prefetched on page load and cached under CATALOG_KEY.
-const FALLBACK_EXERCISES = [
-  {
-    key: "neck_tilt",
-    label: "Neck side tilt",
-    metric: "Head tilt",
-    camera: "front",
-    category: "Neck tension",
-  },
-  {
-    key: "head_turn",
-    label: "Look over your shoulder",
-    metric: "Head turn",
-    camera: "front",
-    category: "Neck tension",
-  },
-  {
-    key: "overhead_reach",
-    label: "Overhead reach",
-    metric: "Arm height",
-    camera: "front",
-    category: "Shoulder & rotator cuff",
-  },
-];
-const CATALOG_KEY = "exerciseCatalog";
-const PREFETCH_TIMEOUT_MS = 3000;
-const FALLBACK_CONNECTIONS = [
-  [11, 12],
-  [11, 13],
-  [13, 15],
-  [12, 14],
-  [14, 16],
-  [11, 23],
-  [12, 24],
-  [23, 24],
-  [23, 25],
-  [25, 27],
-  [27, 29],
-  [29, 31],
-  [27, 31],
-  [24, 26],
-  [26, 28],
-  [28, 30],
-  [30, 32],
-  [28, 32],
-];
 const CAMERA_HINTS = {
   side: "Put the camera side-on, 2–3 m away, with your whole body in frame.",
   front:
@@ -122,7 +72,6 @@ const els = {
   repLog: $("repLog"),
   repEmpty: $("repEmpty"),
   exportBtn: /** @type {HTMLButtonElement} */ ($("exportBtn")),
-  serverUrl: /** @type {HTMLInputElement} */ ($("serverUrl")),
   privacy: /** @type {HTMLInputElement} */ ($("privacy")),
   privacyStyles: $("privacyStyles"),
   styleGrid: $("styleGrid"),
@@ -162,15 +111,14 @@ const els = {
 
 const state = {
   settings: { ...DEFAULTS },
-  exercises: FALLBACK_EXERCISES,
-  connections: FALLBACK_CONNECTIONS,
+  // The office catalog and the skeleton, from lib/pose through avatar-global.js.
+  exercises: globalThis.PoseLocal.exerciseCatalog(),
+  connections: globalThis.PoseLocal.CONNECTIONS,
   ws: null,
   stream: null,
   running: false,
   inflightSince: 0,
-  reconnectTimer: 0,
-  reconnectDelay: 500,
-  capture: null,
+  awaitingFrame: false, // pump() is waiting for the camera's next frame
   latest: null,
   latestAt: 0,
   thresholds: null,
@@ -196,60 +144,11 @@ const state = {
 // ---------------------------------------------------------------------------
 async function loadSettings() {
   try {
-    const stored = await chrome.storage.local.get([
-      ...Object.keys(DEFAULTS),
-      CATALOG_KEY,
-    ]);
-    const { [CATALOG_KEY]: cached, ...settings } = stored;
-    const catalog = /** @type {{ exercises?: typeof FALLBACK_EXERCISES, connections?: typeof FALLBACK_CONNECTIONS } | undefined} */ (cached);
+    const settings = await chrome.storage.local.get(Object.keys(DEFAULTS));
     state.settings = { ...DEFAULTS, ...settings };
-    if (Array.isArray(catalog?.exercises) && catalog.exercises.length) {
-      state.exercises = catalog.exercises;
-      state.connections = catalog.connections ?? state.connections;
-    }
   } catch (err) {
     console.warn("Using default settings:", err);
   }
-}
-
-// Server sent its catalog: use it now and cache it so the next page load has it
-// before any connection exists.
-function applyCatalog(msg) {
-  if (!Array.isArray(msg.exercises) || !msg.exercises.length) return;
-  state.exercises = msg.exercises;
-  state.connections = msg.connections ?? state.connections;
-  renderExerciseOptions();
-  chrome.storage.local
-    .set({
-      [CATALOG_KEY]: {
-        exercises: state.exercises,
-        connections: state.connections,
-      },
-    })
-    .catch((err) => console.warn("Could not cache exercise catalog:", err));
-}
-
-// Fetch the catalog on page load without starting the camera. The server only
-// loads the pose model on the first frame, so this connection is cheap.
-function prefetchCatalog() {
-  let ws;
-  try {
-    ws = new WebSocket(state.settings.serverUrl);
-  } catch {
-    return; // invalid URL; the cached or fallback list stays
-  }
-  const timer = setTimeout(() => ws.close(), PREFETCH_TIMEOUT_MS);
-  ws.addEventListener("message", (ev) => {
-    try {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === "ready") applyCatalog(msg);
-    } catch (err) {
-      console.warn("Bad catalog message:", err);
-    }
-    clearTimeout(timer);
-    ws.close();
-  });
-  ws.addEventListener("error", () => clearTimeout(timer)); // server offline: keep cached list
 }
 
 async function saveSettings(patch) {
@@ -262,7 +161,8 @@ async function saveSettings(patch) {
 }
 
 // ---------------------------------------------------------------------------
-// WebSocket
+// Pose model: on this device (lib/pose through avatar-global.js), over a WebSocket-shaped socket
+// that speaks the old pose server's messages. Camera frames never leave the page.
 // ---------------------------------------------------------------------------
 function setConn(kind, text) {
   els.conn.dataset.state = kind;
@@ -270,67 +170,43 @@ function setConn(kind, text) {
 }
 
 function connect() {
-  clearTimeout(state.reconnectTimer);
-  if (state.ws && state.ws.readyState <= WebSocket.OPEN) return;
-
-  setConn("connecting", "Connecting…");
-  let ws;
-  try {
-    ws = new WebSocket(state.settings.serverUrl);
-  } catch (err) {
-    setConn("error", "Invalid server URL");
-    return;
-  }
-  ws.binaryType = "arraybuffer";
+  if (state.ws) return;
+  setConn("connecting", "Loading the pose model…");
+  const ws = globalThis.PoseLocal.openPoseSocket();
   state.ws = ws;
 
   ws.addEventListener("open", () => {
-    state.reconnectDelay = 500;
     state.inflightSince = 0;
-    setConn("open", "Connected");
+    setConn("open", "Pose model on this device");
     sendJson({ type: "angles", mode: state.settings.angleMode });
     configureExercise();
     sendJson({ type: "privacy", enabled: wantsMask() });
     pump();
   });
-  ws.addEventListener("message", (ev) => {
-    try {
-      onMessage(JSON.parse(ev.data));
-    } catch (err) {
-      console.error("Bad message from server:", err);
-    }
-  });
-  ws.addEventListener("close", (ev) => {
+  ws.addEventListener("message", (/** @type {MessageEvent} */ ev) => onMessage(ev.data));
+  ws.addEventListener("close", () => {
     if (state.ws !== ws) return; // closed on purpose
     state.ws = null;
     state.inflightSince = 0;
-    // 1013 = CLOSE_BUSY in lib/server-status.js: the server is at its session cap.
-    setConn("error", ev.code === 1013 ? "Server busy · try again in a moment" : "Server offline · run npm run start:dev in server/");
-    if (state.running) {
-      state.reconnectTimer = setTimeout(connect, state.reconnectDelay);
-      state.reconnectDelay = Math.min(state.reconnectDelay * 2, 5000);
-    }
+    setConn("error", "This browser couldn't start the pose model");
   });
 }
 
 function disconnect() {
-  clearTimeout(state.reconnectTimer);
   const ws = state.ws;
   state.ws = null;
   if (ws) ws.close();
-  setConn("idle", "Not connected");
+  setConn("idle", "Not started");
 }
 
 function sendJson(obj) {
-  if (state.ws?.readyState === WebSocket.OPEN)
-    state.ws.send(JSON.stringify(obj));
+  if (state.ws && state.ws.readyState === state.ws.OPEN) state.ws.send(JSON.stringify(obj));
 }
 
 function onMessage(msg) {
   switch (msg.type) {
     case "ready":
-      applyCatalog(msg);
-      break;
+      break; // the catalog is local (state.exercises)
     case "frame":
       state.inflightSince = 0;
       trackFps();
@@ -353,40 +229,27 @@ function onMessage(msg) {
 // One frame in flight at a time: the next frame is sent when the result for
 // the previous one arrives, so a slow server lowers the frame rate instead of
 // building up a queue.
-async function pump() {
+// One frame in flight, and each camera frame analysed once: after a result, the next frame goes when
+// the camera presents a new one. The model answers in a few ms, so sending straight away would spin
+// on the main thread and freeze the page (lib/pose-client.js does the same).
+function pump() {
   const ws = state.ws;
-  if (!state.running || !ws || ws.readyState !== WebSocket.OPEN) return;
-  if (state.inflightSince) return;
+  if (!state.running || !ws || ws.readyState !== ws.OPEN || state.inflightSince || state.awaitingFrame) return;
   const video = els.video;
-  if (video.readyState < 2 || !video.videoWidth) {
-    setTimeout(pump, 50);
-    return;
-  }
-  state.inflightSince = performance.now();
-  try {
-    const w = CAPTURE_WIDTH;
-    const h = Math.round((video.videoHeight * w) / video.videoWidth);
-    if (
-      !state.capture ||
-      state.capture.width !== w ||
-      state.capture.height !== h
-    ) {
-      state.capture = new OffscreenCanvas(w, h);
+  state.awaitingFrame = true;
+  const send = () => {
+    state.awaitingFrame = false;
+    if (!state.running || state.ws !== ws || ws.readyState !== ws.OPEN || state.inflightSince) return;
+    if (video.readyState < 2 || !video.videoWidth) {
+      setTimeout(pump, 50);
+      return;
     }
-    state.capture.getContext("2d").drawImage(video, 0, 0, w, h);
-    state.aspect = w / h;
-    const blob = await state.capture.convertToBlob({
-      type: "image/jpeg",
-      quality: JPEG_QUALITY,
-    });
-    const buf = await blob.arrayBuffer();
-    if (state.running && ws.readyState === WebSocket.OPEN) ws.send(buf);
-    else state.inflightSince = 0;
-  } catch (err) {
-    console.error("Frame capture failed:", err);
-    state.inflightSince = 0;
-    setTimeout(pump, 200);
-  }
+    state.aspect = video.videoWidth / video.videoHeight;
+    state.inflightSince = performance.now();
+    ws.send(video); // the model reads the frame on screen
+  };
+  if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(send);
+  else setTimeout(send, 33);
 }
 
 setInterval(() => {
@@ -588,21 +451,18 @@ function cssVar(name) {
 // sharp frame. With no recent mask we blur the whole frame rather than risk
 // showing the person. Only the on-screen preview is blurred: the frames sent
 // to the local server stay sharp because pose tracking needs them.
-async function updateMask(dataUrl) {
-  const seq = ++state.maskSeq;
-  if (!dataUrl) {
+// `mask`: the person in alpha ({ width, height, alpha }, lib/pose/mask.js), or null when nobody is found.
+function updateMask(mask) {
+  state.maskSeq++;
+  if (!mask) {
     state.mask = null;
     return;
   }
-  const img = new Image();
-  img.src = dataUrl;
-  try {
-    await img.decode();
-  } catch (err) {
-    console.warn("Could not decode person mask:", err);
-    return;
-  }
-  if (seq === state.maskSeq) state.mask = { img, at: performance.now() };
+  const rgba = new Uint8ClampedArray(mask.width * mask.height * 4).fill(255);
+  for (let i = 0; i < mask.alpha.length; i++) rgba[i * 4 + 3] = mask.alpha[i];
+  const img = new OffscreenCanvas(mask.width, mask.height);
+  img.getContext("2d").putImageData(new ImageData(rgba, mask.width, mask.height), 0, 0);
+  state.mask = { img, at: performance.now() };
 }
 
 function freshMask() {
@@ -1820,9 +1680,7 @@ async function init() {
   setPrivacyUi();
   renderCalib();
   refreshBreakUi();
-  els.serverUrl.value = state.settings.serverUrl;
   drawChart();
-  prefetchCatalog();
 
   els.startBtn.addEventListener("click", () => {
     if (state.routine) finishBreak(false);
@@ -1899,17 +1757,6 @@ async function init() {
     await saveSettings({ privacyStyle: input.value });
     setPrivacyUi();
     sendJson({ type: "privacy", enabled: wantsMask() });
-  });
-  els.serverUrl.addEventListener("change", async () => {
-    await saveSettings({
-      serverUrl: els.serverUrl.value.trim() || DEFAULTS.serverUrl,
-    });
-    els.serverUrl.value = state.settings.serverUrl;
-    if (!state.running) prefetchCatalog();
-    if (state.running) {
-      disconnect();
-      connect();
-    }
   });
   els.exportBtn.addEventListener("click", exportCsv);
   els.demoBtn.addEventListener("click", openDemo);

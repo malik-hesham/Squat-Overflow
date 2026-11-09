@@ -31,7 +31,8 @@ struct MenuView: View {
                 Button(schedule.pausedUntil > nowMs ? t("resume") : t("pause"), action: model.togglePause)
                     .disabled(!settings.setupDone)
             }
-            team
+            // A build with no API server (SO_SERVER_URL empty) has no team board, like the extension's popup.
+            if Config.serverURL != nil { team }
             if let error = model.error {
                 Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }

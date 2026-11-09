@@ -15,9 +15,9 @@ settings:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.2.0"
     CURRENT_PROJECT_VERSION: "2"
-    # The NestJS server (server/): sign-in, sync, the leaderboard, and the pose WebSocket at /ws.
-    # Override per build:
-    #   xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://pose.example.com
+    # The optional API server (server/): sign-in, sync and the leaderboard. The pose model runs on the Mac.
+    # Override per build (empty: local only, no sign-in):
+    #   xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://api.example.com
     SO_SERVER_URL: "http://127.0.0.1:8765"
     # The extension's web OAuth client (extension/config.js), so the server needs no new client.
     SO_GOOGLE_CLIENT_ID: "977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com"
@@ -28,6 +28,18 @@ targets:
     platform: macOS
     sources:
       - path: SquatOverflowBar
+        excludes: ["PoseWeb/**"]
+      # The pose model: the extension's own lib/pose and vendored MediaPipe, run by PoseBridge.swift
+      # in a web view (PoseWeb/bridge.html). Folder references, so the bundle keeps their layout.
+      - path: SquatOverflowBar/PoseWeb
+        type: folder
+        buildPhase: resources
+      - path: ../extension/lib/pose
+        type: folder
+        buildPhase: resources
+      - path: ../extension/lib/vendor/mediapipe
+        type: folder
+        buildPhase: resources
       # The extension's meme clips (extension/sounds/memes) as AAC: macOS can't play Ogg Vorbis.
       # The mobile app converted them already; both apps play the same files.
       - path: ../mobile/assets/sounds/memes
@@ -41,7 +53,7 @@ targets:
         CFBundleDisplayName: Squat Overflow
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.healthcare-fitness
-        NSCameraUsageDescription: Your camera is used only to count reps during a break and is never recorded.
+        NSCameraUsageDescription: Your camera is used only to count reps during a break, on this Mac. Nothing is recorded or sent.
         SOServerURL: $(SO_SERVER_URL)
         SOGoogleClientID: $(SO_GOOGLE_CLIENT_ID)
         NSAppTransportSecurity:

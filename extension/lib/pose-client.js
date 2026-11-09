@@ -1,8 +1,5 @@
-import { closeStatus } from "./server-status.js";
-import { cacheCatalog } from "./store.js";
+import { CLOSE_MODEL_FAILED, openPoseSocket } from "./pose/local-socket.js";
 
-const CAPTURE_WIDTH = 480;
-const JPEG_QUALITY = 0.7;
 const INFLIGHT_TIMEOUT_MS = 3000;
 const PRIVACY_DOWNSCALE = 24;
 const MASK_MAX_AGE_MS = 500;
@@ -12,7 +9,15 @@ const CONNECTIONS = [
   [25, 27], [27, 29], [29, 31], [27, 31], [24, 26], [26, 28], [28, 30], [30, 32], [28, 32],
 ];
 
-export function createPoseClient({ serverUrl, video, canvas, privacy, style = "blur", avatars = null, fitness = null, onFrame, onStatus }) {
+/** The pose model runs in this page (lib/pose): no server, and camera frames never leave the device. */
+const openLocal = () => openPoseSocket({ createDetector: async () => (await import("./pose/detector.js")).createDetector() });
+
+/**
+ * Camera, on-device pose analysis and the preview canvas for one break. `openSocket` is for tests.
+ * Statuses: "connecting" (the model is loading), "open", "camera-denied", "unavailable" (this browser
+ * can't run the model).
+ */
+export function createPoseClient({ video, canvas, privacy, style = "blur", avatars = null, fitness = null, onFrame, onStatus, openSocket = openLocal }) {
   const st = {
     privacy,
     style,
@@ -22,7 +27,6 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
     running: false,
     exercise: null,
     inflightSince: 0,
-    capture: null,
     latest: null,
     latestAt: 0,
     mask: null,
@@ -31,10 +35,11 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
     fxSmall: null,
     connections: CONNECTIONS,
     watchdog: 0,
+    awaitingFrame: false, // pump() is waiting for the camera's next frame
   };
 
   const sendJson = (obj) => {
-    if (st.ws?.readyState === WebSocket.OPEN) st.ws.send(JSON.stringify(obj));
+    if (st.ws && st.ws.readyState === st.ws.OPEN) st.ws.send(JSON.stringify(obj));
   };
   // A 3D character needs WebGL; without it the blurred mask stands in.
   const character = () =>
@@ -43,14 +48,7 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
 
   function connect() {
     onStatus("connecting");
-    let ws;
-    try {
-      ws = new WebSocket(serverUrl);
-    } catch {
-      onStatus("offline");
-      return;
-    }
-    ws.binaryType = "arraybuffer";
+    const ws = openSocket();
     st.ws = ws;
     ws.addEventListener("open", () => {
       st.inflightSince = 0;
@@ -59,16 +57,10 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
       sendJson({ type: "privacy", enabled: wantsMask() });
       pump();
     });
-    ws.addEventListener("message", (ev) => {
-      let msg;
-      try {
-        msg = JSON.parse(ev.data);
-      } catch {
-        return;
-      }
+    ws.addEventListener("message", (/** @type {MessageEvent} */ ev) => {
+      const msg = ev.data;
       if (msg.type === "ready") {
         if (msg.connections) st.connections = msg.connections;
-        cacheCatalog(msg).catch(() => {});
       } else if (msg.type === "frame") {
         st.inflightSince = 0;
         if ("mask" in msg) updateMask(msg.mask);
@@ -83,50 +75,47 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
         pump();
       }
     });
-    ws.addEventListener("close", (ev) => {
+    ws.addEventListener("close", (/** @type {any} */ ev) => {
       if (st.ws !== ws) return;
       st.ws = null;
-      if (st.running) onStatus(closeStatus(ev.code)); // "busy" when the server is at its session cap
+      if (st.running) onStatus(ev.code === CLOSE_MODEL_FAILED ? "unavailable" : "offline");
     });
   }
 
-  async function pump() {
+  // One frame in flight at a time, and each camera frame analysed once: after a result, the next
+  // frame goes when the camera presents a new one. That wait also lets the page render and run
+  // timers; the model answers in a few ms, so sending straight away would spin on the main thread.
+  // (A live stream's currentTime moves with the clock, so it can't tell frames apart.)
+  function pump() {
     const ws = st.ws;
-    if (!st.running || !ws || ws.readyState !== WebSocket.OPEN || st.inflightSince) return;
-    if (video.readyState < 2 || !video.videoWidth) {
-      setTimeout(pump, 50);
-      return;
-    }
-    st.inflightSince = performance.now();
-    try {
-      const w = CAPTURE_WIDTH;
-      const h = Math.round((video.videoHeight * w) / video.videoWidth);
-      if (!st.capture || st.capture.width !== w || st.capture.height !== h) st.capture = new OffscreenCanvas(w, h);
-      st.capture.getContext("2d").drawImage(video, 0, 0, w, h);
-      const blob = await st.capture.convertToBlob({ type: "image/jpeg", quality: JPEG_QUALITY });
-      const buf = await blob.arrayBuffer();
-      if (st.running && ws.readyState === WebSocket.OPEN) ws.send(buf);
-      else st.inflightSince = 0;
-    } catch {
-      st.inflightSince = 0;
-      setTimeout(pump, 200);
-    }
+    if (!st.running || !ws || ws.readyState !== ws.OPEN || st.inflightSince || st.awaitingFrame) return;
+    st.awaitingFrame = true;
+    const send = () => {
+      st.awaitingFrame = false;
+      if (!st.running || st.ws !== ws || ws.readyState !== ws.OPEN || st.inflightSince) return;
+      if (video.readyState < 2 || !video.videoWidth) {
+        setTimeout(pump, 50);
+        return;
+      }
+      st.inflightSince = performance.now();
+      ws.send(video); // the model reads the frame on screen
+    };
+    if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(send);
+    else setTimeout(send, 33);
   }
 
-  async function updateMask(dataUrl) {
-    const seq = ++st.maskSeq;
-    if (!dataUrl) {
+  /** @param {import("./pose/mask.js").MaskAlpha | null} mask the person in alpha (lib/pose/mask.js) */
+  function updateMask(mask) {
+    st.maskSeq++;
+    if (!mask) {
       st.mask = null;
       return;
     }
-    const img = new Image();
-    img.src = dataUrl;
-    try {
-      await img.decode();
-    } catch {
-      return;
-    }
-    if (seq === st.maskSeq) st.mask = { img, at: performance.now() };
+    const rgba = new Uint8ClampedArray(mask.width * mask.height * 4).fill(255);
+    for (let i = 0; i < mask.alpha.length; i++) rgba[i * 4 + 3] = mask.alpha[i];
+    const img = new OffscreenCanvas(mask.width, mask.height);
+    img.getContext("2d").putImageData(new ImageData(rgba, mask.width, mask.height), 0, 0);
+    st.mask = { img, at: performance.now() };
   }
 
   function freshMask() {
@@ -286,35 +275,4 @@ export function createPoseClient({ serverUrl, video, canvas, privacy, style = "b
   }
 
   return { start, stop, setExercise, setLook, celebrate };
-}
-
-export function fetchCatalog(serverUrl, timeoutMs = 3000) {
-  return new Promise((resolve) => {
-    let ws;
-    try {
-      ws = new WebSocket(serverUrl);
-    } catch {
-      resolve([]);
-      return;
-    }
-    const finish = (list) => {
-      clearTimeout(timer);
-      ws.close();
-      resolve(list);
-    };
-    const timer = setTimeout(() => finish([]), timeoutMs);
-    ws.addEventListener("message", (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type !== "ready") return;
-        cacheCatalog(msg).catch(() => {});
-        finish(Array.isArray(msg.exercises) ? msg.exercises : []);
-      } catch {
-        finish([]);
-      }
-    });
-    ws.addEventListener("error", () => finish([]));
-    // A clean close fires no "error", e.g. 1013 from a server at its session cap: don't wait out the timer.
-    ws.addEventListener("close", () => finish([]));
-  });
 }

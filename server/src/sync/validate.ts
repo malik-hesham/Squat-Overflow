@@ -77,7 +77,7 @@ export function validatePush(body: unknown, now = Date.now()): Check<BreakEvent[
 }
 
 /**
- * Settings every device shares, with a check per key. Device-only keys (serverUrl, setupDone,
+ * Settings every device shares, with a check per key. Device-only keys (setupDone,
  * theme, privacy, privacyStyle) are refused, so one device can't overwrite another's.
  */
 export const SHARED_SETTINGS: Record<string, (v: unknown) => boolean> = {

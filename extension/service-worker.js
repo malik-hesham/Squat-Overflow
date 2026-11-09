@@ -1,4 +1,4 @@
-import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog, readLog, getActivity, setActivity } from "./lib/store.js";
+import { getSettings, getProfile, setProfile, getSchedule, setSchedule, appendLog, readLog, getActivity, setActivity, dropRetiredKeys } from "./lib/store.js";
 import { award } from "./lib/xp.js";
 import { initialSchedule, applyAction, rescheduleForInterval, decideFire, nextActiveSlot, IDLE_SEC, countdownText } from "./lib/schedule.js";
 import { submitScore } from "./lib/leaderboard.js";
@@ -276,6 +276,7 @@ chrome.windows.onRemoved.addListener((id) =>
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") chrome.runtime.openOptionsPage();
+  serial(dropRetiredKeys); // an update from a pose-server version leaves its URL behind
   serial(ensureAlarm);
 });
 

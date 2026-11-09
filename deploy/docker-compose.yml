@@ -1,5 +1,8 @@
-# Pose server + Postgres + Caddy (automatic HTTPS) on one host, e.g. a single EC2 instance
-# on the AWS Free plan. Setup, updates, backups and rollback: docs/aws-free-plan.md.
+# API server (sign-in, team board, sync) + Postgres + Caddy (automatic HTTPS) on one host, e.g. a
+# single EC2 instance on the AWS Free plan. Setup, updates, backups and rollback: docs/aws-free-plan.md.
+# Pose analysis runs on the clients, so nothing here sees camera frames. The service is still called
+# "pose" and the image "squat-overflow-pose" so an update replaces the running container instead
+# of starting a second one next to it.
 #
 #   cp .env.example .env      # fill it in
 #   VERSION=v0.4.0 docker compose up -d --build
@@ -25,8 +28,6 @@ services:
       FORMCOACH_ALLOWED_ORIGINS: ${FORMCOACH_ALLOWED_ORIGINS:?set FORMCOACH_ALLOWED_ORIGINS in .env}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in .env}
-      # Lower than the server's default of 6: on a small burstable instance shared with Postgres.
-      FORMCOACH_MAX_SESSIONS: ${FORMCOACH_MAX_SESSIONS:-3}
       # Same Docker network, so no TLS. Migrations run when the server starts.
       DATABASE_URL: postgres://squat:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/squat
     depends_on:
@@ -48,7 +49,7 @@ services:
       POSTGRES_USER: squat
       POSTGRES_DB: squat
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-    # Sized for a 2 GB instance shared with the pose server. The server's pool uses at most 5 connections.
+    # Sized for a small instance shared with the API server. The server's pool uses at most 5 connections.
     command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20"]
     volumes:
       - pgdata:/var/lib/postgresql/data

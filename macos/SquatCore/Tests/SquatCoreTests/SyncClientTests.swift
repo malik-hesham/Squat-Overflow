@@ -58,7 +58,7 @@ final class SyncClientTests: XCTestCase {
 
     override func setUp() async throws {
         _ = Parity.fixture
-        store = Store(MemoryStore(), defaultServerUrl: "ws://127.0.0.1:8765/ws")
+        store = Store(MemoryStore())
         server = FakeServer()
         client = SyncClient(store: store, transport: server, clock: { [unowned self] in self.now })
     }

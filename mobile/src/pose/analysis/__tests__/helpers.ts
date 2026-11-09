@@ -1,6 +1,6 @@
 /** Shared test helpers: fixture loading, a tolerant deep diff, and the session replay. */
 
-import { Session } from '../session';
+import { Session } from '../../../../../extension/lib/pose/session.js';
 
 // Node built-ins, typed locally: the app's tsconfig loads only jest types, and
 // this is the one test module that reads files (jest runs it under Node).

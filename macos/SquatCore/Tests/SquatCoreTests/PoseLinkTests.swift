@@ -1,8 +1,8 @@
 import SquatCore
 import XCTest
 
-/// The protocol half of extension/lib/pose-client.js: what goes over the pose server's /ws and
-/// when (server/src/pose/protocol.ts).
+/// The protocol half of extension/lib/pose-client.js: what goes to the pose gateway (PoseBridge) and
+/// when (the protocol at the top of extension/lib/pose/gateway.js).
 @MainActor
 final class PoseLinkTests: XCTestCase {
     var sentText: [JSONValue] = []
@@ -134,10 +134,11 @@ final class PoseLinkTests: XCTestCase {
         XCTAssertEqual(link.connections, [[11, 12]])
     }
 
-    func testClose1013MeansTheServerIsBusy() {
+    /// lib/pose-client.js: close code 1011 (CLOSE_MODEL_FAILED) means the model couldn't start.
+    func testClose1011MeansThePoseModelIsUnavailable() {
         link.start()
-        link.closed(code: 1013)
-        XCTAssertEqual(statuses.last, .busy)
+        link.closed(code: 1011)
+        XCTAssertEqual(statuses.last, .unavailable)
     }
 
     func testAnyOtherCloseMeansOffline() {

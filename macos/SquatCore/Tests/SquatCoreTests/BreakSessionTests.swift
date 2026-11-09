@@ -48,7 +48,6 @@ final class BreakSessionTests: XCTestCase {
     override func setUp() async throws {
         host = FakeHost()
         settings = Settings()
-        settings.serverUrl = "ws://127.0.0.1:8765/ws"
         settings.areas = ["Neck tension", "Knees"]
         schedule = ScheduleState()
     }
@@ -276,20 +275,13 @@ final class BreakSessionTests: XCTestCase {
 
     // MARK: Camera and coach
 
-    func testWithTheCoachOfflineTheBreakIsManual() async {
+    func testWhenThePoseModelCantStartTheBreakIsManual() async {
         let s = session()
         await s.begin()
-        s.poseStatus(.offline)
-        XCTAssertEqual(s.fallback?.title, I18n.t("en", "coachOffline"))
-        XCTAssertEqual(s.fallback?.text, I18n.t("en", "offlineText"))
+        s.poseStatus(.unavailable)
+        XCTAssertEqual(s.fallback?.title, I18n.t("en", "coachUnavailable"))
+        XCTAssertEqual(s.fallback?.text, I18n.t("en", "unavailableText"))
         XCTAssertNil(s.demoURL)
-    }
-
-    func testABusyServerSaysSo() async {
-        let s = session()
-        await s.begin()
-        s.poseStatus(.busy)
-        XCTAssertEqual(s.fallback?.title, I18n.t("en", "coachBusy"))
     }
 
     func testNoCameraMeansNoPositioning() async {
@@ -305,7 +297,7 @@ final class BreakSessionTests: XCTestCase {
         let s = session(catalog: [])
         await s.begin()
         XCTAssertTrue(s.moves.isEmpty)
-        XCTAssertEqual(s.fallback?.title, I18n.t("en", "coachOffline"))
+        XCTAssertEqual(s.fallback?.title, I18n.t("en", "coachUnavailable"))
         XCTAssertEqual(s.title, I18n.t("en", "timeToMove"))
     }
 
@@ -328,10 +320,12 @@ final class BreakSessionTests: XCTestCase {
         XCTAssertFalse(s.positioning)
     }
 
-    func testTheDemoClipComesFromTheServer() async {
+    /// showDemo() in extension/break.js: the clip opens on youtube.com, and only while online.
+    func testTheDemoClipOpensOnYouTube() async {
         let s = session(catalog: catalog.filter { $0.demo != nil })
         await s.begin()
-        XCTAssertEqual(s.demoURL?.absoluteString, "http://127.0.0.1:8765/embed/dQw4w9WgXcQ")
+        XCTAssertEqual(s.demoURL?.absoluteString, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        XCTAssertNotNil(s.demoLabel)
         XCTAssertNil(session(catalog: catalog.filter { $0.demo != nil }, online: false).demoURL)
     }
 

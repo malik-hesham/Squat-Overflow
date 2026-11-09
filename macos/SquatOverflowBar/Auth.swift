@@ -38,6 +38,7 @@ enum AuthError: LocalizedError {
     case googleFailed
     case server(Int)
     case signedOut
+    case noServer
 
     var errorDescription: String? {
         switch self {
@@ -45,6 +46,7 @@ enum AuthError: LocalizedError {
         case .googleFailed: "Google sign-in failed."
         case .server(let code): "The server refused sign-in (\(code))."
         case .signedOut: "Signed out."
+        case .noServer: "This build has no API server, so there is no sign-in."
         }
     }
 }
@@ -93,7 +95,7 @@ final class Auth: NSObject, ObservableObject, ASWebAuthenticationPresentationCon
         c.queryItems = [
             URLQueryItem(name: "client_id", value: Config.googleClientID),
             URLQueryItem(name: "response_type", value: "id_token"),
-            URLQueryItem(name: "redirect_uri", value: Config.callbackURL.absoluteString),
+            URLQueryItem(name: "redirect_uri", value: Config.callbackURL?.absoluteString ?? ""),
             URLQueryItem(name: "scope", value: "openid email profile"),
             URLQueryItem(name: "nonce", value: hashedNonce),
             URLQueryItem(name: "prompt", value: "select_account"),
@@ -110,6 +112,7 @@ final class Auth: NSObject, ObservableObject, ASWebAuthenticationPresentationCon
     }
 
     func signIn() async throws {
+        guard Config.serverURL != nil else { throw AuthError.noServer }
         let nonce = Self.newNonce()
         let redirect = try await authenticate(Self.signInURL(hashedNonce: Self.sha256Hex(nonce)))
         guard let idToken = Self.idToken(from: redirect) else { throw AuthError.googleFailed }
@@ -196,7 +199,7 @@ final class Auth: NSObject, ObservableObject, ASWebAuthenticationPresentationCon
     }
 
     private static func requestSession(_ path: String, _ body: [String: String]) async throws -> Session {
-        var req = URLRequest(url: Config.serverURL.appendingPathComponent(path))
+        var req = URLRequest(url: try Config.api(path))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)

@@ -1,6 +1,6 @@
 /** alignWorldY against pose_engine.align_world_y (fixtures/align_world_y.json). */
 
-import { alignWorldY } from '../world';
+import { alignWorldY } from '../../../../../extension/lib/pose/world.js';
 import { diff, loadFixture } from './helpers';
 
 interface AlignCase {

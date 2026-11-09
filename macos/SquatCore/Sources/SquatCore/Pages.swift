@@ -35,7 +35,6 @@ public enum SettingsForm {
             if s.name.isEmpty || s.name.utf16.count > 40 { return t("errName") }
             if Account.companyFromEmail(email) == nil { return t("errCompany") }
         }
-        if s.serverUrl.range(of: "^wss?://", options: .regularExpression) == nil { return t("errServer") }
         return nil
     }
 }

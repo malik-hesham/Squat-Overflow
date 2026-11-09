@@ -28,7 +28,8 @@ read -r plan_type plan_status credits expires <<<"$plan"
 echo "Account plan: $plan_type $plan_status, \$$credits credits left, ends $expires"
 [ "$plan_status" = "ACTIVE" ] || die "the Free plan is $plan_status; the account can't run the server (and we don't upgrade it)."
 
-# Only instance types the Free plan offers. t3.micro (1 GB) is too small for BlazePose.
+# Only instance types the Free plan offers. t4g.small (2 GB) leaves room for the image build next
+# to Postgres; the server no longer runs a pose model, so this is the same cost as before, not more.
 INSTANCE_TYPE="${INSTANCE_TYPE:-t4g.small}"
 type_info=$(aws ec2 describe-instance-types --instance-types "$INSTANCE_TYPE" --output text \
   --query 'InstanceTypes[0].[FreeTierEligible, ProcessorInfo.SupportedArchitectures[0]]')

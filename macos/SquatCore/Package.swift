@@ -9,7 +9,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [.library(name: "SquatCore", targets: ["SquatCore"])],
     targets: [
-        .target(name: "SquatCore", resources: [.copy("Resources/i18n.json")]),
+        .target(name: "SquatCore", resources: [.copy("Resources/i18n.json"), .copy("Resources/catalog.json")]),
         .testTarget(name: "SquatCoreTests", dependencies: ["SquatCore"], resources: [.copy("Fixtures")]),
     ]
 )

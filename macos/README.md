@@ -12,7 +12,7 @@ A native SwiftUI menu bar app (macOS 14+, no Dock icon) that runs Squat Overflow
 | Break window (`break.html`, `break.js`) | Break window (`BreakView.swift`, `BreakController.swift`) running `SquatCore.BreakSession` |
 | Service worker + `chrome.alarms` (`service-worker.js`) | `SquatCore.Engine`, a `Timer` for the next break, a 60 s sync timer |
 | `chrome.storage.local` (`lib/store.js`) | `~/Library/Application Support/SquatOverflowBar/store.json`, with the same keys (`SquatCore.Store`) |
-| Pose server over WebSocket (`lib/pose-client.js`) | The same server and protocol: `PoseSocket.swift` moves the bytes, `SquatCore.PoseLink` decides what to send |
+| On-device pose (`lib/pose`, MediaPipe in the page, through `lib/pose-client.js`) | The same code and model: `PoseBridge.swift` runs `extension/lib/pose` and the vendored MediaPipe in a web view that is never shown (`PoseWeb/bridge.html`, files served from the app bundle). It speaks the old server's messages, so `SquatCore.PoseLink` decides what to send, as before |
 | `chrome.idle` | Seconds since the last input, screen lock (`Presence.swift`) |
 | Sync (`lib/sync.js`, `lib/sync-core.js`) | `SquatCore.SyncClient` and `SquatCore.SyncCore`, device `mac` |
 | Web Speech, `Audio` meme clips | `AVSpeechSynthesizer`, `AVAudioPlayer` (`Sounds.swift`) |
@@ -28,16 +28,16 @@ Swift can't import the extension's JavaScript, so the rules are ported into the 
 
 Break now and the scheduled reminder open the same break as the extension:
 - three exercises from your pain areas;
-- reps, form scores and cues ("Great form!", "Go deeper", the server's issue text, translated) from the pose server;
+- reps, form scores and cues ("Great form!", "Go deeper", the issue text, translated) from the pose model on this Mac;
 - side-on and standing moves wait until you're in frame (up to 15 s);
-- Swap, the demo clip through the server's `/embed` page, and voice cues and meme clips that take turns;
+- Swap, a **Watch demo** button that opens the clip on youtube.com (only while online), and voice cues and meme clips that take turns;
 - Done, Snooze 20 min (at most twice in a row) and Skip;
 - the "~N hours without moving" warning after three skips in a row;
 - the XP summary with bonuses, new badges and level-up.
 
-If the camera is denied, the server can't be reached, or it's at its session cap, the break goes on by hand with no XP ("Coach offline", "Coach busy", "Camera unavailable"), as in the extension.
+If the camera is denied or the pose model can't start, the break goes on by hand with no XP ("Camera unavailable", "Coach unavailable"), as in the extension.
 
-The camera preview is mirrored. With privacy on (the default, "Blur") the person is blurred using the mask the server sends, and the whole frame is blurred while there's no fresh mask. Frames go only to the pose server you configure and are never recorded.
+The camera preview is mirrored. With privacy on (the default, "Blur") the person is blurred using the mask the pose model makes, and the whole frame is blurred while there's no fresh mask. Frames stay on this Mac and are never recorded; a break works with no network.
 
 ### Gaps
 
@@ -80,13 +80,15 @@ The app's wiring, plus a pose-server integration test that runs when a server is
 cd macos && xcodegen && xcodebuild -scheme SquatOverflowBar test
 ```
 
-## Server URL
+## API server URL
 
-The server URL is the `SO_SERVER_URL` build setting. It defaults to `http://127.0.0.1:8765` (start it with `cd server && npm run start:dev`). It's used for sign-in, sync and the leaderboard. The pose WebSocket defaults to the same host at `/ws` (`ws://`, or `wss://` for an `https://` server). It can be changed under Settings → Advanced, like the extension's Pose server URL. To build against another server:
+The optional API server (`server/`) is the `SO_SERVER_URL` build setting. It defaults to `http://127.0.0.1:8765` (start it with `cd server && npm run start:dev`). It's used only for sign-in, sync and the leaderboard; breaks never need it. To build against another server:
 
 ```bash
-cd macos && xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://pose.example.com
+cd macos && xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://api.example.com
 ```
+
+Built with `SO_SERVER_URL=` (empty), the app is local only, like an extension build with no `API_URL`: no sign-in, no team board, no sync requests.
 
 `SO_GOOGLE_CLIENT_ID` in `project.yml` can be overridden the same way.
 

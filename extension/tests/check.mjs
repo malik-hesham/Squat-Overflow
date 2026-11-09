@@ -18,7 +18,7 @@ import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
-import { CLOSE_BUSY, closeStatus } from "../lib/server-status.js";
+import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, exerciseCatalog, JOINTS } from "../lib/pose/index.js";
 import { readFileSync, readdirSync } from "node:fs";
 
 /** @typedef {import("../lib/vendor/three.js").Mesh} Mesh  what the avatar scene traversals below look at */
@@ -321,7 +321,7 @@ check("leaderboard payload maps fields without id, secret or company, zeroes sta
   assert.equal(stale.weekXp, 0);
 });
 
-check("leaderboard API is the local pose server, and the manifest CSP lets pages reach it", () => {
+check("leaderboard API is the local API server, and the manifest CSP lets pages reach it", () => {
   assert.equal(API_URL, "http://127.0.0.1:8765");
   const manifest = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
   const connectSrc = manifest.content_security_policy.extension_pages.match(/connect-src([^;]*)/)[1].trim().split(/\s+/);
@@ -839,7 +839,7 @@ check("leaderboard board GETs the period with the bearer token; errors resolve n
     } finally { bad.restore(); }
   }));
 });
-check("session: sign-in and refresh POST to the pose server's auth API and map the reply", () => {
+check("session: sign-in and refresh POST to the API server's auth API and map the reply", () => {
   pending.push(serially(async () => {
     const reply = { access_token: "jwt", refresh_token: "r2", expires_in: 3600, user: { id: "u1", email: "malik@leadliaison.com", user_metadata: { full_name: "Malik" } } };
     const ok = fakeFetch(200, reply);
@@ -932,16 +932,57 @@ pending.push(
     assert.deepEqual(saved.at(-1), { done: 0, unscored: 0, reps: 0 });
   })(),
 );
-check("pose socket: close code 1013 means the server is busy, any other close means offline", () => {
-  assert.equal(CLOSE_BUSY, 1013); // the pose server's FORMCOACH_MAX_SESSIONS cap
-  assert.equal(closeStatus(1013), "busy");
-  for (const code of [1000, 1001, 1006, 1011, 1012]) assert.equal(closeStatus(code), "offline");
+check("manifest: WASM may run (the pose model), and pages can't reach a pose server", () => {
+  const csp = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8")).content_security_policy.extension_pages;
+  assert.match(csp, /script-src 'self' 'wasm-unsafe-eval';/);
+  assert.doesNotMatch(csp, /\bwss?:\/\//);
 });
-check("i18n: the break page has its own title and text for a busy server", () => {
+check("i18n: no pose server strings left, in any language", () => {
   const keys = translationKeys("en");
-  for (const key of ["coachBusy", "busyText"]) assert.ok(keys.includes(key), `missing ${key}`);
-  assert.notEqual(t("en", "busyText"), t("en", "offlineText"));
+  for (const key of ["serverUrl", "errServer", "coachOffline", "offlineText", "coachBusy", "busyText"]) assert.ok(!keys.includes(key), `${key} is still there`);
+  for (const key of keys) assert.doesNotMatch(t("en", key), /pose server/i, key);
+  for (const key of ["coachUnavailable", "unavailableText", "watchDemo", "demoCredit"]) assert.ok(keys.includes(key), `missing ${key}`);
 });
+/**
+ * A side-view squat at knee angle `deg`, in normalised image coordinates (the shape of
+ * mobile/src/pose/analysis/__tests__/synthetic.ts's `squat`, kept small). The right side is a
+ * low-visibility copy, as when the camera sees one side.
+ */
+function squatPose(deg) {
+  const lms = Array.from({ length: 33 }, () => [0.5, 0.5, 0.9]);
+  const ankle = [500, 900];
+  const knee = [500, 700];
+  const r = (deg * Math.PI) / 180;
+  // The hip sits 200 px from the knee, `deg` away from the shin, behind the knee.
+  const hip = [knee[0] - 200 * Math.sin(r), knee[1] + 200 * Math.cos(r)];
+  const shoulder = [hip[0] + 250 * Math.sin(Math.PI / 18), hip[1] - 250 * Math.cos(Math.PI / 18)];
+  const pts = { ankle, knee, hip, shoulder, heel: [480, 915], toe: [560, 915], elbow: [shoulder[0], shoulder[1] + 120], wrist: [shoulder[0], shoulder[1] + 240] };
+  for (const [side, vis] of /** @type {[import("../lib/pose/index.js").Side, number][]} */ ([["left", 0.95], ["right", 0.2]])) {
+    for (const [joint, idx] of Object.entries(JOINTS[side])) if (pts[joint]) lms[idx] = [pts[joint][0] / 1000, pts[joint][1] / 1000, vis];
+  }
+  return lms;
+}
+
+check("pose: the catalog lists the office moves in order, the first is the default, demos link to YouTube", () => {
+  const catalog = exerciseCatalog();
+  assert.deepEqual(catalog.map((e) => e.key), OFFICE_EXERCISES.map((e) => e.key));
+  assert.equal(DEFAULT_EXERCISE, catalog[0].key);
+  assert.ok(catalog.every((e) => Object.hasOwn(POSE_CATALOG, e.key)));
+  assert.ok(catalog.filter((e) => e.demo).every((e) => /^https:\/\/www\.youtube\.com\//.test(e.demo.url)));
+});
+
+check("pose: three squats on the device count three clean reps", () => {
+  const session = new Session("squat");
+  const frames = [];
+  for (let rep = 0; rep < 3; rep++) {
+    for (let i = 0; i <= 60; i++) frames.push(172 + ((80 - 172) * (1 - Math.cos((2 * Math.PI * i) / 60))) / 2);
+  }
+  const results = frames.map((deg, i) => session.process(squatPose(deg), 1000, 1000, i / 30));
+  const reps = results.flatMap((r) => (r.rep_event ? [r.rep_event] : []));
+  assert.deepEqual(reps.map((e) => [e.index, e.score]), [[1, 100], [2, 100], [3, 100]]);
+  assert.equal(results.at(-1).summary.reps, 3);
+});
+
 check("i18n: every English string has an Arabic translation", () => {
   const ar = new Set(translationKeys("ar"));
   const missing = translationKeys("en").filter((k) => !ar.has(k));
@@ -1196,7 +1237,7 @@ Promise.all(pending).then(
     assert.deepEqual(
       core.remotePatch(settings, { intervalMin: 30, memes: true, mode: "competitive", lang: "xx-123456", serverUrl: "ws://evil" }, { memes: NOW }),
       { intervalMin: 30 },
-      "memes has an unsent change, mode is equal, lang is invalid, serverUrl is device-only",
+      "memes has an unsent change, mode is equal, lang is invalid, serverUrl is not a shared setting",
     );
     assert.deepEqual(core.changedSharedKeys({ workdays: [1, 2], theme: "a" }, { workdays: [1, 2], theme: "b", areas: ["Eyes"] }), ["areas"]);
   });
@@ -1321,6 +1362,19 @@ Promise.all(pending).then(
       assert.equal(srv.doc.voice, false);
     } finally {
       srv.restore();
+    }
+  });
+
+  await acheck("store: no pose server setting; an install or update deletes the retired pose server keys", async () => {
+    assert.ok(!("serverUrl" in store.SETTINGS_DEFAULTS));
+    const saved = structuredClone(mem); // the sync checks below carry state from the ones above
+    try {
+      reset({ serverUrl: "ws://127.0.0.1:8765/ws", exerciseCatalog: { exercises: [{ key: "neck_tilt" }] }, intervalMin: 45 });
+      await store.dropRetiredKeys();
+      assert.deepEqual(Object.keys(mem), ["intervalMin"]);
+      assert.ok(!("serverUrl" in (await store.getSettings())));
+    } finally {
+      reset(saved);
     }
   });
 
@@ -1471,5 +1525,279 @@ Promise.all(pending).then(
   });
   check("avatars: no WebGL means unsupported, so the blur mask stands in", () => {
     assert.equal(Avatar.supported(), false);
+  });
+}
+
+// ---- On-device pose (lib/pose/gateway.js, lib/pose/mask.js): the old pose server's /ws protocol,
+// answered in the page. Ported from server/test/server/server.spec.ts and mask.spec.ts.
+{
+  const { createPoseGateway } = await import("../lib/pose/gateway.js");
+  const { encodeMask } = await import("../lib/pose/mask.js");
+  const { CONNECTIONS } = await import("../lib/pose/index.js");
+  const acheck = async (name, fn) => {
+    try {
+      await fn();
+      console.log(`ok ${name}`);
+    } catch (err) {
+      console.log(`FAIL ${name}\n  ${err.stack ?? err.message}`);
+      process.exitCode = 1;
+    }
+  };
+  /** A gateway whose detector returns the frame it is given, on a clock that moves 5 ms per read. */
+  const gateway = () => {
+    let ms = 1000;
+    return createPoseGateway({ detect: async (frame) => frame, now: () => (ms += 5) });
+  };
+  const send = (g, msg) => g.handle(typeof msg === "string" ? msg : JSON.stringify(msg));
+  const nobody = { width: 640, height: 480, landmarks: null, world: null, mask: null };
+  const maskOf = (h, w, fill) => {
+    const data = new Float32Array(w * h);
+    if (fill) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) data[y * w + x] = fill(x, y) ? 1 : 0;
+    return { data, width: w, height: h };
+  };
+  /** A standing "person": rows 60..299, columns 200..279 of a 360x480 frame. */
+  const person = () => maskOf(360, 480, (x, y) => y >= 60 && y < 300 && x >= 200 && x < 280);
+  const alphaAt = (m, x, y) => m.alpha[y * m.width + x];
+
+  await acheck("pose gateway: ready lists the whole office catalog, the skeleton and the default move", async () => {
+    const ready = gateway().ready();
+    assert.equal(ready.type, "ready");
+    assert.deepEqual(ready.exercises, exerciseCatalog());
+    assert.equal(ready.exercises.length, 40);
+    assert.deepEqual(ready.connections, CONNECTIONS);
+    assert.equal(ready.exercise, "neck_tilt");
+  });
+
+  await acheck("pose gateway: config takes office moves only and reports bad messages like the server did", async () => {
+    const g = gateway();
+    assert.equal((await send(g, { type: "config", exercise: "curl" }))[0].type, "error"); // Workout set is not offered
+    assert.deepEqual(await send(g, { type: "config", exercise: "nerve_glide" }), [{ type: "config", exercise: "nerve_glide", calibrated: false }]);
+    assert.deepEqual(await send(g, { type: "config", exercise: ["neck_tilt"] }), [{ type: "error", message: "unknown exercise ['neck_tilt']" }]);
+    assert.deepEqual(await send(g, { type: "warp" }), [{ type: "error", message: "unknown message type 'warp'" }]);
+    assert.deepEqual(await send(g, "{not json"), [{ type: "error", message: "invalid JSON" }]);
+    assert.deepEqual(await send(g, ["not", "an", "object"]), [{ type: "error", message: "expected a JSON object" }]);
+    assert.deepEqual(await send(g, { type: "reset" }), [{ type: "config", exercise: "nerve_glide", calibrated: false }]);
+  });
+
+  await acheck("pose gateway: a frame with nobody in it says so, with no mask unless privacy is on", async () => {
+    const g = gateway();
+    await send(g, { type: "config", exercise: "nerve_glide" });
+    const [frame] = await g.handle(nobody);
+    assert.equal(frame.type, "frame");
+    assert.equal(frame.exercise, "nerve_glide");
+    assert.equal(frame.landmarks, null);
+    assert.equal(frame.feedback[0].code, "not_visible");
+    assert.ok(frame.latency_ms > 0);
+    assert.ok(!("mask" in frame)); // off by default: nothing to draw
+
+    assert.deepEqual(await send(g, { type: "privacy", enabled: true }), [{ type: "privacy", enabled: true }]);
+    assert.equal((await g.handle(nobody))[0].mask, null); // nobody found -> the client blurs everything
+    assert.deepEqual(await send(g, { type: "privacy", enabled: "yes" }), [{ type: "privacy", enabled: false }]); // only a real true
+  });
+
+  await acheck("pose gateway: landmarks are rounded like the server's, and privacy adds the person's mask", async () => {
+    const g = gateway();
+    await send(g, { type: "privacy", enabled: true });
+    const landmarks = Array.from({ length: 33 }, () => [0.123456, 0.654321, 0.98765]);
+    const [frame] = await g.handle({ width: 480, height: 360, landmarks, world: null, mask: person() });
+    assert.deepEqual(frame.landmarks[0], [0.1235, 0.6543, 0.988]);
+    assert.equal(Math.max(frame.mask.width, frame.mask.height), 160);
+    assert.equal(alphaAt(frame.mask, 80, 80), 255);
+  });
+
+  await acheck("pose gateway: a frame the detector can't read is an error, and the next one still works", async () => {
+    let fail = true;
+    const g = createPoseGateway({ detect: async (f) => { if (fail) throw new Error("bad frame"); return f; }, now: () => 0 });
+    assert.deepEqual(await g.handle(nobody), [{ type: "error", message: "could not read frame" }]);
+    fail = false;
+    assert.equal((await g.handle(nobody))[0].type, "frame");
+  });
+
+  await acheck("pose gateway: angle mode, calibration thresholds and calibrate start/cancel", async () => {
+    const g = gateway();
+    assert.deepEqual(await send(g, { type: "angles", mode: "3d" }), [{ type: "angles", mode: "3d", exercise: "neck_tilt" }]);
+    assert.equal((await send(g, { type: "angles", mode: "4d" }))[0].type, "error");
+
+    assert.deepEqual(await send(g, { type: "config", exercise: "sit_to_stand", calibration: { rest: 150, target: 120 } }), [
+      { type: "config", exercise: "sit_to_stand", calibrated: true },
+    ]);
+    const th = (await g.handle(nobody))[0].thresholds;
+    assert.deepEqual([th.rest, th.target, th.calibrated, th.default_rest, th.default_target], [150, 120, true, 155, 110]);
+
+    // Wrong direction for this exercise: an error, then the switch happens with defaults.
+    const replies = await send(g, { type: "config", exercise: "sit_to_stand", calibration: { rest: 100, target: 150 } });
+    assert.deepEqual(replies, [{ type: "error", message: "invalid calibration" }, { type: "config", exercise: "sit_to_stand", calibrated: false }]);
+
+    assert.deepEqual(await send(g, { type: "calibrate", action: "start" }), [{ type: "calibrate", action: "start", exercise: "sit_to_stand" }]);
+    const frame = (await g.handle(nobody))[0];
+    assert.deepEqual(frame.calibration, { status: "recording", reps: 0, needed: 3 });
+    assert.equal(frame.angle_mode, "2d"); // nobody found: no world landmarks this frame
+    assert.equal((await send(g, { type: "calibrate", action: "cancel" }))[0].action, "cancel");
+    assert.ok(!("calibration" in (await g.handle(nobody))[0]));
+    assert.equal((await send(g, { type: "calibrate", action: "explode" }))[0].type, "error");
+  });
+
+  await acheck("pose gateway: 3D mode measures on the frame's world landmarks (alignWorldY is pinned by mobile's world.parity test)", async () => {
+    const g = gateway();
+    await send(g, { type: "config", exercise: "sit_to_stand" });
+    await send(g, { type: "angles", mode: "3d" });
+    const landmarks = Array.from({ length: 33 }, (_, i) => [0.5, i / 33, 0.99]);
+    const world = landmarks.map(([x, y]) => [x - 0.5, -(y - 0.5), 0]);
+    const [frame] = await g.handle({ width: 640, height: 480, landmarks, world, mask: null });
+    assert.equal(frame.angle_mode, "3d");
+  });
+
+  check("pose mask: small, with the person in alpha", () => {
+    const m = encodeMask(person());
+    assert.equal(Math.max(m.width, m.height), 160);
+    assert.equal(m.height / m.width, 0.75);
+    assert.equal(m.alpha.length, m.width * m.height);
+    assert.equal(alphaAt(m, 80, 80), 255); // centre of the person (scaled 1/3)
+    assert.equal(alphaAt(m, 5, 5), 0); // far background
+  });
+
+  check("pose mask: grown beyond the person, never shrunk", () => {
+    const m = encodeMask(person());
+    let original = 0;
+    let grown = 0;
+    for (let y = 0; y < m.height; y++) {
+      for (let x = 0; x < m.width; x++) {
+        const inPerson = y * 3 >= 60 && y * 3 < 300 && x * 3 >= 200 && x * 3 < 280;
+        const covered = alphaAt(m, x, y) > 127;
+        if (inPerson) {
+          original++;
+          assert.ok(covered, `person pixel ${x},${y} uncovered`);
+        }
+        if (covered) grown++;
+      }
+    }
+    assert.ok(grown > original * 1.2);
+  });
+
+  check("pose mask: landmarks cover the limbs and head the segmentation missed", () => {
+    const lms = Array.from({ length: 33 }, () => [0.5, 0.5, 0.0]); // unseen by default
+    lms[0] = [0.5, 0.15, 0.99]; // nose
+    lms[11] = [0.6, 0.3, 0.99]; // shoulders
+    lms[12] = [0.4, 0.3, 0.99];
+    lms[13] = [0.75, 0.3, 0.99]; // left arm out sideways
+    lms[15] = [0.9, 0.3, 0.99];
+    const m = encodeMask(maskOf(360, 480), lms);
+    const { width: w, height: h } = m;
+    assert.equal(alphaAt(m, Math.round(0.82 * w), Math.round(0.3 * h)), 255); // forearm
+    assert.equal(alphaAt(m, Math.round(0.5 * w), Math.round(0.15 * h)), 255); // face
+    assert.equal(alphaAt(m, Math.round(0.1 * w), Math.round(0.9 * h)), 0); // background
+    assert.equal(alphaAt(m, Math.round(0.6 * w), Math.round(0.7 * h)), 0); // no line to an unseen landmark
+  });
+
+  check("pose mask: an empty mask stays empty", () => {
+    assert.equal(Math.max(...encodeMask(maskOf(90, 120)).alpha), 0);
+  });
+}
+
+// ---- On-device pose transport (lib/pose/local-socket.js) and the vendored model (lib/vendor/mediapipe).
+{
+  const { openPoseSocket } = await import("../lib/pose/local-socket.js");
+  const { createPoseGateway } = await import("../lib/pose/gateway.js");
+  const { createHash } = await import("node:crypto");
+  const acheck = async (name, fn) => {
+    try {
+      await fn();
+      console.log(`ok ${name}`);
+    } catch (err) {
+      console.log(`FAIL ${name}\n  ${err.stack ?? err.message}`);
+      process.exitCode = 1;
+    }
+  };
+  const nobody = { width: 640, height: 480, landmarks: null, world: null, mask: null };
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  /** Opens a socket on a fake detector; records every event it fires. */
+  const open = (detector = { detect: async (f) => f, close() { detector.closed = true; } }) => {
+    const events = [];
+    const socket = openPoseSocket({ createDetector: async () => detector });
+    for (const type of ["open", "message", "close", "error"]) {
+      socket.addEventListener(type, (/** @type {any} */ ev) => events.push(type === "message" ? ev.data : type === "close" ? { close: ev.code } : type));
+    }
+    return { socket, events, detector };
+  };
+
+  await acheck("pose socket: connecting until the model loads, then open, then ready first", async () => {
+    const { socket, events } = open();
+    assert.equal(socket.readyState, socket.CONNECTING);
+    await tick();
+    assert.equal(socket.readyState, socket.OPEN);
+    assert.equal(events[0], "open");
+    assert.equal(events[1].type, "ready");
+  });
+
+  await acheck("pose socket: replies come back as objects, in the order the messages were sent", async () => {
+    let release;
+    const slow = new Promise((r) => (release = r));
+    const detector = { detect: async (f) => (await slow, f), close() {} };
+    const { socket, events } = open(detector);
+    await tick();
+    socket.send(nobody); // held by the slow detector
+    socket.send(JSON.stringify({ type: "privacy", enabled: true }));
+    await tick();
+    assert.equal(events.length, 2); // open, ready: the privacy reply waits for the frame before it
+    release();
+    await tick();
+    await tick();
+    assert.deepEqual(events.slice(2).map((m) => m.type), ["frame", "privacy"]);
+  });
+
+  await acheck("pose socket: close stops replies and releases the model", async () => {
+    let release;
+    const slow = new Promise((r) => (release = r));
+    const detector = { detect: async (f) => (await slow, f), close() { detector.closed = true; } };
+    const { socket, events } = open(detector);
+    await tick();
+    socket.send(nobody);
+    socket.close();
+    assert.equal(socket.readyState, socket.CLOSED);
+    release();
+    await tick();
+    await tick();
+    assert.deepEqual(events, ["open", events[1], { close: 1000 }]);
+    assert.equal(detector.closed, true);
+    socket.send(nobody); // ignored once closed, like a closed WebSocket
+  });
+
+  await acheck("pose socket: a model that fails to load closes with 1011 and never opens", async () => {
+    const events = [];
+    const socket = openPoseSocket({ createDetector: async () => { throw new Error("no WebGL, no WASM"); } });
+    socket.addEventListener("open", () => events.push("open"));
+    socket.addEventListener("close", (/** @type {any} */ ev) => events.push([ev.code, ev.reason]));
+    await tick();
+    assert.deepEqual(events, [[1011, "no WebGL, no WASM"]]);
+    assert.equal(socket.readyState, socket.CLOSED);
+  });
+
+  await acheck("pose socket: closed while the model loads, the model is released as soon as it arrives", async () => {
+    const detector = { detect: async (f) => f, close() { detector.closed = true; } };
+    const socket = openPoseSocket({ createDetector: async () => detector });
+    socket.close();
+    await tick();
+    assert.equal(detector.closed, true);
+  });
+
+  await acheck("pose gateway: the detector is asked for a person mask only while privacy is on", async () => {
+    const asked = [];
+    const g = createPoseGateway({ detect: async (f, _ms, opts) => (asked.push(opts.mask), f), now: () => 0 });
+    await g.handle(nobody);
+    await g.handle(JSON.stringify({ type: "privacy", enabled: true }));
+    await g.handle(nobody);
+    assert.deepEqual(asked, [false, true]);
+  });
+
+  check("pose model: the extension ships the phone's pose_landmarker_lite.task, byte for byte", () => {
+    const sha = (p) => createHash("sha256").update(readFileSync(new URL(p, import.meta.url))).digest("hex");
+    assert.equal(sha("../lib/vendor/mediapipe/pose_landmarker_lite.task"), sha("../../mobile/modules/squat-pose/assets/pose_landmarker_lite.task"));
+  });
+
+  check("pose model: the MediaPipe runtime is vendored, so a break needs no network", () => {
+    const files = readdirSync(new URL("../lib/vendor/mediapipe/", import.meta.url));
+    for (const f of ["vision_bundle.mjs", "vision_wasm_internal.js", "vision_wasm_internal.wasm", "pose_landmarker_lite.task", "LICENSE"]) {
+      assert.ok(files.includes(f), `lib/vendor/mediapipe/${f} missing; run npm run vendor in extension/`);
+    }
   });
 }

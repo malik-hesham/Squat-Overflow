@@ -7,7 +7,7 @@ final class StoreTests: XCTestCase {
 
     private func store(_ kv: KeyValueStore = MemoryStore()) -> Store {
         _ = Parity.fixture // time zone
-        return Store(kv, defaultServerUrl: "ws://127.0.0.1:8765/ws")
+        return Store(kv)
     }
 
     func testSettingsDefaultToTheExtensionDefaults() throws {
@@ -77,12 +77,23 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.outbox().count, 7)
     }
 
-    func testCatalogCacheIgnoresAnEmptyList() {
-        let s = store()
-        let e = Exercise(key: "neck_tilt", label: "Neck tilt", category: "Neck tension", camera: "front", howTo: "Tilt")
-        s.cacheCatalog([e])
-        s.cacheCatalog([])
-        XCTAssertEqual(s.catalog(), [e])
+    /// dropRetiredKeys() in extension/lib/store.js: the pose server's URL and the catalog it sent.
+    func testThePoseServerKeysAreRetired() {
+        let kv = MemoryStore()
+        kv.set(["serverUrl": .string("ws://127.0.0.1:8765/ws"), "exerciseCatalog": .object([:]), "intervalMin": .number(45)])
+        let s = store(kv)
+        s.dropRetiredKeys()
+        XCTAssertNil(kv.get("serverUrl"))
+        XCTAssertNil(kv.get("exerciseCatalog"))
+        XCTAssertEqual(s.settings().intervalMin, 45)
+    }
+
+    /// The catalog is lib/pose's exerciseCatalog(), exported to Resources/catalog.json.
+    func testTheCatalogIsTheExtensionsOwn() throws {
+        let keys = try Parity.cases("pose.catalogKeys")[0].out.as_([String].self)
+        XCTAssertEqual(Exercise.catalog.map(\.key), keys)
+        XCTAssertEqual(Exercise.catalog.count, 40)
+        XCTAssertTrue(Exercise.catalog.allSatisfy { !$0.howTo.isEmpty && !$0.category.isEmpty })
     }
 
     func testFileStoreKeepsValuesAcrossLaunches() throws {

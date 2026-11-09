@@ -5,7 +5,6 @@ import type { INestApplication, LogLevel } from '@nestjs/common';
 
 import { AppModule } from './app.module';
 import { originAllowed } from './config';
-import { PoseWsAdapter } from './pose/protocol';
 
 /** Builds the app without listening, so tests can drive it on an ephemeral port. */
 export async function createApp(
@@ -14,10 +13,9 @@ export async function createApp(
   return configureApp(await NestFactory.create(AppModule, { logger }));
 }
 
-/** Everything main() and the tests both need on top of the module: WebSocket adapter, CORS, shutdown hooks. */
+/** Everything main() and the tests both need on top of the module: CORS, shutdown hooks. */
 export function configureApp(app: INestApplication): INestApplication {
-  app.useWebSocketAdapter(new PoseWsAdapter(app));
-  // The extension's pages call the auth, leaderboard and sync API cross-origin. Same allowlist as /ws.
+  // The extension's pages call the auth, leaderboard and sync API cross-origin.
   app.enableCors({
     origin: (origin: string | undefined, done: (err: Error | null, allow: boolean) => void) =>
       done(null, originAllowed(origin)),
@@ -34,7 +32,7 @@ async function main(): Promise<void> {
   const host = process.env.FORMCOACH_HOST ?? '127.0.0.1';
   const port = Number(process.env.FORMCOACH_PORT ?? process.env.PORT ?? 8765);
   await app.listen(port, host);
-  console.log(`FormCoach pose server (NestJS) on http://${host}:${port}  ws path /ws`);
+  console.log(`Squat Overflow API server (NestJS) on http://${host}:${port}`);
 }
 
 if (require.main === module) void main();

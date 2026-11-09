@@ -1,7 +1,6 @@
 import Foundation
 
-/// The settings, with SETTINGS_DEFAULTS from extension/lib/store.js. `serverUrl` is the pose
-/// server's WebSocket (`ws://…/ws`); the app fills in its build's default.
+/// The settings, with SETTINGS_DEFAULTS from extension/lib/store.js.
 public struct Settings: Codable, Equatable, Sendable {
     public var intervalMin = 60
     public var areas: [String] = []
@@ -15,7 +14,6 @@ public struct Settings: Codable, Equatable, Sendable {
     public var memes = true
     public var mode = "personal"
     public var name = ""
-    public var serverUrl = ""
     public var setupDone = false
     public var theme = "auto"
     public var avatar = "bunny"
@@ -28,7 +26,7 @@ public struct Settings: Codable, Equatable, Sendable {
 
     /// The keys of SETTINGS_DEFAULTS, in order.
     public static let keys = ["intervalMin", "areas", "activeStart", "activeEnd", "workdays", "autoPause", "privacy",
-                              "privacyStyle", "voice", "memes", "mode", "name", "serverUrl", "setupDone", "theme",
+                              "privacyStyle", "voice", "memes", "mode", "name", "setupDone", "theme",
                               "avatar", "lang", "weekStart"]
 
     /// `{ ...SETTINGS_DEFAULTS, ...stored }`: a missing or mistyped value keeps its default.
@@ -37,7 +35,7 @@ public struct Settings: Codable, Equatable, Sendable {
         func take<T: Decodable>(_ key: CodingKeys, _ into: inout T) { if let v = try? c.decodeIfPresent(T.self, forKey: key) { into = v } }
         take(.intervalMin, &intervalMin); take(.areas, &areas); take(.activeStart, &activeStart); take(.activeEnd, &activeEnd)
         take(.workdays, &workdays); take(.autoPause, &autoPause); take(.privacy, &privacy); take(.privacyStyle, &privacyStyle)
-        take(.voice, &voice); take(.memes, &memes); take(.mode, &mode); take(.name, &name); take(.serverUrl, &serverUrl)
+        take(.voice, &voice); take(.memes, &memes); take(.mode, &mode); take(.name, &name)
         take(.setupDone, &setupDone); take(.theme, &theme); take(.avatar, &avatar); take(.lang, &lang); take(.weekStart, &weekStart)
     }
 
@@ -49,6 +47,7 @@ public struct Settings: Codable, Equatable, Sendable {
 public protocol KeyValueStore: AnyObject {
     func get(_ key: String) -> JSONValue?
     func set(_ values: [String: JSONValue])
+    func remove(_ keys: [String])
 }
 
 public final class MemoryStore: KeyValueStore {
@@ -56,6 +55,7 @@ public final class MemoryStore: KeyValueStore {
     public init() {}
     public func get(_ key: String) -> JSONValue? { values[key] }
     public func set(_ values: [String: JSONValue]) { self.values.merge(values) { $1 } }
+    public func remove(_ keys: [String]) { for k in keys { values[k] = nil } }
 }
 
 /// A JSON file, read once and rewritten atomically on every change.
@@ -78,6 +78,17 @@ public final class FileStore: KeyValueStore {
     public func set(_ values: [String: JSONValue]) {
         lock.lock(); defer { lock.unlock() }
         self.values.merge(values) { $1 }
+        save()
+    }
+
+    public func remove(_ keys: [String]) {
+        lock.lock(); defer { lock.unlock() }
+        for k in keys { values[k] = nil }
+        save()
+    }
+
+    /// Call with the lock held.
+    private func save() {
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(self.values).write(to: url, options: .atomic)
@@ -94,7 +105,6 @@ public final class Store {
     static let profileKey = "profile"
     static let scheduleKey = "schedule"
     static let logKey = "breakLog"
-    static let catalogKey = "exerciseCatalog"
     static let memeTurnsKey = "memeTurns"
     static let activityKey = "activity"
     public static let outboxKey = "syncOutbox"
@@ -102,12 +112,19 @@ public final class Store {
     public static let syncStateKey = "syncState"
     public static let rejectedKey = "syncRejected"
 
-    public let kv: KeyValueStore
-    private let defaultServerUrl: String
+    /// Keys an older version stored that nothing reads any more: the pose server's URL (the model
+    /// runs on the device now) and the catalog it sent (RETIRED_KEYS in extension/lib/store.js).
+    static let retiredKeys = ["serverUrl", "exerciseCatalog"]
 
-    public init(_ kv: KeyValueStore, defaultServerUrl: String) {
+    public let kv: KeyValueStore
+
+    public init(_ kv: KeyValueStore) {
         self.kv = kv
-        self.defaultServerUrl = defaultServerUrl
+    }
+
+    /// dropRetiredKeys() in extension/lib/store.js; the app runs it at launch.
+    public func dropRetiredKeys() {
+        kv.remove(Store.retiredKeys)
     }
 
     func read<T: Decodable>(_ key: String, as: T.Type = T.self) -> T? { try? kv.get(key)?.decode(T.self) }
@@ -119,10 +136,9 @@ public final class Store {
     // MARK: Settings
 
     public func settings() -> Settings {
-        var stored: [String: JSONValue] = ["serverUrl": .string(defaultServerUrl)]
+        var stored: [String: JSONValue] = [:]
         for k in Settings.keys { if let v = kv.get(k) { stored[k] = v } }
         var s = (try? JSONValue.object(stored).decode(Settings.self)) ?? Settings()
-        if s.serverUrl.isEmpty { s.serverUrl = defaultServerUrl }
         s.areas = Routine.currentAreas(s.areas)
         return s
     }
@@ -178,15 +194,7 @@ public final class Store {
         setOutbox(SyncCore.addToOutbox(outbox(), [SyncCore.breakEvent(entry, id: id, areas: areas, now: now)]))
     }
 
-    // MARK: Catalog, activity, sounds
-
-    public func catalog() -> [Exercise] { (read(Store.catalogKey, as: JSONValue.self)?["exercises"]).flatMap { try? $0.decode([Exercise].self) } ?? [] }
-
-    /// Keeps the server's catalog for when it can't be reached; an empty one is ignored.
-    public func cacheCatalog(_ exercises: [Exercise], connections: JSONValue? = nil) {
-        guard !exercises.isEmpty, let list = try? JSONValue(encoding: exercises) else { return }
-        kv.set([Store.catalogKey: .object(["exercises": list, "connections": connections ?? .null])])
-    }
+    // MARK: Activity, sounds
 
     public func activity() -> [String: DayActivity]? { read(Store.activityKey) }
 

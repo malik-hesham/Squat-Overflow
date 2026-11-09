@@ -13,7 +13,7 @@ final class AppModel: ObservableObject, EngineHost {
     static let underTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     let auth = Auth()
-    let store = Store(underTests ? MemoryStore() : FileStore(url: Config.storeURL), defaultServerUrl: Config.poseURL)
+    let store = Store(underTests ? MemoryStore() : FileStore(url: Config.storeURL))
     private(set) var engine: Engine!
     private(set) lazy var api = ServerAPI(auth: auth)
     private lazy var syncer = SyncClient(store: store, transport: api, clock: Self.nowMs)
@@ -40,6 +40,7 @@ final class AppModel: ObservableObject, EngineHost {
     nonisolated static func nowMs() -> Millis { LocalTime.millis(Date()) }
 
     init() {
+        store.dropRetiredKeys() // the pose server's URL and catalog, from before the model ran here
         session = auth.session
         engine = Engine(store: store, host: self, clock: Self.nowMs)
         UILang.current = lang
@@ -123,14 +124,14 @@ final class AppModel: ObservableObject, EngineHost {
     // MARK: Sync and the board
 
     func runSync() async {
-        guard session != nil else { return }
+        guard session != nil, Config.serverURL != nil else { return }
         let out = await syncer.syncNow()
         if out.ok {
             lastSync = Date()
             error = nil
             if out.scheduleChanged || out.lastBreakAt != nil { engine.afterSync(scheduleChanged: out.scheduleChanged, lastBreakAt: out.lastBreakAt) }
         } else if out.reason != "signed-out" {
-            error = out.reason == "offline" ? "Can't reach \(Config.serverURL.host ?? "the server")." : "Sync failed (\(out.reason ?? "?"))."
+            error = out.reason == "offline" ? "Can't reach \(Config.serverURL?.host ?? "the server")." : "Sync failed (\(out.reason ?? "?"))."
         }
         await loadBoard()
         changed()

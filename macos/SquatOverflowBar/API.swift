@@ -12,7 +12,8 @@ final class ServerAPI: SyncTransport {
     func userId() async -> String? { auth.session?.userId }
 
     func call(_ method: String, _ path: String, _ body: JSONValue?) async throws -> JSONValue? {
-        guard let url = URL(string: Config.serverURL.absoluteString + path) else { throw HTTPStatusError(status: 400) }
+        guard let base = Config.serverURL else { throw AuthError.noServer }
+        guard let url = URL(string: base.absoluteString + path) else { throw HTTPStatusError(status: 400) }
         let token = try await auth.accessToken()
         var (data, status) = try await send(method, url, body, token)
         if status == 401 {

@@ -60,14 +60,14 @@ public enum Memes {
 
 /// The pose socket's states as the break page shows them (onStatus in extension/break.js).
 public enum PoseStatus: String, Sendable {
-    case connecting, open, offline, busy
+    case connecting, open, offline, unavailable
     case cameraDenied = "camera-denied"
 
-    /// WebSocket close code 1013 "Try Again Later": the server is at its session cap.
-    public static let closeBusy = 1013
+    /// CLOSE_MODEL_FAILED in extension/lib/pose/local-socket.js: the pose model couldn't start.
+    public static let closeModelFailed = 1011
 
-    /// closeStatus() in extension/lib/server-status.js.
-    public static func closeStatus(_ code: Int) -> PoseStatus { code == closeBusy ? .busy : .offline }
+    /// The close handler in extension/lib/pose-client.js.
+    public static func closeStatus(_ code: Int) -> PoseStatus { code == closeModelFailed ? .unavailable : .offline }
 }
 
 /// extension/lib/badges.js

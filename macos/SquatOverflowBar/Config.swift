@@ -7,29 +7,30 @@ enum Config {
         return value.isEmpty || value.hasPrefix("$(") ? fallback : value
     }
 
-    /// The NestJS server. A trailing slash is dropped so paths can be appended.
-    static let serverURL: URL = {
-        var raw = string("SOServerURL", "http://127.0.0.1:8765")
-        while raw.hasSuffix("/") { raw.removeLast() }
-        return URL(string: raw) ?? URL(string: "http://127.0.0.1:8765")!
-    }()
+    /// The optional API server (server/): Google sign-in, the team board and sync. nil when
+    /// `SO_SERVER_URL` is empty: the app is then local only, like a build of the extension with no
+    /// API_URL (extension/config.js), and offers no sign-in.
+    static let serverURL: URL? = serverURL(from: Bundle.main.object(forInfoDictionaryKey: "SOServerURL") as? String)
 
-    /// The pose WebSocket on a server: http → ws, https → wss, path /ws. The extension's
-    /// POSE_SERVER_URL has the same shape; it's the default for the `serverUrl` setting.
-    static func poseURL(for server: URL) -> String {
-        var c = URLComponents(url: server, resolvingAgainstBaseURL: false) ?? URLComponents()
-        c.scheme = c.scheme == "https" ? "wss" : "ws"
-        c.path = "/ws"
-        return c.string ?? "ws://127.0.0.1:8765/ws"
+    /// A trailing slash is dropped so paths can be appended. Empty or an undefined build setting: nil.
+    static func serverURL(from raw: String?) -> URL? {
+        var value = (raw ?? "").trimmingCharacters(in: .whitespaces)
+        if value.isEmpty || value.hasPrefix("$(") { return nil }
+        while value.hasSuffix("/") { value.removeLast() }
+        return URL(string: value)
     }
 
-    static var poseURL: String { poseURL(for: serverURL) }
+    /// The URL for `path` on the API server.
+    static func api(_ path: String) throws -> URL {
+        guard let base = serverURL else { throw AuthError.noServer }
+        return base.appendingPathComponent(path)
+    }
 
     static let googleClientID = string(
         "SOGoogleClientID", "977942788346-udafursfj3ns2juas0o7c4knj3pvht3h.apps.googleusercontent.com")
 
     /// Google redirects here; server/static/mobile-callback.html relays to squatoverflow://auth.
-    static var callbackURL: URL { serverURL.appendingPathComponent("auth/mobile-callback") }
+    static var callbackURL: URL? { serverURL?.appendingPathComponent("auth/mobile-callback") }
 
     static let appScheme = "squatoverflow"
 

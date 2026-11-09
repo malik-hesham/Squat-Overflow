@@ -1,11 +1,11 @@
-# Running the pose server on the AWS Free plan
+# Running the API server on the AWS Free plan
 
-This guide runs the pose server, its Postgres database and HTTPS on **one EC2 instance**, from [`deploy/`](../deploy). Everything else (releases, the Chrome Web Store, migrations) is in [deployment.md](deployment.md).
+This guide runs the API server (optional Google sign-in, team leaderboard and cross-device sync), its Postgres database and HTTPS on **one EC2 instance**, from [`deploy/`](../deploy). Everything else (releases, the Chrome Web Store, migrations) is in [deployment.md](deployment.md).
 
 ```
-extension ── wss://<DOMAIN>/ws, https://<DOMAIN> ──▶ EC2 instance (Elastic IP)
+extension ── https://<DOMAIN> (signed in only) ──▶ EC2 instance (Elastic IP)
                                                       ├─ caddy  :80/:443  Let's Encrypt TLS → pose:8080
-                                                      ├─ pose   server/Dockerfile (NestJS + BlazePose)
+                                                      ├─ pose   server/Dockerfile (NestJS API)
                                                       └─ db     postgres:17, volume pgdata
 ```
 
@@ -25,13 +25,13 @@ AWS accounts on the **Free plan** get $100 in credits, plus up to $100 more for 
 
 These are estimates; check them in the [AWS Pricing Calculator](https://calculator.aws/) for your region. There is no load balancer (~$18/month) and no RDS (~$15/month); together they would use up $100 of credits in about two months.
 
-> **Before the plan's end date**, move the server to another account or provider (see [Moving off the instance](#moving-off-the-instance)). We don't upgrade this account, so it closes then, and the instance and its disk go with it. Store builds of the extension have the server's hostname built in, so a server that disappears shows "offline" in every installed extension; one that moved behind the same hostname keeps working.
+> **Before the plan's end date**, move the server to another account or provider (see [Moving off the instance](#moving-off-the-instance)). We don't upgrade this account, so it closes then, and the instance and its disk go with it. Store builds of the extension have the server's hostname built in. Breaks never need the server (pose analysis runs on each device), but if it disappears, sign-in, the leaderboard and sync stop in every installed extension and signed-in breaks wait in each device's queue; a server that moved behind the same hostname keeps working.
 
-**Capacity:** every open break holds one WebSocket and one BlazePose detector. On this instance, plan for **2–4 breaks at the same time**, not the 4–6 of a dedicated 2 GB machine, because the CPU is burstable and Postgres shares the memory. `FORMCOACH_MAX_SESSIONS` in `.env` (3 by default here) enforces that: past it, new clients are closed with "server busy" and the break page shows "Coach busy". Raise it only if `latency_ms` in frame results stays low with that many breaks running.
+**Capacity:** the server sees no camera frames (pose analysis runs on each device), only small JSON requests from signed-in clients: a sync about once a minute per open client, plus sign-in and the leaderboard. One instance handles far more users than it did as a pose server. The service is still called `pose` in `deploy/docker-compose.yml` and the AWS resources are still tagged `squat-overflow-pose`, so an update replaces what's running instead of creating a second copy. Dropping the pose model changes nothing in the cost.
 
 ## 1. Choose a hostname
 
-Caddy needs a DNS name for the certificate, and the store build of the extension points at that name. **Use a domain you control** (e.g. `pose.yourcompany.com`). When the server moves later, you change one DNS record and installed extensions keep working with no store update. A name tied to the instance's IP can't move.
+Caddy needs a DNS name for the certificate, and the store build of the extension points at that name. **Use a domain you control** (e.g. `api.yourcompany.com`). When the server moves later, you change one DNS record and installed extensions keep working with no store update. A name tied to the instance's IP can't move.
 
 ## 2. Launch the instance
 
@@ -80,7 +80,7 @@ In the AWS console, in one region (e.g. **eu-central-1, Frankfurt**):
 
 1. **EC2 → Launch instance**
    - AMI: **Ubuntu Server 24.04 LTS, 64-bit (Arm)**.
-   - Instance type: **t4g.small**. Only types labeled *Free tier eligible* are offered on the Free plan. If `t4g.small` isn't one of them, use **t3.small** with the **64-bit (x86)** Ubuntu AMI. `t3.micro` (1 GB) is too small for BlazePose.
+   - Instance type: **t4g.small**. Only types labeled *Free tier eligible* are offered on the Free plan. If `t4g.small` isn't one of them, use **t3.small** with the **64-bit (x86)** Ubuntu AMI. Stay on the 2 GB type: the image build (`npm ci` + `tsc`) runs on the instance next to Postgres.
    - Key pair: create one and keep the `.pem` file.
    - Network: create a security group allowing **SSH (22) from My IP**, **HTTP (80)** and **HTTPS (443)** from anywhere.
    - Storage: **20 GB gp3**.
@@ -106,7 +106,7 @@ nano .env                                          # DOMAIN, ACME_EMAIL, AUTH_JW
 VERSION=v0.4.0 docker compose up -d --build        # first build takes a few minutes
 ```
 
-Generate `AUTH_JWT_SECRET` and `POSTGRES_PASSWORD` with `openssl rand -hex 32` (hex keeps the password safe inside `DATABASE_URL`). The `.env` variables are described in [`deploy/.env.example`](../deploy/.env.example) and [deployment.md](deployment.md#running-the-pose-server).
+Generate `AUTH_JWT_SECRET` and `POSTGRES_PASSWORD` with `openssl rand -hex 32` (hex keeps the password safe inside `DATABASE_URL`). The `.env` variables are described in [`deploy/.env.example`](../deploy/.env.example) and [deployment.md](deployment.md#running-the-api-server).
 
 Check it from your own machine:
 
@@ -116,7 +116,7 @@ curl https://<DOMAIN>/health
 
 `version` should be the `VERSION` you built. Also open `https://<DOMAIN>/privacy`. If HTTPS fails, run `docker compose logs caddy`: the A record must point at the Elastic IP and port 80 must be open before Caddy can get a certificate.
 
-Then point the extension at `wss://<DOMAIN>/ws`: follow [One-time setup → 1](deployment.md#1-point-the-extension-at-your-server) in deployment.md.
+Then point the extension at `https://<DOMAIN>`: follow [One-time setup → 1](deployment.md#1-point-the-extension-at-your-api-server-optional) in deployment.md.
 
 ## Updating
 
@@ -189,6 +189,7 @@ Before the Free plan's end date (or sooner, if the server outgrows the instance)
 ## Known limits
 
 - **One instance, no failover.** A reboot or deploy takes the server down for a few seconds to a minute.
-- **Full means no coaching for that break.** At the session cap, the break page says "Coach busy" and the user does the moves without the camera. Extensions released before the busy message show "Coach offline" instead.
-- **No per-IP limit.** The pose stream has no login, so a script that fakes the extension's Origin can fill every slot. Stock Caddy has no connection limit; a per-IP limit needs a Caddy plugin or a proxy in front.
+- **Down means no sync, not no breaks.** While the server is down, breaks still run on every device; signed-in clients queue them and upload when it's back. Sign-in and the leaderboard wait for it.
+- **No per-IP rate limit.** Everything but `/health`, `/privacy` and the sign-in pages needs a session, but stock Caddy has no request limit; one needs a Caddy plugin or a proxy in front.
+- **Old extension builds.** Versions from before the on-device pose model stream camera frames to `/ws`, which this server no longer has; their breaks fall back to the manual instructions until they update.
 - **SSH is the only deploy path.** The release workflow doesn't deploy the server.

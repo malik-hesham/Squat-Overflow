@@ -12,6 +12,7 @@ import { getBusy, calendarState } from "./lib/calendar-client.js";
 import { agenda } from "./lib/calendar.js";
 import { getSession } from "./lib/session.js";
 import { companyFromEmail } from "./lib/auth.js";
+import { API_URL } from "./config.js";
 
 const lang = await initLang();
 const $ = (id) => document.getElementById(id);
@@ -198,6 +199,9 @@ function boardRow(r) {
 }
 
 async function renderBoard() {
+  // A local-only build (no API server) has no team board.
+  $("board").hidden = !API_URL;
+  if (!API_URL) return;
   const [settings, profile, session] = await Promise.all([getSettings(), getProfile(), getSession()]);
   const rows = $("boardRows");
   /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".tab")).forEach((t) => t.classList.toggle("active", t.dataset.period === period));

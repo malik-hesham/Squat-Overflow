@@ -7,7 +7,7 @@
  * can reason about geometry without a camera.
  */
 
-import { JOINTS, type Joint, type Side } from '../geometry';
+import { JOINTS, type Joint, type Side } from '../../../../../extension/lib/pose/geometry.js';
 
 export const SIZE = 1000;
 

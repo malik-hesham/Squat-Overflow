@@ -8,7 +8,7 @@ public struct Cancel {
     public func callAsFunction() { run() }
 }
 
-/// What a break window needs from the app: the camera and pose server, sound, and the engine.
+/// What a break window needs from the app: the camera and pose model, sound, and the engine.
 @MainActor
 public protocol BreakSessionHost: AnyObject {
     /// Starts the camera and the pose socket; false when the camera can't be used.
@@ -36,7 +36,7 @@ public struct MoveProgress: Equatable, Sendable {
 }
 
 /// One break window, ported from extension/break.js: the three exercises, reps and form scores
-/// from the pose server, cues, the skip warning, the coach-offline fallback, Done / Snooze / Skip
+/// from the on-device pose model, cues, the skip warning, the manual fallback, Done / Snooze / Skip
 /// and the XP summary. The window draws this; the app's host does the camera, sound and engine.
 @MainActor
 public final class BreakSession: ObservableObject {
@@ -48,8 +48,7 @@ public final class BreakSession: ObservableObject {
 
     /// Fallback title and text for each status that ends the coached break.
     static let fallbacks: [PoseStatus: (title: String, text: String)] = [
-        .offline: ("coachOffline", "offlineText"),
-        .busy: ("coachBusy", "busyText"),
+        .unavailable: ("coachUnavailable", "unavailableText"),
         .cameraDenied: ("cameraUnavailable", "deniedText"),
     ]
 
@@ -151,7 +150,7 @@ public final class BreakSession: ObservableObject {
         if withMeme { meme("start") }
         phase = .routine
         guard !moves.isEmpty else {
-            poseStatus(.offline)
+            poseStatus(.unavailable)
             title = t("timeToMove")
             manualHowTo = t("manualHowto")
             return
@@ -215,9 +214,9 @@ public final class BreakSession: ObservableObject {
     public var totalTarget: Int { moves.reduce(0) { $0 + $1.target } }
     public var totalReps: Int { progress.reduce(0) { $0 + $1.reps } }
 
-    // MARK: Pose server
+    // MARK: Pose model
 
-    /// One reply from the pose server for the current exercise (onFrame()).
+    /// One reply from the pose model for the current exercise (onFrame()).
     public func frame(_ f: PoseFrame) {
         guard !finished, moves.indices.contains(index) else { return }
         if positioning && !f.feedbackCodes.contains("not_visible") { endPositioning() }
@@ -248,7 +247,7 @@ public final class BreakSession: ObservableObject {
         }
     }
 
-    /// Offline, busy or no camera: the break goes on by hand, with no XP (onStatus()).
+    /// No pose model or no camera: the break goes on by hand, with no XP (onStatus()).
     public func poseStatus(_ status: PoseStatus) {
         guard let f = Self.fallbacks[status], !finished else { return }
         endPositioning()
@@ -256,15 +255,19 @@ public final class BreakSession: ObservableObject {
         fallback = (t(f.title), t(f.text))
     }
 
-    /// The demo clip, embedded through the pose server's /embed page, when online and coached.
+    /// The demo clip on youtube.com, when online and coached (validDemo() in extension/break.js).
+    /// The window opens it in the browser: like the extension, nothing loads from YouTube until a click.
     public var demoURL: URL? {
         guard online, fallback == nil, moves.indices.contains(index), let id = moves[index].youtubeID,
-              id.range(of: Self.youtubeID, options: .regularExpression) != nil,
-              var c = URLComponents(string: settings.serverUrl) else { return nil }
-        c.scheme = c.scheme == "wss" ? "https" : (c.scheme == "ws" ? "http" : c.scheme)
-        c.path = "/embed/\(id)"
-        c.query = nil
-        return c.url
+              id.range(of: Self.youtubeID, options: .regularExpression) != nil else { return nil }
+        return URL(string: "https://www.youtube.com/watch?v=\(id)")
+    }
+
+    /// "▶ Watch demo (12s)" for the demo button (showDemo() in extension/break.js).
+    public var demoLabel: String? {
+        guard demoURL != nil else { return nil }
+        let seconds = moves[index].demo?["seconds"]?.number.map { Int($0) } ?? 0
+        return t("watchDemo", ["n": seconds])
     }
 
     // MARK: Result

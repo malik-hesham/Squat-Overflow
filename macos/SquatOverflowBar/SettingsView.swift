@@ -59,10 +59,9 @@ final class SettingsFormModel: ObservableObject {
     /// save() in options.js.
     func save() {
         guard problem == nil else { return }
-        let keys = ["intervalMin", "areas", "activeStart", "activeEnd", "workdays", "weekStart", "autoPause", "privacy", "mode", "name", "serverUrl"]
+        let keys = ["intervalMin", "areas", "activeStart", "activeEnd", "workdays", "weekStart", "autoPause", "privacy", "mode", "name"]
         var draft = self.draft
         draft.name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        draft.serverUrl = draft.serverUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         var patch = draft.json.filter { keys.contains($0.key) }
         patch["setupDone"] = .bool(true)
         model.store.saveSettings(patch, now: AppModel.nowMs())
@@ -121,9 +120,6 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                Section(t("advanced")) {
-                    TextField(t("serverUrl"), text: $form.draft.serverUrl)
-                }
             }
             .formStyle(.grouped)
             Divider()
@@ -159,7 +155,7 @@ struct SettingsView: View {
                     Spacer()
                     Button(t("signOut")) { model.signOut() }
                 }
-            } else {
+            } else if Config.serverURL != nil { // a local-only build has nothing to sign in to
                 HStack {
                     Text(t("notSignedIn")).font(.caption).foregroundStyle(.secondary)
                     Spacer()

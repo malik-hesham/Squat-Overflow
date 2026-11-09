@@ -4,8 +4,8 @@
  * the rep scenarios don't.
  */
 
-import { EXERCISES } from '../exercises';
-import { Pose, type Side } from '../geometry';
+import { EXERCISES } from '../../../../../extension/lib/pose/exercises.js';
+import { Pose, type Side } from '../../../../../extension/lib/pose/geometry.js';
 import { diff, loadFixture } from './helpers';
 
 interface MeasureFixture {
