@@ -421,8 +421,8 @@ export default function BreakScreen() {
             ) : null}
             {fallback || !move ? (
               <Overlay
-                title={t(lang, status === 'offline' || !move ? 'coachOffline' : 'cameraUnavailable')}
-                body={t(lang, status === 'offline' || !move ? 'offlineText' : 'deniedText')}
+                title={t(lang, status === 'offline' || !move ? 'coachUnavailable' : 'cameraUnavailable')}
+                body={t(lang, status === 'offline' || !move ? 'unavailableText' : 'deniedText')}
               />
             ) : null}
           </View>

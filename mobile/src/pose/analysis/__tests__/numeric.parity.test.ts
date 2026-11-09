@@ -4,10 +4,10 @@
  * the angle helpers, calibration.validate and the Calibrator.
  */
 
-import { Calibrator, validate } from '../calibration';
-import { EXERCISES, officeRepScore } from '../exercises';
-import { angle, angleFromHorizontal, angleFromVertical } from '../geometry';
-import { degrees, median, pyHypot, pyRound, pySum } from '../pymath';
+import { Calibrator, validate } from '../../../../../extension/lib/pose/calibration.js';
+import { EXERCISES, officeRepScore } from '../../../../../extension/lib/pose/exercises.js';
+import { angle, angleFromHorizontal, angleFromVertical } from '../../../../../extension/lib/pose/geometry.js';
+import { degrees, median, pyHypot, pyRound, pySum } from '../../../../../extension/lib/pose/pymath.js';
 import { type Scenario, diff, loadFixture, replay } from './helpers';
 
 interface NumericFixture {

@@ -1,6 +1,7 @@
 // The exercise demo clip on the break screen: YouTube's privacy-enhanced
-// player with the same parameters as the pose server's /embed page, which the
-// extension's break window shows.
+// player, embedded. The extension can't embed it (YouTube refuses players with
+// no Referer, which extension pages never send), so its break window opens the
+// same clip on youtube.com in a small popup instead.
 import * as React from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';

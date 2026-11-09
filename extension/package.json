@@ -3,9 +3,11 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc -p . && tsc -p tests",
-    "test": "node tests/check.mjs"
+    "test": "node tests/check.mjs",
+    "vendor": "node scripts/vendor-mediapipe.mjs"
   },
   "devDependencies": {
+    "@mediapipe/tasks-vision": "1.2.2",
     "@types/chrome": "^0.3.7",
     "@types/node": "^24.19.2",
     "@types/three": "0.186.0",

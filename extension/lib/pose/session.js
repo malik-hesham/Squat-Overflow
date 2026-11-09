@@ -15,146 +15,161 @@
  * the same object the Python server sent over the WebSocket (minus the
  * transport fields `type`, `landmarks`, `mask`, `latency_ms`).
  */
-
-import * as calibration from './calibration';
-import { Calibrator, type CalibrationStatus, type Thresholds } from './calibration';
-import { EXERCISES, type Exercise, ISSUE_TEXT, type IssueCode } from './exercises';
-import { Ema, type Landmark, Pose, type Side, type WorldLandmark } from './geometry';
-import { pyRound, pySum } from './pymath';
+import * as calibration from "./calibration.js";
+import { Calibrator } from "./calibration.js";
+import { EXERCISES, ISSUE_TEXT } from "./exercises.js";
+import { Ema, Pose } from "./geometry.js";
+import { pyRound, pySum } from "./pymath.js";
 
 export const MIN_VISIBILITY = 0.5;
 export const SIDE_SWITCH_MARGIN = 0.15;
 
-export type Stage = 'waiting' | 'rest' | 'moving' | 'work';
+/** @typedef {import("./exercises.js").Exercise} Exercise */
+/** @typedef {import("./exercises.js").IssueCode} IssueCode */
+/** @typedef {import("./geometry.js").Side} Side */
+/** @typedef {import("./geometry.js").Landmark} Landmark */
+/** @typedef {import("./geometry.js").WorldLandmark} WorldLandmark */
+/** @typedef {import("./calibration.js").Thresholds} Thresholds */
+/** @typedef {import("./calibration.js").CalibrationStatus} CalibrationStatus */
 
-export interface Rep {
-  index: number;
-  duration_s: number;
-  /** Deepest point reached. */
-  peak_angle: number;
-  /** Range of motion in degrees. */
-  rom: number;
-  issues: IssueCode[];
-  score: number;
-  partial: boolean;
-}
+/** @typedef {"waiting" | "rest" | "moving" | "work"} Stage */
 
-export interface RepEvent extends Rep {
-  issue_text: string[];
-}
+/**
+ * @typedef {object} Rep
+ * @property {number} index
+ * @property {number} duration_s
+ * @property {number} peak_angle deepest point reached
+ * @property {number} rom range of motion in degrees
+ * @property {IssueCode[]} issues
+ * @property {number} score
+ * @property {boolean} partial
+ */
 
-export interface TopIssue {
-  code: IssueCode;
-  count: number;
-  text: string;
-}
+/** @typedef {Rep & { issue_text: string[] }} RepEvent */
+/** @typedef {{ code: IssueCode, count: number, text: string }} TopIssue */
+/** @typedef {{ code: IssueCode, text: string }} Feedback */
 
-export interface Summary {
-  reps: number;
-  good_reps: number;
-  partial_reps: number;
-  avg_duration_s: number | null;
-  avg_rom: number | null;
-  avg_score: number | null;
-  top_issues: TopIssue[];
-}
+/**
+ * @typedef {object} Summary
+ * @property {number} reps
+ * @property {number} good_reps
+ * @property {number} partial_reps
+ * @property {number | null} avg_duration_s
+ * @property {number | null} avg_rom
+ * @property {number | null} avg_score
+ * @property {TopIssue[]} top_issues
+ */
 
-export interface Feedback {
-  code: IssueCode;
-  text: string;
-}
+/**
+ * @typedef {object} ThresholdsInfo
+ * @property {number} rest
+ * @property {number} target
+ * @property {boolean} rest_is_high
+ * @property {boolean} calibrated
+ * @property {number} default_rest
+ * @property {number} default_target
+ */
 
-export interface ThresholdsInfo {
-  rest: number;
-  target: number;
-  rest_is_high: boolean;
-  calibrated: boolean;
-  default_rest: number;
-  default_target: number;
-}
+/**
+ * One frame's analysis: the shape of the old pose server's `frame` message.
+ * @typedef {object} FrameResult
+ * @property {string} exercise
+ * @property {Side | "both" | null} side
+ * @property {number | null} angle
+ * @property {number | null} angle_alt
+ * @property {"2d" | "3d"} angle_mode
+ * @property {Stage} stage
+ * @property {Feedback[]} feedback
+ * @property {RepEvent | null} rep_event
+ * @property {CalibrationStatus} [calibration] present only while calibrating, and on the frame calibration ends
+ * @property {Summary} summary
+ * @property {ThresholdsInfo} thresholds
+ */
 
-/** What `Session.process` returns for one frame (Python's frame result dict). */
-export interface FrameResult {
-  exercise: string;
-  side: Side | 'both' | null;
-  angle: number | null;
-  angle_alt: number | null;
-  angle_mode: '2d' | '3d';
-  stage: Stage;
-  feedback: Feedback[];
-  rep_event: RepEvent | null;
-  /** Present only while calibrating, and on the frame calibration ends. */
-  calibration?: CalibrationStatus;
-  summary: Summary;
-  thresholds: ThresholdsInfo;
-}
-
-interface Cycle {
-  startT: number;
-  restRef: number;
-  extreme: number;
-  reachedTarget: boolean;
-  /** Per-issue frame counts, in first-seen order (like collections.Counter). */
-  issueFrames: Map<IssueCode, number>;
-}
+/**
+ * @typedef {object} Cycle
+ * @property {number} startT
+ * @property {number} restRef
+ * @property {number} extreme
+ * @property {boolean} reachedTarget
+ * @property {Map<IssueCode, number>} issueFrames per-issue frame counts, in first-seen order (like collections.Counter)
+ */
 
 export class RepCounter {
-  readonly ex: Exercise;
-  readonly minIssueFrames: number;
-  readonly partialFraction: number;
-  stage: Stage = 'waiting';
-  readonly reps: Rep[] = [];
-  readonly partials: Rep[] = [];
-  private restRef: number | null = null;
-  private cycle: Cycle | null = null;
-
-  constructor(ex: Exercise, minIssueFrames = 3, partialFraction = 0.4) {
+  /**
+   * @param {Exercise} ex
+   * @param {number} [minIssueFrames]
+   * @param {number} [partialFraction]
+   */
+  constructor(ex, minIssueFrames = 3, partialFraction = 0.4) {
+    /** @type {Stage} */
+    this.stage = "waiting";
+    /** @type {Rep[]} */
+    this.reps = [];
+    /** @type {Rep[]} */
+    this.partials = [];
+    /** @private @type {number | null} */
+    this.restRef = null;
+    /** @private @type {Cycle | null} */
+    this.cycle = null;
     this.ex = ex;
     this.minIssueFrames = minIssueFrames;
     this.partialFraction = partialFraction;
   }
 
-  private deeper(a: number, b: number): number {
+  /**
+   * @private
+   * @param {number} a
+   * @param {number} b
+   */
+  deeper(a, b) {
     return this.ex.restIsHigh ? Math.min(a, b) : Math.max(a, b);
   }
 
-  private shallower(a: number, b: number): number {
+  /**
+   * @private
+   * @param {number} a
+   * @param {number} b
+   */
+  shallower(a, b) {
     return this.ex.restIsHigh ? Math.max(a, b) : Math.min(a, b);
   }
 
-  /** Feed one frame. Returns a Rep when a full or partial rep just finished. */
-  update(value: number, issues: readonly IssueCode[], t: number): Rep | null {
+  /**
+   * Feed one frame. Returns a Rep when a full or partial rep just finished.
+   * @param {number} value
+   * @param {readonly IssueCode[]} issues
+   * @param {number} t
+   * @returns {Rep | null}
+   */
+  update(value, issues, t) {
     const ex = this.ex;
-    if (this.stage === 'waiting') {
+    if (this.stage === "waiting") {
       if (ex.atRest(value)) {
-        this.stage = 'rest';
+        this.stage = "rest";
         this.restRef = value;
       }
       return null;
     }
-
-    if (this.stage === 'rest') {
-      const restRef = this.restRef as number;
+    if (this.stage === "rest") {
+      const restRef = this.restRef;
       if (ex.atRest(value)) {
         this.restRef = this.shallower(restRef, value);
         return null;
       }
-      this.stage = 'moving';
+      this.stage = "moving";
       this.cycle = { startT: t, restRef, extreme: value, reachedTarget: false, issueFrames: new Map() };
     }
-
-    const cyc = this.cycle as Cycle;
+    const cyc = this.cycle;
     cyc.extreme = this.deeper(cyc.extreme, value);
     for (const issue of new Set(issues)) cyc.issueFrames.set(issue, (cyc.issueFrames.get(issue) ?? 0) + 1);
     if (ex.atTarget(value)) {
       cyc.reachedTarget = true;
-      this.stage = 'work';
+      this.stage = "work";
     }
-
     if (!ex.atRest(value)) return null;
-
     // Back in the rest zone: the cycle is over.
-    this.stage = 'rest';
+    this.stage = "rest";
     this.restRef = value;
     this.cycle = null;
     const rom = Math.abs(cyc.restRef - cyc.extreme);
@@ -162,16 +177,14 @@ export class RepCounter {
     if (!cyc.reachedTarget && rom < this.partialFraction * needed) {
       return null; // small wobble, not an attempted rep
     }
-
-    const repIssues: IssueCode[] = [...cyc.issueFrames]
+    const repIssues = [...cyc.issueFrames]
       .filter(([, n]) => n >= this.minIssueFrames)
       .map(([i]) => i)
       .sort(compareCodePoints);
     const duration = t - cyc.startT;
-    if (duration < ex.minRepSeconds) repIssues.push('too_fast');
-    if (!cyc.reachedTarget) repIssues.unshift('not_deep_enough');
-
-    const rep: Rep = {
+    if (duration < ex.minRepSeconds) repIssues.push("too_fast");
+    if (!cyc.reachedTarget) repIssues.unshift("not_deep_enough");
+    const rep = {
       index: cyc.reachedTarget ? this.reps.length + 1 : 0,
       duration_s: pyRound(duration, 2),
       peak_angle: pyRound(cyc.extreme, 1),
@@ -184,16 +197,18 @@ export class RepCounter {
     return rep;
   }
 
-  summary(): Summary {
+  /** @returns {Summary} */
+  summary() {
     const reps = this.reps;
     // collections.Counter over every issue of every rep, then most_common(3):
     // highest count first, ties in first-seen order.
-    const issueCounts = new Map<IssueCode, number>();
+    /** @type {Map<IssueCode, number>} */
+    const issueCounts = new Map();
     for (const r of [...reps, ...this.partials]) {
       for (const i of r.issues) issueCounts.set(i, (issueCounts.get(i) ?? 0) + 1);
     }
     const top = [...issueCounts].sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const avg = (xs: number[]): number | null => (xs.length ? pyRound(pySum(xs) / xs.length, 1) : null);
+    const avg = (/** @type {number[]} */ xs) => (xs.length ? pyRound(pySum(xs) / xs.length, 1) : null);
     return {
       reps: reps.length,
       good_reps: reps.filter((r) => r.issues.length === 0).length,
@@ -207,11 +222,16 @@ export class RepCounter {
 }
 
 /** Python's default string ordering (code points); issue codes are ASCII. */
-function compareCodePoints(a: string, b: string): number {
+/**
+ * @param {string} a
+ * @param {string} b
+ */
+function compareCodePoints(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-const notVisible = (): Feedback[] => [{ code: 'not_visible', text: ISSUE_TEXT.not_visible }];
+/** @returns {Feedback[]} */
+const notVisible = () => [{ code: "not_visible", text: ISSUE_TEXT.not_visible }];
 
 /**
  * All per-user analysis state for one exercise set.
@@ -221,27 +241,38 @@ const notVisible = (): Feedback[] => [{ code: 'not_visible', text: ISSUE_TEXT.no
  * angle from the other mode as `angle_alt`, so the UI can show both.
  */
 export class Session {
-  useWorld: boolean;
-  /** The exercise with its default thresholds. */
-  baseExercise!: Exercise;
-  /** Calibrated thresholds in use, or null for the defaults. */
-  thresholds!: Thresholds | null;
-  /** The exercise as counted: `baseExercise` with `thresholds` applied. */
-  exercise!: Exercise;
-  counter!: RepCounter;
-  calibrator: Calibrator | null = null;
-  private smooth!: Ema;
-  private altSmooth!: Ema;
-  private side: Side | null = null;
-
-  /** Defaults match the Python (`Session("squat")`); the app passes DEFAULT_EXERCISE. */
-  constructor(exerciseKey = 'squat', useWorld = false) {
+  /**
+   * Defaults match the Python (`Session("squat")`); the app passes DEFAULT_EXERCISE.
+   * @param {string} [exerciseKey]
+   * @param {boolean} [useWorld]
+   */
+  constructor(exerciseKey = "squat", useWorld = false) {
+    /** The exercise with its default thresholds. @type {Exercise} */
+    this.baseExercise;
+    /** Calibrated thresholds in use, or null for the defaults. @type {Thresholds | null} */
+    this.thresholds;
+    /** The exercise as counted: `baseExercise` with `thresholds` applied. @type {Exercise} */
+    this.exercise;
+    /** @type {RepCounter} */
+    this.counter;
+    /** @private @type {Ema} */
+    this.smooth;
+    /** @private @type {Ema} */
+    this.altSmooth;
+    /** @type {Calibrator | null} */
+    this.calibrator = null;
+    /** @private @type {Side | null} */
+    this.side = null;
     this.useWorld = useWorld;
     this.setExercise(exerciseKey);
   }
 
-  /** Start a new set. `thresholds` replaces the default rest/target (from calibration). */
-  setExercise(key: string, thresholds: Thresholds | null = null): void {
+  /**
+   * Start a new set. `thresholds` replaces the default rest/target (from calibration).
+   * @param {string} key
+   * @param {Thresholds | null} [thresholds]
+   */
+  setExercise(key, thresholds = null) {
     if (!Object.prototype.hasOwnProperty.call(EXERCISES, key)) {
       throw new Error(`unknown exercise ${JSON.stringify(key)}`);
     }
@@ -255,36 +286,50 @@ export class Session {
     this.calibrator = null;
   }
 
-  reset(): void {
+  reset() {
     this.setExercise(this.exercise.key, this.thresholds);
   }
 
-  /** Switch 2D/3D angles. Thresholds are per mode, so this drops any calibration. */
-  setAngleMode(useWorld: boolean): void {
+  /**
+   * Switch 2D/3D angles. Thresholds are per mode, so this drops any calibration.
+   * @param {boolean} useWorld
+   */
+  setAngleMode(useWorld) {
     this.useWorld = useWorld;
     this.setExercise(this.exercise.key);
   }
 
   /** Next reps teach the thresholds; the rep counter pauses until calibration ends. */
-  startCalibration(): void {
+  startCalibration() {
     this.setExercise(this.exercise.key); // learn from the default exercise, on a fresh set
     this.calibrator = new Calibrator(this.baseExercise);
   }
 
-  cancelCalibration(): void {
+  cancelCalibration() {
     this.calibrator = null;
   }
 
-  private visibility(pose: Pose, side: Side): number {
+  /**
+   * @private
+   * @param {Pose} pose
+   * @param {Side} side
+   */
+  visibility(pose, side) {
     return Math.min(...this.exercise.joints.map((j) => pose.vis(side, j)));
   }
 
-  private pickSide(pose: Pose): [Side | 'both', number] {
+  /**
+   * @private
+   * @param {Pose} pose
+   * @returns {[Side | "both", number]}
+   */
+  pickSide(pose) {
     if (this.exercise.bilateral) {
-      return ['both', Math.min(this.visibility(pose, 'left'), this.visibility(pose, 'right'))];
+      return ["both", Math.min(this.visibility(pose, "left"), this.visibility(pose, "right"))];
     }
-    const vis: Record<Side, number> = { left: this.visibility(pose, 'left'), right: this.visibility(pose, 'right') };
-    const best: Side = vis.right > vis.left ? 'right' : 'left'; // max() keeps the first on ties
+    const vis = { left: this.visibility(pose, "left"), right: this.visibility(pose, "right") };
+    /** @type {Side} */
+    const best = vis.right > vis.left ? "right" : "left"; // max() keeps the first on ties
     if (this.side === null || vis[best] > vis[this.side] + SIDE_SWITCH_MARGIN) {
       this.side = best;
     }
@@ -294,22 +339,23 @@ export class Session {
   /**
    * Analyse one frame. `t` is a timestamp in seconds; `world` = 3D landmarks
    * (already passed through `alignWorldY`), if any.
+   * @param {readonly Landmark[] | null | undefined} landmarks
+   * @param {number} width
+   * @param {number} height
+   * @param {number} t
+   * @param {readonly WorldLandmark[] | null} [world]
+   * @returns {FrameResult}
    */
-  process(
-    landmarks: readonly Landmark[] | null | undefined,
-    width: number,
-    height: number,
-    t: number,
-    world: readonly WorldLandmark[] | null = null,
-  ): FrameResult {
+  process(landmarks, width, height, t, world = null) {
     const ex = this.exercise;
     const hasWorld = world != null;
-    const out: Omit<FrameResult, 'summary' | 'thresholds'> & Partial<FrameResult> = {
+    /** @type {Omit<FrameResult, "summary" | "thresholds"> & Partial<FrameResult>} */
+    const out = {
       exercise: ex.key,
       side: null,
       angle: null,
       angle_alt: null,
-      angle_mode: this.useWorld && hasWorld ? '3d' : '2d',
+      angle_mode: this.useWorld && hasWorld ? "3d" : "2d",
       stage: this.counter.stage,
       feedback: [],
       rep_event: null,
@@ -320,7 +366,6 @@ export class Session {
       out.feedback = notVisible();
       return this.finish(out);
     }
-
     const pose = new Pose(landmarks, width, height, world ?? null, this.useWorld);
     const [side, vis] = this.pickSide(pose);
     out.side = side;
@@ -330,8 +375,7 @@ export class Session {
       out.feedback = notVisible();
       return this.finish(out);
     }
-
-    const measureSide: Side = side === 'both' ? 'left' : side;
+    const measureSide = side === "both" ? "left" : side;
     const m = ex.measure(pose, measureSide);
     const value = this.smooth.update(m.value);
     out.angle = pyRound(value, 1);
@@ -353,23 +397,33 @@ export class Session {
     return this.finish(out);
   }
 
-  private calibrate(value: number, out: Partial<FrameResult>): void {
-    const cal = this.calibrator as Calibrator;
+  /**
+   * @private
+   * @param {number} value
+   * @param {Partial<FrameResult>} out
+   */
+  calibrate(value, out) {
+    const cal = this.calibrator;
     cal.update(value);
     if (!cal.done) return;
     const th = cal.result();
     if (th === null) {
       // range too small to count reps on
       this.calibrator = null;
-      out.calibration = { status: 'failed', reps: cal.reps, needed: cal.repsNeeded };
+      out.calibration = { status: "failed", reps: cal.reps, needed: cal.repsNeeded };
       return;
     }
     this.setExercise(this.exercise.key, th);
-    out.calibration = { status: 'done', reps: cal.reps, needed: cal.repsNeeded, rest: th.rest, target: th.target };
+    out.calibration = { status: "done", reps: cal.reps, needed: cal.repsNeeded, rest: th.rest, target: th.target };
   }
 
-  private finish(out: Omit<FrameResult, 'summary' | 'thresholds'> & Partial<FrameResult>): FrameResult {
-    if (this.calibrator !== null && !('calibration' in out)) {
+  /**
+   * @private
+   * @param {Omit<FrameResult, "summary" | "thresholds"> & Partial<FrameResult>} out
+   * @returns {FrameResult}
+   */
+  finish(out) {
+    if (this.calibrator !== null && !("calibration" in out)) {
       out.calibration = this.calibrator.status();
     }
     out.stage = this.counter.stage;
@@ -382,6 +436,6 @@ export class Session {
       default_rest: this.baseExercise.rest,
       default_target: this.baseExercise.target,
     };
-    return out as FrameResult;
+    return /** @type {FrameResult} */ (out);
   }
 }

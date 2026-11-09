@@ -11,7 +11,7 @@ import {
   JOINTS,
   MAX_DEMO_SECONDS,
   exerciseCatalog,
-} from '../index';
+} from '../../../../../extension/lib/pose/index.js';
 import { diff, loadFixture } from './helpers';
 
 interface CatalogFixture {

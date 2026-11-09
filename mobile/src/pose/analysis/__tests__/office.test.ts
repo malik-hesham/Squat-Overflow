@@ -18,9 +18,9 @@ import {
   headTurn,
   officeRepScore,
   shoulderTilt,
-} from '../exercises';
-import { Pose } from '../geometry';
-import { RepCounter, type Rep, Session, type Summary, type RepEvent } from '../session';
+} from '../../../../../extension/lib/pose/exercises.js';
+import { Pose } from '../../../../../extension/lib/pose/geometry.js';
+import { RepCounter, type Rep, Session, type Summary, type RepEvent } from '../../../../../extension/lib/pose/session.js';
 import * as syn from './synthetic';
 
 const FPS = 30;

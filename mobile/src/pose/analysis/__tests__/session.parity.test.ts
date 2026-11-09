@@ -5,7 +5,7 @@
  * Fixtures come from mobile/scripts/gen_pose_fixtures.py (run with the server venv).
  */
 
-import { CATALOG, EXERCISES } from '../exercises';
+import { CATALOG, EXERCISES } from '../../../../../extension/lib/pose/exercises.js';
 import { type SessionFixture, fixtureNames, loadFixture, replay } from './helpers';
 
 const files = fixtureNames('session_');

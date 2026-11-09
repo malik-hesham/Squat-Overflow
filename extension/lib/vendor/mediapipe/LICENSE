@@ -1,0 +1,4 @@
+@mediapipe/tasks-vision 1.2.2 (vision_bundle.mjs, vision_bundle.d.mts, vision_wasm_internal.*) and the
+pose_landmarker_lite.task model are by Google, under the Apache-2.0 license:
+https://www.apache.org/licenses/LICENSE-2.0
+Source: https://github.com/google-ai-edge/mediapipe

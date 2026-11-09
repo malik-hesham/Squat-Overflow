@@ -46,8 +46,8 @@
         <canvas id="overlay"></canvas>
         <div class="placeholder" id="placeholder">
           <p class="ph-title">Camera is off</p>
-          <p class="ph-sub">Pick an exercise and press <strong>Start</strong>. Frames are analysed by the
-            pose server on this computer and never leave it.</p>
+          <p class="ph-sub">Pick an exercise and press <strong>Start</strong>. Frames are analysed in this
+            browser and never leave it.</p>
         </div>
         <div class="hud" id="hud" hidden>
           <div class="hud-reps"><span id="hudReps">0</span><small>reps</small></div>
@@ -160,14 +160,6 @@
         </div>
       </div>
 
-      <details class="card">
-        <summary>Server</summary>
-        <label class="field">
-          <span>WebSocket URL</span>
-          <input id="serverUrl" type="text" spellcheck="false">
-        </label>
-        <p class="hint">Start it with <code>npm run start:dev</code> in the <code>server</code> folder.</p>
-      </details>
     </aside>
   </main>
 

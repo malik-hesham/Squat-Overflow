@@ -1,5 +1,5 @@
-// The shape of one analysed frame: what the Python pose server sent as a
-// "frame" message, and what src/pose/analysis's Session.process returns.
+// The shape of one analysed frame: what extension/lib/pose's Session.process
+// returns (the old pose server's "frame" message), on the phone and in the extension.
 export type Landmark = [x: number, y: number, visibility: number];
 
 export type RepEvent = {

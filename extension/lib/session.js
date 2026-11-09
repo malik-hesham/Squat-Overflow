@@ -5,7 +5,7 @@ const KEY = "auth";
 
 /** @typedef {ReturnType<typeof toSession>} Session */
 
-/** POSTs to the pose server's auth API (/auth/google or /auth/refresh) and maps the reply to a stored session. */
+/** POSTs to the API server's auth API (/auth/google or /auth/refresh) and maps the reply to a stored session. */
 export async function requestSession(path, body, base = API_URL) {
   const res = await fetch(`${base}${path}`, {
     method: "POST",

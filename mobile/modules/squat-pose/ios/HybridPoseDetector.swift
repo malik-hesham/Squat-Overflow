@@ -2,9 +2,9 @@
 //  HybridPoseDetector.swift
 //  SquatPose
 //
-//  MediaPipe Pose Landmarker (the same pose_landmarker_lite model the Python
-//  pose server uses) on Vision Camera frames. Landmarks come back for the
-//  upright, unmirrored camera image, like the webcam frames the server analysed,
+//  MediaPipe Pose Landmarker (the same pose_landmarker_lite model the extension
+//  runs in the browser) on Vision Camera frames. Landmarks come back for the
+//  upright, unmirrored camera image, like the extension's webcam frames,
 //  so left and right mean the same thing in the shared analysis code.
 //
 

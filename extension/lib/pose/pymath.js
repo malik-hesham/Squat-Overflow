@@ -1,5 +1,5 @@
 /**
- * Numeric helpers that reproduce CPython's float semantics, so the TypeScript
+ * Numeric helpers that reproduce CPython's float semantics, so this JavaScript
  * port of the pose analysis gives the same numbers as the Python server.
  *
  * Why this matters: frame results are rounded to 0.1 degree and rep durations
@@ -12,14 +12,17 @@
 
 /** `math.degrees` multiplies by this constant (CPython: `x * radToDeg`). */
 export const RAD_TO_DEG = 180.0 / Math.PI;
+
 /** `math.radians` multiplies by this constant. */
 export const DEG_TO_RAD = Math.PI / 180.0;
 
-export function degrees(x: number): number {
+/** @param {number} x */
+export function degrees(x) {
   return x * RAD_TO_DEG;
 }
 
-export function radians(x: number): number {
+/** @param {number} x */
+export function radians(x) {
   return x * DEG_TO_RAD;
 }
 
@@ -31,8 +34,10 @@ export function radians(x: number): number {
  * the exact value, but breaks ties away from zero. An exact tie at `ndigits`
  * decimals is only possible when `x * 2^(ndigits + 1)` is an odd integer
  * (e.g. 0.25 for one decimal, 0.125 for two), so those are handled apart.
+ * @param {number} x
+ * @param {number} [ndigits]
  */
-export function pyRound(x: number, ndigits = 0): number {
+export function pyRound(x, ndigits = 0) {
   if (!Number.isFinite(x)) return x;
   const q = x * 2 ** (ndigits + 1); // exact: scaling by a power of two
   if (Number.isInteger(q) && q % 2 !== 0) {
@@ -47,8 +52,9 @@ export function pyRound(x: number, ndigits = 0): number {
 /**
  * Python 3.12+ `sum()` over floats: Neumaier compensated summation, starting
  * from the integer 0 (so the first item is taken as-is).
+ * @param {readonly number[]} xs
  */
-export function pySum(xs: readonly number[]): number {
+export function pySum(xs) {
   if (xs.length === 0) return 0;
   let f = 0 + xs[0];
   let c = 0.0;
@@ -68,25 +74,27 @@ export function pySum(xs: readonly number[]): number {
   return f;
 }
 
-/** Python's `statistics.median`. */
-export function median(data: readonly number[]): number {
+/** Python's `statistics.median`.
+ * @param {readonly number[]} data
+ */
+export function median(data) {
   const sorted = [...data].sort((a, b) => a - b);
   const n = sorted.length;
-  if (n === 0) throw new Error('no median for empty data');
+  if (n === 0) throw new Error("no median for empty data");
   if (n % 2 === 1) return sorted[(n - 1) / 2];
   const i = n / 2;
   return (sorted[i - 1] + sorted[i]) / 2;
 }
 
 // --- math.hypot -------------------------------------------------------------
+
 // Port of CPython's `vector_norm` (Modules/mathmodule.c), which is correctly
 // rounded in all but rare cases. `Math.hypot` / `Math.sqrt(x*x + y*y)` differ
 // from it in the last bit for roughly one input in six.
-
 const VELTKAMP = 134217729.0; // 2^27 + 1
 
 /** Error-free product: [hi, lo] with hi = fl(x*y) and hi + lo == x*y exactly. */
-function twoProduct(x: number, y: number): [number, number] {
+function twoProduct(x, y) {
   const z = x * y;
   let t = VELTKAMP * x;
   const xh = t - (t - x);
@@ -99,20 +107,21 @@ function twoProduct(x: number, y: number): [number, number] {
 }
 
 /** Compensated sum of two floats, |a| >= |b|. */
-function fastTwoSum(a: number, b: number): [number, number] {
+function fastTwoSum(a, b) {
   const x = a + b;
   const y = a - x + b;
   return [x, y];
 }
 
 /** Exponent e of frexp(v): v = m * 2^e with 0.5 <= m < 1 (v finite, > 0, normal). */
-function frexpExponent(v: number): number {
+function frexpExponent(v) {
   let e = Math.floor(Math.log2(v)) + 1;
   let m = v / 2 ** e;
   while (m >= 1) {
     e += 1;
     m /= 2;
   }
+
   while (m < 0.5) {
     e -= 1;
     m *= 2;
@@ -120,8 +129,11 @@ function frexpExponent(v: number): number {
   return e;
 }
 
-/** Python's `math.hypot(x, y)`. */
-export function pyHypot(x: number, y: number): number {
+/** Python's `math.hypot(x, y)`.
+ * @param {number} x
+ * @param {number} y
+ */
+export function pyHypot(x, y) {
   const ax = Math.abs(x);
   const ay = Math.abs(y);
   if (ax === Infinity || ay === Infinity) return Infinity;

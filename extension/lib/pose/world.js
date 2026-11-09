@@ -4,17 +4,14 @@
  * Call this on MediaPipe's raw world landmarks before passing them to
  * `Session.process`.
  */
-
-import type { Landmark, WorldLandmark } from './geometry';
-
-function mean(xs: readonly number[]): number {
+function mean(xs) {
   let s = 0;
   for (const x of xs) s += x;
   return s / xs.length;
 }
 
 /** Population standard deviation (numpy's default, ddof=0). */
-function std(xs: readonly number[], m: number): number {
+function std(xs, m) {
   let s = 0;
   for (const x of xs) s += (x - m) * (x - m);
   return Math.sqrt(s / xs.length);
@@ -26,11 +23,11 @@ function std(xs: readonly number[], m: number): number {
  * MediaPipe's world axes follow the image, but the angle helpers depend on
  * that, so we check it: if world y runs opposite to image y across the body,
  * flip it. Returns `world` itself when nothing needs flipping.
+ * @param {readonly import("./geometry.js").Landmark[]} landmarks
+ * @param {readonly import("./geometry.js").WorldLandmark[]} world
+ * @returns {readonly import("./geometry.js").WorldLandmark[]}
  */
-export function alignWorldY(
-  landmarks: readonly Landmark[],
-  world: readonly WorldLandmark[],
-): readonly WorldLandmark[] {
+export function alignWorldY(landmarks, world) {
   const imgY = landmarks.map((lm) => Number(lm[1]));
   const wY = world.map((p) => Number(p[1]));
   const mi = mean(imgY);

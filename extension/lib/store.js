@@ -1,4 +1,3 @@
-import { POSE_SERVER_URL } from "../config.js";
 import { currentAreas } from "./routine.js";
 import { OUTBOX_KEY, DIRTY_KEY, breakEvent, addToOutbox, changedSharedKeys, markDirty } from "./sync-core.js";
 
@@ -15,7 +14,6 @@ export const SETTINGS_DEFAULTS = {
   memes: true,
   mode: "personal",
   name: "",
-  serverUrl: POSE_SERVER_URL,
   setupDone: false,
   theme: "auto",
   avatar: "bunny",
@@ -27,7 +25,11 @@ const PROFILE_KEY = "profile";
 const SCHEDULE_KEY = "schedule";
 const LOG_KEY = "breakLog";
 export const LOG_MAX = 500;
-const CATALOG_KEY = "exerciseCatalog";
+/**
+ * Keys an older version stored that nothing reads any more: the pose server's URL (the model runs in
+ * the extension now) and the catalog it sent (lib/pose has it).
+ */
+const RETIRED_KEYS = ["serverUrl", "exerciseCatalog"];
 const MEME_TURNS_KEY = "memeTurns";
 
 const local = chrome.storage.local;
@@ -131,15 +133,9 @@ export function setLog(log) {
   return local.set({ [LOG_KEY]: log.slice(-LOG_MAX) });
 }
 
-export async function getCatalog() {
-  /** @type {{ [CATALOG_KEY]?: { exercises?: unknown, connections?: unknown } }} */
-  const { [CATALOG_KEY]: catalog } = await local.get(CATALOG_KEY);
-  return Array.isArray(catalog?.exercises) ? catalog.exercises : [];
-}
-
-export function cacheCatalog(msg) {
-  if (!Array.isArray(msg.exercises) || !msg.exercises.length) return Promise.resolve();
-  return local.set({ [CATALOG_KEY]: { exercises: msg.exercises, connections: msg.connections } });
+/** Deletes what RETIRED_KEYS lists; the service worker runs it on install, update and start-up. */
+export function dropRetiredKeys() {
+  return local.remove(RETIRED_KEYS);
 }
 
 export async function getActivity() {

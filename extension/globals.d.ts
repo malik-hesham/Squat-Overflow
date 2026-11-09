@@ -4,5 +4,10 @@ import type { Avatar as AvatarApi } from "./avatar.js";
 
 declare global {
   var Avatar: typeof AvatarApi;
-  var POSE_SERVER_URL: string;
+  var PoseLocal: {
+    exerciseCatalog: typeof import("./lib/pose/index.js").exerciseCatalog;
+    CONNECTIONS: typeof import("./lib/pose/index.js").CONNECTIONS;
+    CLOSE_MODEL_FAILED: number;
+    openPoseSocket: () => import("./lib/pose/local-socket.js").PoseSocket;
+  };
 }

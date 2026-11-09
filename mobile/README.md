@@ -11,11 +11,11 @@ The Squat Overflow extension as a React Native app: break reminders, camera-coac
 | Break window (`break.html`) | Break screen (`app/break.tsx`) |
 | Service worker + `chrome.alarms` | `src/core/engine.ts` + local notifications planned by `src/core/plan.ts` |
 | `chrome.storage.local` | AsyncStorage (`src/core/storage.ts`, `src/core/store.ts`) |
-| Python pose server (MediaPipe over WebSocket) | MediaPipe on the phone (`modules/squat-pose`) + the server's analysis ported to TypeScript (`src/pose/analysis`) |
+| On-device pose: MediaPipe `pose_landmarker_lite.task` in the page + `lib/pose` (rep counting, form, calibration) | The same model file through MediaPipe's native SDK (`modules/squat-pose`) + the same `extension/lib/pose` modules, imported as-is (`src/pose/analysis/index.ts`) |
 | Google Calendar freeBusy | The phone's own calendars (`expo-calendar`), busy times only |
 | Blurred preview / 3D characters | Privacy mode blurs the camera (`expo-blur`, `src/pose/privacy.ts`); on Android before 12, which has no real blur, the picture is hidden and only the skeleton shows. Characters come later |
 
-The XP, schedule grid, routine, challenge, badge, leaderboard and i18n logic is **not copied**: the app imports the extension's pure modules from `../extension/lib` (see `src/core/shared.ts` and `metro.config.js`), so both clients score and schedule breaks identically and post comparable numbers to the same leaderboard. Only modules with no `chrome.*` or DOM access at import time can be shared.
+The pose analysis, XP, schedule grid, routine, challenge, badge, leaderboard and i18n logic is **not copied**: the app imports the extension's pure modules from `../extension/lib` (see `src/core/shared.ts` and `metro.config.js`), so both clients score and schedule breaks identically and post comparable numbers to the same leaderboard. Only modules with no `chrome.*` or DOM access at import time can be shared.
 
 ### Reminders on a phone
 
@@ -44,7 +44,7 @@ Simulators and emulators have no front camera. In development builds the break s
 
 ```bash
 cd mobile
-npm test            # planner, shared-logic bridge, and analysis parity with the Python server
+npm test            # planner, shared-logic bridge, and extension/lib/pose parity with the Python server's recorded fixtures
 npm run typecheck
 ```
 

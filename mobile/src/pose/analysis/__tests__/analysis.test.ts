@@ -3,10 +3,10 @@
  * server/tests/test_analysis.py and server/tests/test_calibration_3d.py).
  */
 
-import { Calibrator, validate } from '../calibration';
-import { EXERCISES } from '../exercises';
-import { Pose, angle, angleFromHorizontal, angleFromVertical } from '../geometry';
-import { type FrameResult, type RepEvent, Session } from '../session';
+import { Calibrator, validate } from '../../../../../extension/lib/pose/calibration.js';
+import { EXERCISES } from '../../../../../extension/lib/pose/exercises.js';
+import { Pose, angle, angleFromHorizontal, angleFromVertical } from '../../../../../extension/lib/pose/geometry.js';
+import { type FrameResult, type RepEvent, Session } from '../../../../../extension/lib/pose/session.js';
 import * as syn from './synthetic';
 
 type Frame = number[][];

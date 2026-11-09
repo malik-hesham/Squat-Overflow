@@ -1,4 +1,5 @@
 import { award, buildRoutine, currentAreas, levelFor, t, AREAS } from '../shared';
+import { t as appT } from '../i18n';
 
 const catalog = AREAS.flatMap((area: string) =>
   [1, 2, 3].map((k) => ({ key: `${area}-${k}`, label: `${area} ${k}`, category: area, camera: 'front', how_to: '' })),
@@ -20,4 +21,11 @@ test('routine, legacy areas and i18n come from the extension', () => {
   expect(moves.length).toBeGreaterThan(0);
   expect(t('en', 'breakNow')).toBe('Break now');
   expect(t('ar', 'breakNow')).not.toBe('Break now');
+});
+
+test("the pose model's fallback screen uses the extension's wording, in both languages", () => {
+  for (const lang of ['en', 'ar']) {
+    for (const key of ['coachUnavailable', 'unavailableText']) expect(appT(lang, key)).toBe(t(lang, key));
+  }
+  expect(appT('en', 'unavailableText')).toContain('No XP this time');
 });
