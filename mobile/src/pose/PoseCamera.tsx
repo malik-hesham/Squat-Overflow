@@ -2,8 +2,9 @@
 // (modules/squat-pose), the landmarks through the same rep counting and form
 // scoring the Python server did (src/pose/analysis), and each result reaches
 // the break screen as one FrameResult, like the extension's WebSocket frames.
+import { BlurTargetView, BlurView } from 'expo-blur';
 import * as React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import {
   Camera,
   useCamera,
@@ -17,17 +18,19 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { createPoseDetector, type PoseResult } from 'react-native-squat-pose';
 
 import { alignWorldY, Session } from './analysis';
+import { cameraLook } from './privacy';
 import { startSimulatedCoach } from './simulate';
 import { Skeleton } from './Skeleton';
 import type { CoachStatus, FrameResult, Landmark } from './types';
 
 const FRAME_SIZE = { width: 640, height: 480 };
+const BLUR_INTENSITY = 100; // as strong as the extension's (24x downscale): shape and motion show, faces don't
 const STALL_MS = 8000; // no result for this long after starting: treat the coach as offline
 
 type Props = {
   exercise: string;
   active: boolean;
-  privacy: boolean; // show only the skeleton, never camera pixels
+  privacy: boolean; // blur the camera picture (see ./privacy)
   onFrame: (msg: FrameResult) => void;
   onStatus: (status: CoachStatus | 'simulated') => void;
 };
@@ -168,30 +171,48 @@ function LiveCoach({ device, exercise, active, privacy, onFrame, onStatus }: Pro
   }, [active, fail]);
 
   const outputs: CameraOutput[] = [frameOutput];
+  const look = cameraLook({ privacy, os: Platform.OS, version: Platform.Version });
+  const blurTarget = React.useRef<View>(null);
   return (
     <View style={StyleSheet.absoluteFill}>
-      {privacy ? (
-        <HeadlessCamera device={device} active={active} outputs={outputs} onError={fail} />
+      {look === 'hidden' ? (
+        <>
+          <HeadlessCamera device={device} active={active} outputs={outputs} onError={fail} />
+          <Backdrop />
+        </>
       ) : (
-        // Frames stay unmirrored for the analysis; only the picture is flipped into a selfie view.
-        <Camera
-          style={[StyleSheet.absoluteFill, styles.mirror]}
-          device={device}
-          isActive={active}
-          outputs={outputs}
-          mirrorMode="off"
-          resizeMode="cover"
-          onError={(e) => fail(e.message)}
-        />
+        // The camera stays mounted when privacy toggles, so it doesn't restart.
+        <BlurTargetView ref={blurTarget} style={StyleSheet.absoluteFill}>
+          {/* Frames stay unmirrored for the analysis; only the picture is flipped into a selfie view. */}
+          <Camera
+            style={[StyleSheet.absoluteFill, styles.mirror]}
+            device={device}
+            isActive={active}
+            outputs={outputs}
+            mirrorMode="off"
+            resizeMode="cover"
+            // Android can only blur a TextureView preview (the default SurfaceView isn't captured).
+            implementationMode="compatible"
+            onError={(e) => fail(e.message)}
+          />
+        </BlurTargetView>
       )}
-      {privacy ? <Backdrop /> : null}
+      {look === 'blur' ? (
+        <BlurView
+          style={StyleSheet.absoluteFill}
+          blurTarget={blurTarget}
+          blurMethod="dimezisBlurViewSdk31Plus"
+          intensity={BLUR_INTENSITY}
+          tint="dark"
+        />
+      ) : null}
       <Skeleton landmarks={pose.landmarks} frame={pose.frame} issues={pose.issues} />
     </View>
   );
 }
 
-// Privacy mode: the camera runs without a preview, so no camera pixels are
-// ever drawn; only the skeleton shows.
+// Privacy mode where no real blur exists (older Android): the camera runs
+// without a preview, so no camera pixels are ever drawn; only the skeleton shows.
 function HeadlessCamera({ device, active, outputs, onError }: { device: CameraDevice; active: boolean; outputs: CameraOutput[]; onError: (m: string) => void }) {
   useCamera({ device, isActive: active, outputs, mirrorMode: 'off', onError: (e) => onError(e.message) });
   return null;

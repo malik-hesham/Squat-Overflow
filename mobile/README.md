@@ -13,7 +13,7 @@ The Squat Overflow extension as a React Native app: break reminders, camera-coac
 | `chrome.storage.local` | AsyncStorage (`src/core/storage.ts`, `src/core/store.ts`) |
 | Python pose server (MediaPipe over WebSocket) | MediaPipe on the phone (`modules/squat-pose`) + the server's analysis ported to TypeScript (`src/pose/analysis`) |
 | Google Calendar freeBusy | The phone's own calendars (`expo-calendar`), busy times only |
-| Blurred preview / 3D characters | "Skeleton only" privacy mode (no camera pixels drawn); characters come later |
+| Blurred preview / 3D characters | Privacy mode blurs the camera (`expo-blur`, `src/pose/privacy.ts`); on Android before 12, which has no real blur, the picture is hidden and only the skeleton shows. Characters come later |
 
 The XP, schedule grid, routine, challenge, badge, leaderboard and i18n logic is **not copied**: the app imports the extension's pure modules from `../extension/lib` (see `src/core/shared.ts` and `metro.config.js`), so both clients score and schedule breaks identically and post comparable numbers to the same leaderboard. Only modules with no `chrome.*` or DOM access at import time can be shared.
 

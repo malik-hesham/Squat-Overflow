@@ -7,11 +7,11 @@ import * as React from 'react';
 import { Alert, BackHandler, Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Text } from '@/components/ui/text';
+import { DemoVideo } from '@/src/components/DemoVideo';
 import { Bar, Muted } from '@/src/components/kit';
 import { useAppData } from '@/src/core/AppData';
 import { breakAction, breakDone, type BreakResult, type DoneOutcome } from '@/src/core/engine';
@@ -55,11 +55,6 @@ type Move = {
 type Progress = { reps: number; scores: number[]; base: number };
 type CatalogItem = Move & { category: string };
 type Screen = 'warning' | 'routine' | 'summary';
-
-function demoHtml(id: string) {
-  const src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&controls=0&modestbranding=1&playsinline=1&rel=0`;
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;overflow:hidden;background:#000}iframe{display:block;border:0;width:100%;height:100%}</style></head><body><iframe src="${src}" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>`;
-}
 
 export default function BreakScreen() {
   useKeepAwake();
@@ -453,22 +448,13 @@ export default function BreakScreen() {
           </View>
 
           {demo && demoId ? (
-            <View className="aspect-video overflow-hidden rounded-xl bg-black">
-              <WebView
-                source={{ html: demoHtml(demoId), baseUrl: 'https://squatoverflow.app' }}
-                allowsInlineMediaPlayback
-                mediaPlaybackRequiresUserAction={false}
-                javaScriptEnabled
-                scrollEnabled={false}
-                style={{ backgroundColor: '#000' }}
-              />
-            </View>
+            <DemoVideo youtubeId={demoId} />
           ) : null}
 
           <View className="bg-card border-border gap-3 rounded-xl border p-3">
             <PrefRow label={t(lang, 'voiceCues')} value={voice} onChange={(v) => togglePref('voice', v)} />
             <PrefRow label={t(lang, 'memeSounds')} value={memes} onChange={(v) => togglePref('memes', v)} />
-            <PrefRow label={`${t(lang, 'look')} ${t(lang, 'lookSkeleton')}`} value={privacy} onChange={togglePrivacy} />
+            <PrefRow label={`${t(lang, 'look')} ${t(lang, 'lookBlur')}`} value={privacy} onChange={togglePrivacy} />
           </View>
         </ScrollView>
       )}
