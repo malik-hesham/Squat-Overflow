@@ -162,3 +162,14 @@ test("POST /__api/close calls windowClosed", async () => {
   assert.equal(r.status, 200);
   assert.ok(closed.includes(9));
 });
+
+test("the on-device pose model is served: WASM as application/wasm, the model as bytes", async () => {
+  const base = `/${info.token}/lib/vendor/mediapipe`;
+  const wasm = await raw(`${base}/vision_wasm_internal.wasm`);
+  assert.equal(wasm.status, 200);
+  assert.equal(wasm.headers["content-type"], "application/wasm"); // or instantiateStreaming refuses it
+  const model = await raw(`${base}/pose_landmarker_lite.task`);
+  assert.equal(model.status, 200);
+  assert.equal(model.headers["content-type"], "application/octet-stream");
+  assert.match((await raw(`${base}/vision_bundle.mjs`)).headers["content-type"], /^application\/javascript/);
+});

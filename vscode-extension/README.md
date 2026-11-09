@@ -7,19 +7,14 @@ Break reminders with webcam-scored exercises, driven from VS Code. It behaves li
 1. **Build or get the `.vsix`.** From this folder run `npm install && npm run package`. It creates `standup-break-vscode-0.3.0.vsix`.
 2. **Install it.** In VS Code open the Extensions view, click `...`, choose **Install from VSIX...** and pick the file. Or from a terminal: `code --install-extension standup-break-vscode-0.3.0.vsix --force`. On macOS, if `code` is not found, use `"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"` instead, or run **Shell Command: Install 'code' command in PATH** from the Command Palette.
 3. **Reload VS Code** (Command Palette, **Developer: Reload Window**). A `StandUp` item appears in the status bar.
-4. **Start the pose server** (needed for webcam scoring; see the root README for the one-time setup of `server/`):
-   ```bash
-   cd server && npm run start:dev
-   ```
-   If a pose server from before the loopback-origin change is still running, stop it and start it again.
-5. **Set up.** On the first run the Settings page opens. Pick your muscle areas and click **Get started**. You can reopen it any time with **StandUp Break: Settings**.
-6. **Try a break.** Click `StandUp` in the status bar and choose **Break now**. With the default `openIn: browser` the page opens in your default browser; allow the camera when asked.
-7. **Automatic reminders.** In Settings, check that today is a work day, that the current time is inside your active hours, and set the interval (use a short custom one such as 1 minute to test). When a break is due, a dialog appears; click **Start**.
+4. **Set up.** On the first run the Settings page opens. Pick your muscle areas and click **Get started**. You can reopen it any time with **StandUp Break: Settings**.
+5. **Try a break.** Click `StandUp` in the status bar and choose **Break now**. With the default `openIn: browser` the page opens in your default browser; allow the camera when asked.
+6. **Automatic reminders.** In Settings, check that today is a work day, that the current time is inside your active hours, and set the interval (use a short custom one such as 1 minute to test). When a break is due, a dialog appears; click **Start**.
 
 ### Troubleshooting
 
 - **No reminder appears.** Run **StandUp Break: Show log** and read the `idleState` and reminder lines. The defaults only remind on weekdays during 09:00 to 17:00, and a reminder is held back when VS Code is not focused and idle for 5 minutes.
-- **Break page opens but the camera does not connect.** Make sure the pose server is running on port 8765 and was started after the loopback-origin change.
+- **Break page opens but the coach says it's unavailable.** The pose model runs in the page and needs WebAssembly; use a current Chrome, Edge or Firefox as the default browser.
 - **Nothing happens on Break now.** Open **StandUp Break: Show log**, and check **Developer: Show Running Extensions** to confirm StandUp Break is active.
 
 ## How it works
@@ -34,7 +29,7 @@ By default (`standupBreak.openIn: browser`) Break and Practice open in your defa
 
 Set `standupBreak.openIn` to `editor` to open Break and Practice in a VS Code editor panel too. VS Code webviews block `getUserMedia`, so in this mode there is no webcam and exercises are not scored by camera; the pages show "camera unavailable".
 
-Webcam scoring needs the pose server: run `server/` as described in the root README (`ws://127.0.0.1:8765/ws` by default). The pose server accepts pages served from `127.0.0.1` and `localhost`, which is how the VS Code extension's pages connect; restart a server started before this change.
+Webcam scoring needs no server: the pose model ships with the pages (`lib/vendor/mediapipe/`) and runs in the browser, so camera frames never leave your computer. Sign-in, the leaderboard and sync are optional and use the API server in `server/` (see the root README). It accepts pages served from `127.0.0.1` and `localhost`, which is how the VS Code extension's pages call it.
 
 Automatic reminders first show a modal dialog with a Start button. It stays until answered. Start opens the break page; closing the dialog without Start skips that break, and the next reminder comes at the next interval. Manual breaks (`Break now`) open immediately.
 

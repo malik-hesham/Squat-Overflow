@@ -14,6 +14,7 @@ const CONTENT_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".task": "application/octet-stream",
+  ".wasm": "application/wasm", // the on-device pose model's runtime (lib/vendor/mediapipe); instantiateStreaming needs it
 };
 
 export function createServer({ webDir, shimPath, chrome, host, port, closeGraceMs = 4000 }) {
