@@ -1,10 +1,11 @@
 # Squat Overflow menu bar app (macOS)
 
-A SwiftUI `MenuBarExtra` app (macOS 14+, no Dock icon) that shows your synced Squat Overflow data and hands breaks off to Chrome. It doesn't use the camera.
+A SwiftUI `MenuBarExtra` app (macOS 14+, no Dock icon) that shows your next break and hands breaks off to Chrome. Sign-in is optional, as in the extension. If you sign in, it also shows your synced Squat Overflow data. It doesn't use the camera.
 
 - **Menu bar title:** the countdown to your next break. It's computed from the shared settings (`intervalMin`, `activeStart`/`activeEnd`, `workdays`) and the newest break on any device (`lastBreakAt`), using the rules in `extension/lib/schedule.js`.
-- **Menu:** level and XP bar, streak, today's breaks, week XP, and your team's top 5 for the week.
-- **Break now** opens the extension's start page (`SO_START_URL`, from PR #10 / `docs/start-break-link.md`) in Chrome, which starts a break. **Open settings** opens the extension's options page, `chrome-extension://<SO_EXTENSION_ID>/options.html`. **Sign out** removes the session from Keychain.
+- **Signed out (the default):** the countdown, **Break now**, **Open settings**, and an optional **Continue with Google** row. The app never asks you to sign in. The countdown uses the extension's default schedule (`SETTINGS_DEFAULTS` in `extension/lib/store.js`: every 60 min, 09:00–17:00, Monday–Friday), counted from when today's window opened. The Mac app can't read the extension's local storage, so it doesn't know your own schedule or your last break until you sign in. Signed out, the countdown can be off from the extension's timer. That's the gap.
+- **Signed in:** level and XP bar, streak, today's breaks, week XP, and your team's top 5 for the week. The countdown uses your synced settings.
+- **Break now** opens the extension's start page, `chrome-extension://<SO_EXTENSION_ID>/start.html`, in Chrome. It sends the same `break-now` message as the popup's Break now button, then closes its tab, so the break window opens just as it does from the popup. This works signed out and needs no server. **Open settings** opens the extension's options page, `chrome-extension://<SO_EXTENSION_ID>/options.html`. **Sign out** removes the session from Keychain.
 - **Data:** `GET /me/profile?day=&week=`, `GET /me/settings` and `GET /leaderboard?period=week`, fetched every 60 s and each time the menu opens.
 
 ## Build and run
@@ -35,7 +36,7 @@ The server URL is the `SO_SERVER_URL` build setting. It defaults to `http://127.
 cd macos && xcodebuild -scheme SquatOverflowBar build SO_SERVER_URL=https://pose.example.com
 ```
 
-`SO_START_URL`, `SO_EXTENSION_ID` and `SO_GOOGLE_CLIENT_ID` in `project.yml` can be overridden the same way.
+`SO_EXTENSION_ID` and `SO_GOOGLE_CLIENT_ID` in `project.yml` can be overridden the same way.
 
 ## Sign-in
 
@@ -52,5 +53,8 @@ For Google to accept the redirect, `<server>/auth/mobile-callback` must be liste
 ## Notes
 
 - The app is ad-hoc signed ("Sign to Run Locally"). After each rebuild, macOS may ask once whether the new build can read its Keychain item. Click **Always Allow**.
-- Chrome may refuse to open a `chrome-extension://` URL from another app. If **Open settings** opens a blank tab, use the extension's popup → Settings instead.
-- Break now needs the extension build that includes the start-page content script (PR #10).
+- Break now and Open settings need the extension installed in Chrome with the fixed ID from the manifest `key` (any unpacked or release build of `extension/`). If Chrome opens a blank or "blocked" tab, the extension isn't installed in that Chrome profile.
+
+## End-to-end check
+
+`node macos/tests/journey.mjs` loads `extension/` into Chrome for Testing, hands Chrome the app's Break now and Open settings URLs the way the app does (`open -a`), and checks that a break window opens, the start tab closes, and the options page loads. It needs Chrome for Testing (`npx @puppeteer/browsers install chrome@stable`, or the one Playwright caches). Set `CHROME_APP` to the `.app` path if it's somewhere else.

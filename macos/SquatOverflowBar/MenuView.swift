@@ -24,22 +24,37 @@ struct MenuView: View {
     // MARK: Signed out
 
     private var signedOut: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Squat Overflow").font(.headline)
-            Text("Sign in with the Google account you use in Chrome to see your level, streak and team board.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Button {
-                model.signIn()
-            } label: {
-                HStack {
-                    if model.signingIn { ProgressView().controlSize(.small) }
-                    Text("Continue with Google")
+
+            nextBreak
+
+            breakNowButton
+
+            // Optional, like the extension's Options → Profile: everything above works signed out.
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Sign in to sync your schedule and see your level, streak and team board.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button {
+                    model.signIn()
+                } label: {
+                    HStack {
+                        if model.signingIn { ProgressView().controlSize(.small) }
+                        Text("Continue with Google")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+                .disabled(model.signingIn)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(model.signingIn)
         }
+    }
+
+    private var breakNowButton: some View {
+        Button(action: model.breakNow) {
+            Label("Break now", systemImage: "figure.walk").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .help("Opens the break in Chrome")
     }
 
     // MARK: Signed in
@@ -65,11 +80,7 @@ struct MenuView: View {
 
         nextBreak
 
-        Button(action: model.breakNow) {
-            Label("Break now", systemImage: "figure.walk").frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .help("Opens the break in Chrome")
+        breakNowButton
 
         team
     }
@@ -136,8 +147,8 @@ struct MenuView: View {
 
     private var footer: some View {
         HStack {
+            Button("Open settings", action: model.openSettings)
             if model.session != nil {
-                Button("Open settings", action: model.openSettings)
                 Button("Sign out", action: model.signOut)
             }
             Spacer()

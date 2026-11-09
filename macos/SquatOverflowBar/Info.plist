@@ -35,7 +35,5 @@
 	<string>$(SO_GOOGLE_CLIENT_ID)</string>
 	<key>SOServerURL</key>
 	<string>$(SO_SERVER_URL)</string>
-	<key>SOStartURL</key>
-	<string>$(SO_START_URL)</string>
 </dict>
 </plist>
