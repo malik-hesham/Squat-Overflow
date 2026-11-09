@@ -468,7 +468,7 @@ export default function BreakScreen() {
           <View className="bg-card border-border gap-3 rounded-xl border p-3">
             <PrefRow label={t(lang, 'voiceCues')} value={voice} onChange={(v) => togglePref('voice', v)} />
             <PrefRow label={t(lang, 'memeSounds')} value={memes} onChange={(v) => togglePref('memes', v)} />
-            <PrefRow label={`${t(lang, 'look')} ${t(lang, 'lookSkeleton')}`} value={privacy} onChange={togglePrivacy} />
+            <PrefRow label={`${t(lang, 'look')} ${t(lang, 'lookBlur')}`} value={privacy} onChange={togglePrivacy} />
           </View>
         </ScrollView>
       )}
