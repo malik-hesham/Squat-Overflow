@@ -24,13 +24,28 @@ on screen: the avatar's body clip and rest face (the face and eye layers come in
 So on this Mac, drawing the avatar uses at most about a sixth of a 60 fps frame, at the 95th
 percentile.
 
+## Mobile (spike S1, 2026-11-10)
+
+**Device:** iPhone 12 (A14), iOS 27.0.1. **Stack:** Expo 56, React Native 0.85.3 (Hermes), `expo-gl`,
+three 0.187, React Three Fiber 9.8 native, Release build. **Method:** frames counted for 10 s in the app's
+render loop (the real display), plus the JavaScript time per frame of posing (clip and face shapes).
+Details and the fixes it needed: [spike-s1-mobile.md](spike-s1-mobile.md).
+
+| Model                   | Resolution          | Average  | Frame gap median | 95th percentile | JS posing |
+| ----------------------- | ------------------- | -------- | ---------------- | --------------- | --------- |
+| OPTIMIZED, PNG textures | 1170 × 2532 (DPR 3) | 53.2 fps | 16.72 ms         | 16.87 ms        | 0.75 ms   |
+| OPTIMIZED, no textures  | 1170 × 2532 (DPR 3) | 53.7 fps | 16.71 ms         | 16.92 ms        | 0.72 ms   |
+
+At least 95% of frames hit the display's 60 Hz; a few long ones (likely shader compilation at the start)
+pull the average to 53. Without the Phase 4 face layers and without audio.
+
 ## Not measured yet
 
 - **Frames shown per second in a visible window.** Headless Chrome paces `requestAnimationFrame`
   itself (it gave 44 to 53 fps with the frame costs above, which says nothing about the avatar), and
   the app's browser pane was hidden, so its loop didn't run.
 - Windows (WebView2) and Linux (WebKitGTK): Phase 7.
-- Phones: spike S1, after Phase 3.
+- Android phones (S1 covered the iPhone 12 only); older iPhones.
 - With the face and procedural layers (Phase 4) and lip sync (Phase 5) running.
 - Memory over a long session, and the cost of loading (download and decode).
 - Older or integrated GPUs. An M5 is fast; this is the best case, not the typical one.

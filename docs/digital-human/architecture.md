@@ -309,7 +309,11 @@ Ranked by how much they could change the plan.
    KTX2, meshopt and Draco decoders three uses on the web won't run: mobile needs textures and geometry it
    can load without them. Candidates to measure in S1: React Three Fiber's native entry on `expo-gl`, and
    `react-native-filament` (native glTF with morph targets and skinning). If neither runs morph targets
-   at 30 fps, I'll report that and propose a native renderer, not ship a workaround.
+   at 30 fps, I'll report that and propose a native renderer, not ship a workaround. _S1 (iPhone 12,
+   2026-11-10):_ R3F native on `expo-gl` works at 60 Hz for at least 95% of frames, textured and with
+   all face shapes, after three fixes (a `process.emitWarning` no-op, a `FinalizationRegistry`
+   stand-in, PNG/JPEG textures: no WebP and no meshopt on the phone) and with the iOS 27 scene
+   lifecycle. Android untested. See [spike-s1-mobile.md](spike-s1-mobile.md).
 3. **Extension CSP.** three's `KTX2Loader` and `DRACOLoader` start workers from `blob:` URLs. The
    extension's CSP (`script-src 'self' 'wasm-unsafe-eval'`) blocks those. Plan: meshopt for geometry
    (its decoder runs WebAssembly on the main thread, which the CSP allows) and a packaged worker file for
@@ -452,5 +456,5 @@ Changed from the plan:
 - **WebP, not KTX2** (assets.md).
 - `setGaze` and `setExpression` still throw: the eye and face layers are Phase 4.
 
-Next: spike S1 (the mobile renderer on a real iPhone and an Android device, with this model), then
-Phase 4. Not measured yet: frames shown per second in a visible window, Windows and Linux, phones.
+Next: Phase 4. Spike S1 ran on the iPhone ([spike-s1-mobile.md](spike-s1-mobile.md)); Android is still
+to do. Not measured yet: frames shown per second in a visible window, Windows and Linux, phones.
