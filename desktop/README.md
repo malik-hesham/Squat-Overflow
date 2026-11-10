@@ -23,7 +23,7 @@ This is a proof of concept. "What has been checked" below says what has run and 
 | `chrome.runtime.sendMessage` / `onMessage` | Passed through the shell to the hidden page, and the answer back |
 | `chrome.idle.queryState` | Seconds since the last keyboard or mouse input (the `user-idle` crate) |
 | On-device pose (`lib/pose`, MediaPipe) | The same code and model, in the break window's webview |
-| 3D exercise demos (`lib/demo-model.js`, `lib/demo-player.js`) | The same figure, drawn on the page's canvas, with nothing loaded from the web. A web link opens in the user's browser; the app never loads a web page in its own windows |
+| 3D exercise demos (`lib/demo-model.js`, `lib/demo-player.js`) | The same Blender human (`lib/demo-human.js`, `models/coach-01.glb`) in WebGL, or the drawn figure without it, with nothing loaded from the web. The app's CSP allows `blob:` in `connect-src`: WebKit's three.js reads the model's textures from `blob:` URLs the page makes itself (Chrome lets an extension page do that under `'self'`). A web link opens in the user's browser; the app never loads a web page in its own windows |
 
 The app keeps the extension's Content Security Policy (`tauri.conf.json`), and it does real work: the vendored MediaPipe tries to send a log request to `odml.pa.googleapis.com`, and the policy blocks it here as it does in the extension.
 
@@ -40,6 +40,7 @@ On macOS 26 (Apple silicon), by running a debug build and reading the log (`SO_T
 - With the language set to Arabic, the menu labels, the tooltip, the popup and the Settings page are in Arabic.
 - The pose model loads in the app's webview with WebGL2 and analyses frames (a blank test frame, no camera).
 - No page error and no blocked request under the extension's own Content Security Policy.
+- The exercise demo's Blender human renders in the app's webview: WebGL 2, the meshopt-compressed model (its WebAssembly decoder) and the WebP textures, with no CSP refusal once `connect-src` has `blob:` (before, all 11 textures were refused and the human drew untextured). Checked with a preview page opened from the hidden page (`SO_DEBUG_EVAL`), not on the break page, which would start the camera. Not checked on Linux (WebKitGTK reads textures the same way, so it needs the same `blob:`, which it has) or Windows.
 
 Checked by tests: `cargo test` (storage changes and alarm timing), the extension's `node tests/check.mjs`, and its offline break test in Chromium (`tests/e2e/break-offline.mjs`) after the one change this needed in the extension (see below).
 

@@ -558,3 +558,27 @@ Limits that remain:
 - Measured in Node and in Chromium on this Mac only; no phone with these layers yet (Phase 8).
 
 Next: Phase 5 (speech and lip sync).
+
+## The exercise demo record
+
+Ahead of the side panel (Phase 6), the Blender human replaced the drawn mannequin as the exercise demo
+on the break and Practice pages (extension, and the desktop app through the same pages). Only the
+model is shared: the extension uses none of the packages' code yet.
+
+- **The file.** `extension/models/coach-01.glb` is avatar-assets' `optimized` profile, copied by
+  `npm run vendor:human` in `extension/`. `tests/check.mjs` checks it against the SHA-256 in the
+  manifest, so a rebuilt model that isn't copied fails CI. The store zip grows by 2.3 MB (to 11.6 MB).
+- **The pose.** `extension/lib/demo-rig.js` (pure, no three) reads the skeleton from the GLB and poses it
+  from the mannequin's joints each frame: limbs point along the mannequin's, the torso to its chest
+  point, the head turns as far as the mannequin's from upright. The coach's own rep counter checks it
+  like the mannequin: all 44 moves count every rep cleanly from their camera.
+- **Decisions to review.** The human's neck is longer than the mannequin's (shoulder to ear 0.26 m
+  against 0.19 m), so its shoulders shrug and its head glides 1.4 times as far, and the three moves
+  measured from the ear (shrugs, rolls, chin tuck) read differently standing still: their check
+  calibrates the coach first, as the coach does for a real person, and checks in metres that the human
+  moves at least as far as the mannequin. Hands copy the mannequin's only where the coach measures them
+  (four wrist moves, forearms turned so the wrist bends forward or back); elsewhere they stay relaxed,
+  since the mannequin's reaching hands bend up to 124 degrees at the wrist.
+- **Gaps.** Mobile still draws the mannequin (Phase 8). Linux and Windows haven't rendered the human.
+  The face doesn't blink or look around in the demo; avatar-core can drive that when the side panel
+  brings it in.

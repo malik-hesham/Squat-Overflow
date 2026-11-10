@@ -14,7 +14,8 @@ for (const entry of await readdir(src, { withFileTypes: true })) {
     await cp(path.join(src, entry.name), path.join(dest, entry.name));
   }
 }
-for (const dir of ["lib", "icons"]) {
+// models/: the exercise demo's Blender human (lib/demo-human.js loads it).
+for (const dir of ["lib", "icons", "models"]) {
   await cp(path.join(src, dir), path.join(dest, dir), { recursive: true, filter: (p) => !p.endsWith(".d.ts") });
 }
 await writeFile(path.join(dest, "package.json"), JSON.stringify({ type: "module", private: true }));

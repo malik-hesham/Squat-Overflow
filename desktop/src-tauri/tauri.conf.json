@@ -11,7 +11,7 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://www.googleapis.com https://oauth2.googleapis.com"
+      "csp": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' blob: ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://www.googleapis.com https://oauth2.googleapis.com"
     }
   },
   "bundle": {
