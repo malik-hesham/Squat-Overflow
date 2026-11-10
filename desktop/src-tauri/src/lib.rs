@@ -318,8 +318,14 @@ async fn windows_create(app: AppHandle, url: String, width: Option<f64>, height:
 fn page_of(app: &AppHandle, url: &str) -> Result<String, String> {
     let background = app.get_webview_window(BACKGROUND).ok_or("the background page is gone")?;
     let base = background.url().map_err(|e| e.to_string())?;
+    resolve_page(&base, url)
+}
+
+/// The path in web/ of `url`, which must be a page of this app: `base` (the background page's
+/// address) is one.
+fn resolve_page(base: &tauri::Url, url: &str) -> Result<String, String> {
     let target = base.join(url).map_err(|e| e.to_string())?;
-    if target.origin() != base.origin() || target.scheme() != base.scheme() || target.host_str() != base.host_str() {
+    if origin_of(&target) != origin_of(base) {
         return Err(format!("not a page of this app: {url}"));
     }
     let mut page = target.path().trim_start_matches('/').to_string();
@@ -330,6 +336,12 @@ fn page_of(app: &AppHandle, url: &str) -> Result<String, String> {
         page = format!("{page}#{fragment}");
     }
     Ok(page)
+}
+
+/// Scheme, host and port. Not `Url::origin()`: for the tauri:// scheme the pages load from on
+/// macOS and Linux it is opaque, and no two opaque origins are equal, so no page would match.
+fn origin_of(url: &tauri::Url) -> (&str, Option<&str>, Option<u16>) {
+    (url.scheme(), url.host_str(), url.port_or_known_default())
 }
 
 #[tauri::command]
@@ -642,4 +654,55 @@ pub fn run() {
             api.prevent_exit();
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Where the background page loads from on macOS and Linux, and on Windows.
+    const MAC_AND_LINUX: &str = "tauri://localhost/background.html";
+    const WINDOWS: &str = "http://tauri.localhost/background.html";
+
+    fn resolve(base: &str, url: &str) -> Result<String, String> {
+        resolve_page(&tauri::Url::parse(base).unwrap(), url)
+    }
+
+    fn page(path: &str) -> Result<String, String> {
+        Ok(path.to_string())
+    }
+
+    #[test]
+    fn a_page_of_the_app_at_tauri_localhost_resolves_to_its_path() {
+        assert_eq!(resolve(MAC_AND_LINUX, "tauri://localhost/popup.html"), page("popup.html"));
+    }
+
+    #[test]
+    fn break_nows_fragment_and_a_query_are_kept() {
+        assert_eq!(resolve(MAC_AND_LINUX, "tauri://localhost/break.html#manual"), page("break.html#manual"));
+        assert_eq!(resolve(MAC_AND_LINUX, "trainer.html?area=neck"), page("trainer.html?area=neck"));
+    }
+
+    #[test]
+    fn a_page_of_the_app_at_tauri_localhost_on_windows_resolves_to_its_path() {
+        assert_eq!(resolve(WINDOWS, "http://tauri.localhost/break.html#manual"), page("break.html#manual"));
+    }
+
+    #[test]
+    fn a_web_address_is_not_a_page_of_the_app() {
+        for base in [MAC_AND_LINUX, WINDOWS] {
+            assert!(resolve(base, "https://example.com/break.html").is_err(), "{base}");
+        }
+    }
+
+    #[test]
+    fn the_same_scheme_on_another_host_is_not_a_page_of_the_app() {
+        assert!(resolve(MAC_AND_LINUX, "tauri://example.com/break.html").is_err());
+        assert!(resolve(WINDOWS, "http://example.com/break.html").is_err());
+    }
+
+    #[test]
+    fn another_port_on_the_apps_host_is_not_a_page_of_the_app() {
+        assert!(resolve(WINDOWS, "http://tauri.localhost:8080/break.html").is_err());
+    }
 }
