@@ -1,8 +1,8 @@
 /**
  * Pins plugins/withSceneLifecycle.js, the UIScene life cycle that iOS 27 requires,
  * against Expo SDK 56's template AppDelegate.swift (fixtures/AppDelegate.sdk56.swift,
- * exactly as `expo prebuild` writes it). An iOS 26 simulator doesn't enforce the
- * scene requirement, so a regression here would only show on a real iOS 27 phone.
+ * exactly as `expo prebuild` writes it). iOS 26 simulators don't enforce the scene
+ * requirement, so a regression here only shows when launching on iOS 27.
  */
 import { applySceneDelegate, applySceneManifest, SCENE_MANIFEST } from '../withSceneLifecycle';
 
@@ -69,9 +69,14 @@ describe('AppDelegate.swift', () => {
 
   test('links and user activities reach the AppDelegate handlers', () => {
     const scene = sceneDelegate(patched);
-    // Cold launch: the link is in the connection options; pass it on as launch options.
+    // Cold launch: the link is in the connection options. Pass it on as launch options,
+    // then to the AppDelegate handlers (the dev client and expo-linking read it there).
     expect(scene).toContain('options[.url] = context.url');
     expect(scene).toContain('options[.userActivityDictionary]');
+    const connect = scene.slice(scene.indexOf('willConnectTo'), scene.indexOf('private static func launchOptions'));
+    expect(connect).toContain('self.scene(scene, openURLContexts: connectionOptions.urlContexts)');
+    expect(connect).toContain('self.scene(scene, continue: activity)');
+    expect(connect.indexOf('startReactNative')).toBeLessThan(connect.indexOf('openURLContexts:'));
     // While running: iOS calls the scene, not application(_:open:options:).
     expect(scene).toContain('func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>)');
     expect(scene).toContain('appDelegate.application(UIApplication.shared, open: context.url, options: options)');

@@ -41,7 +41,7 @@ If `pod install` fails with `Unicode Normalization not appropriate for ASCII-8BI
 
 ### iOS 27 needs the scene life cycle
 
-iOS 27 stops an app built with Xcode 27 (the iOS 27 SDK) at launch if it doesn't use the UIScene life cycle. iOS 26 simulators don't check this, so the crash only shows on an iOS 27 phone. Expo SDK 56's template has no scenes, so `plugins/withSceneLifecycle.js` adds them on every prebuild:
+iOS 27 stops an app built with Xcode 27 (the iOS 27 SDK) at launch (`SIGTRAP`, "UIScene life cycle is required for apps built with this SDK") if it doesn't use the UIScene life cycle. iOS 26 simulators don't check this; iOS 27 simulators and phones do, so test launch changes on an iOS 27 simulator. Expo SDK 56's template has no scenes, so `plugins/withSceneLifecycle.js` adds them on every prebuild:
 
 - `Info.plist` gets a `UIApplicationSceneManifest` with one window scene.
 - `ios/SquatOverflow/AppDelegate.swift` gets a `SceneDelegate` class. It creates the window, starts React Native in it, and hands incoming links on to the `AppDelegate`. `didFinishLaunching` still builds the React Native factory.

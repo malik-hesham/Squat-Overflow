@@ -57,11 +57,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       withModuleName: "${moduleName}",
       in: window,
       launchOptions: SceneDelegate.launchOptions(from: connectionOptions))
+
+    // Then hand the launching link or activity to AppDelegate, as UIKit does after
+    // didFinishLaunching without scenes: the dev client loads its URL from there, and
+    // expo-linking takes its initial URL from there.
+    if !connectionOptions.urlContexts.isEmpty {
+      self.scene(scene, openURLContexts: connectionOptions.urlContexts)
+    }
+    if let activity = connectionOptions.userActivities.first {
+      self.scene(scene, continue: activity)
+    }
   }
 
   // A link or activity that launches the app now comes in the connection options, not
-  // in didFinishLaunching. Linking.getInitialURL and the dev client read it from the
-  // launch options, so pass it on there.
+  // in didFinishLaunching's launch options, where React Native's Linking.getInitialURL
+  // and the dev client look for it. Rebuild those launch options.
   private static func launchOptions(
     from connectionOptions: UIScene.ConnectionOptions
   ) -> [UIApplication.LaunchOptionsKey: Any]? {
