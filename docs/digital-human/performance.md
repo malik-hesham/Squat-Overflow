@@ -24,6 +24,23 @@ on screen: the avatar's body clip and rest face (the face and eye layers come in
 So on this Mac, drawing the avatar uses at most about a sixth of a 60 fps frame, at the 95th
 percentile.
 
+## With the face, eye and procedural layers (2026-11-10, Phase 4)
+
+**avatar-core alone:** `frame()` (body clips, face, blinks, gaze, breathing, drift) takes **1.0 µs**
+per call, median of 5 runs of 200,000 frames, in Node 24 on the same Mac (listening, with a face set).
+
+**Web renderer:** the same measure mode as above, now with the layers running (idle: blinks, drift,
+gaze), Chrome for Testing 1248 headless on ANGLE Metal (Apple M5), device pixel ratio 2:
+
+| Profile   | Framing  | Drawing buffer | Triangles | Median | 95th percentile |
+| --------- | -------- | -------------- | --------- | ------ | --------------- |
+| OPTIMIZED | portrait | 800 × 968      | 39,388    | 0.6 ms | 1.9 ms          |
+| OPTIMIZED | portrait | 2560 × 1458    | 39,388    | 1.3 ms | 2.6 ms          |
+| HIGH      | portrait | 2560 × 1458    | 93,024    | 1.5 ms | 2.8 ms          |
+
+The same as Phase 3 within 0.1 ms: the rig already wrote every face shape each frame, so more of them
+moving costs nothing extra.
+
 ## Mobile (spike S1, 2026-11-10)
 
 **Device:** iPhone 12 (A14), iOS 27.0.1. **Stack:** Expo 56, React Native 0.85.3 (Hermes), `expo-gl`,
@@ -46,6 +63,7 @@ pull the average to 53. Without the Phase 4 face layers and without audio.
   the app's browser pane was hidden, so its loop didn't run.
 - Windows (WebView2) and Linux (WebKitGTK): Phase 7.
 - Android phones (S1 covered the iPhone 12 only); older iPhones.
-- With the face and procedural layers (Phase 4) and lip sync (Phase 5) running.
+- The Phase 4 layers on a phone (Hermes is slower than Node; core's 1 µs will be more), and lip sync
+  (Phase 5).
 - Memory over a long session, and the cost of loading (download and decode).
 - Older or integrated GPUs. An M5 is fast; this is the best case, not the typical one.

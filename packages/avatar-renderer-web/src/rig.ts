@@ -10,14 +10,15 @@ import type {
   HeadRotation,
   VisemeId,
 } from '@squat-overflow/avatar-types';
+import { EYE_RANGE } from '@squat-overflow/avatar-core';
 import * as THREE from 'three';
 
 /**
- * Without eye bones, gaze uses the ARKit eyeLook shapes: a shape at full weight stands for this much
- * eye turn (about the comfortable range of a human eye).
+ * Without eye bones, gaze uses the ARKit eyeLook shapes: a shape at full weight stands for the
+ * furthest eye turn avatar-core makes (EYE_RANGE, about the comfortable range of a human eye).
  */
-export const EYE_YAW_MAX = THREE.MathUtils.degToRad(30);
-export const EYE_PITCH_MAX = THREE.MathUtils.degToRad(25);
+export const EYE_YAW_MAX = EYE_RANGE.yaw;
+export const EYE_PITCH_MAX = EYE_RANGE.pitch;
 
 /** How far a full breath lifts the chest (frame.breath = 1). */
 export const BREATH_PITCH_MAX = THREE.MathUtils.degToRad(1.5);

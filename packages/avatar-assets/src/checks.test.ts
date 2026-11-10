@@ -27,6 +27,7 @@ const MANIFEST: AvatarAssetManifest = {
     optimized: { uri: 'optimized.glb', bytes: 5, sha256: 'bb', triangles: 400 },
   },
   morphTargets: { arkit, visemes },
+  eyes: { left: [0.03, 1.69, 0.137], right: [-0.03, 1.69, 0.137] },
   skeleton: { hips: 'pelvis', spine: 'spine_01', chest: 'spine_03', neck: 'neck_01', head: 'head' },
   animations: { idle: { clip: 'Idle', durationMs: 4000, loop: true } },
 };

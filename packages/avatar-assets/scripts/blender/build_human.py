@@ -9,7 +9,6 @@ post-processing (scripts/build-profiles.mjs) before it goes into models/.
 """
 import argparse
 import json
-import math
 import os
 import sys
 
@@ -33,7 +32,6 @@ IDLE_SECONDS = 4
 # upper arms hang down a little away from the hips, forearms bend slightly forward.
 UPPER_ARM_DOWN = Vector((0.12, 0.0, -1.0))
 FOREARM_DOWN = Vector((0.06, -0.22, -1.0))
-BREATH_DEGREES = 1.2
 
 
 def parse_args():
@@ -134,7 +132,11 @@ def aim(rig, bone_name, direction):
 
 
 def add_idle_clip(rig):
-    """The `idle` clip: arms hanging down from MakeHuman's A-pose, and slow breathing in the chest."""
+    """The `idle` clip: arms hanging down from MakeHuman's A-pose, held for the loop.
+
+    Breathing, head drift and gaze are avatar-core's procedural layer (they vary with the state), so
+    the clip leaves the chest, neck and head at rest.
+    """
     scene = bpy.context.scene
     scene.render.fps = FPS
     last = 1 + FPS * IDLE_SECONDS
@@ -142,14 +144,9 @@ def add_idle_clip(rig):
         aim(rig, f"upperarm_{side}", Vector((UPPER_ARM_DOWN.x * x, UPPER_ARM_DOWN.y, UPPER_ARM_DOWN.z)))
         aim(rig, f"lowerarm_{side}", Vector((FOREARM_DOWN.x * x, FOREARM_DOWN.y, FOREARM_DOWN.z)))
     arms = [f"{b}_{s}" for b in ("upperarm", "lowerarm") for s in ("l", "r")]
-    chest = rig.pose.bones["spine_03"]
-    rest_chest = chest.rotation_euler.copy()
-    for frame, breath in ((1, 0.0), (1 + last // 2, 1.0), (last, 0.0)):
+    for frame in (1, last):
         for name in arms:
             rig.pose.bones[name].keyframe_insert("rotation_euler", frame=frame)
-        chest.rotation_euler = rest_chest.copy()
-        chest.rotation_euler.x += math.radians(-BREATH_DEGREES * breath)  # chest lifts as it fills
-        chest.keyframe_insert("rotation_euler", frame=frame)
     rig.animation_data.action.name = "idle"
     scene.frame_start, scene.frame_end = 1, last
 

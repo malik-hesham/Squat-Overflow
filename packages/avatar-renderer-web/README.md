@@ -10,7 +10,13 @@ import { createAvatarController } from '@squat-overflow/avatar-core';
 import { createAvatarView, loadAvatarModel } from '@squat-overflow/avatar-renderer-web';
 
 const model = await loadAvatarModel(modelUrl, COACH_01);
-const avatar = createAvatarController({ clock: performance, audio, clips: COACH_01.animations });
+const avatar = createAvatarController({
+  clock: performance,
+  audio,
+  clips: COACH_01.animations,
+  random: { next: () => Math.random() },
+  eyes: COACH_01.eyes,
+});
 const view = createAvatarView({ canvas, model, frames: avatar, framing: 'portrait' });
 view.start(); // draws every animation frame; pauses by itself while the page is hidden
 // later: view.dispose() frees the model, the environment map and the WebGL context
@@ -22,7 +28,9 @@ view.start(); // draws every animation frame; pauses by itself while the page is
   shapes and visemes through the manifest's names, clip weights and times, head, neck and chest turns
   on top of the clips, and gaze (eye bones, or the `eyeLook*` shapes when the model has none).
 - `createAvatarView` (AvatarScene, CameraController, LightingController): the canvas, a soft studio
-  light rig, portrait or full-body framing, the render loop.
+  light rig, portrait or full-body framing, the render loop. In a portrait the camera is at the eyes'
+  height, where avatar-core puts the user, so the avatar's eye contact meets it. `view.camera` turns a
+  pointer into a `setGaze` point (the preview page shows how).
 
 ## React
 
@@ -61,8 +69,9 @@ pnpm --filter @squat-overflow/avatar-renderer-web dev
 ```
 
 Options: `?profile=high|optimized`, `?framing=portrait|full`, `?measure=300` (times frames; see
-[docs/digital-human/performance.md](../../docs/digital-human/performance.md)). Until Phase 4 the
-buttons change the state and the body clip only: there are no face expressions, gaze or blinking yet.
+[docs/digital-human/performance.md](../../docs/digital-human/performance.md)). The buttons change the
+state, "Face" calls `setExpression`, and "Look at the pointer" aims `setGaze` at the pointer. Speech
+comes with Phase 5.
 
 ## Tests
 

@@ -1,7 +1,8 @@
 # Digital human engine: architecture and plan
 
-Status: **Phases 1 to 3 done** (workspace, shared types, `avatar-core`, the human model, the web
-renderer). Phases 4 to 9 are planned, not built. All phases go on one branch, `feat/digital-human`.
+Status: **Phases 1 to 4 done** (workspace, shared types, `avatar-core` with its face, eye and
+procedural layers, the human model, the web renderer). Phases 5 to 9 are planned, not built. All phases
+go on one branch, `feat/digital-human`.
 
 The engine renders one interactive 3D human (idle, listening, thinking, speaking, reacting) in the three
 Squat Overflow clients: the browser extension, the desktop app and the mobile app. It follows the repo
@@ -208,7 +209,11 @@ Priority, highest first:
 | 5    | Procedural layer              | blinking, breathing, head drift, saccades, acknowledgment nods  |
 
 Lower ranks fill whatever the higher ranks leave free. For example, blinking keeps running while speaking,
-but a blink is skipped while the eyes are wide in `surprised`.
+but a blink waits while the eyes are wide in `surprised`.
+
+The face that shows, highest first: the reaction's (also as an overlay on speech, scaled by its
+`intensity`), the speak command's `expression`, `setExpression`'s, the state's own (`thinking` while
+thinking; otherwise neutral). The gaze: `setGaze`'s point, else the state's own way of looking.
 
 | Command → / state ↓ | idle                  | listening                  | thinking                  | speaking                             | reacting              |
 | ------------------- | --------------------- | -------------------------- | ------------------------- | ------------------------------------ | --------------------- |
@@ -218,15 +223,19 @@ but a blink is skipped while the eyes are wide in `surprised`.
 | `speak`             | → speak               | → speak                    | → speak                   | replace speech (old one interrupted) | end reaction → speak  |
 | `react`             | → react, back to idle | → react, back to listening | → react, back to thinking | overlay, stays speaking              | replace reaction      |
 
-What each state does (built in Phases 2, 4 and 5):
+What each state does (built in Phases 2 and 4; lip sync in Phase 5). In every state the avatar
+breathes, blinks (every 2 to 6 s, sometimes twice) and its head drifts slowly; the eyes jump to what
+they look at and the head follows big shifts.
 
-- **idle**: breathing, random blinks (2 to 6 s apart, sometimes double), slow head drift, eye saccades,
-  gaze follows `setGaze` or wanders.
-- **listening**: eye contact with the user, slight forward lean, a nod now and then.
-- **thinking**: head tilt, eyes up and to the side, the `thinking` expression, thinking gesture clip.
-- **speaking**: audio plays, mouth follows the visemes on the audio clock, expression from the command,
-  talking gesture clips.
-- **reacting**: the reaction's expression and clip.
+- **idle**: about 14 breaths a minute; the eyes wander, back at the user for about a third of the looks.
+- **listening**: eye contact, moving between the user's eyes and mouth; leaning in with the head tilted;
+  a nod every 4 to 9 s, sometimes two.
+- **thinking**: head tilt, eyes up and to one side (the same side all through), the `thinking` face,
+  slower breathing; the thinking clip when the model has one.
+- **speaking**: audio plays (Phase 5: the mouth follows the visemes on the audio clock); mostly eye
+  contact with glances away, the command's expression, quicker breathing; the talking clip.
+- **reacting**: the reaction's face and posture (sad looks down, surprised lifts the head, confused
+  tilts it), eye contact, and its clip.
 
 Transitions blend, driven by the renderer calling `frame()` once per displayed frame. Body clips
 crossfade over 300 ms (`CLIP_FADE_MS`) and their weights always sum to 1, also when the target changes
@@ -234,8 +243,10 @@ mid-fade; a clip that comes back while still fading out keeps its place. A react
 own (`neutral`, or one the model lacks) keeps the activity's clip, and a missing activity clip falls back
 to idle. After a long gap between frames (a hidden page) the animation moves on at most 100 ms
 (`MAX_FRAME_STEP_MS`) instead of jumping. Reactions are timed on the clock, not on frames, so a reaction
-whose time ran out while the page was hidden counts as completed. Expression and posture smoothing comes
-with the face and eye layers in Phase 4.
+whose time ran out while the page was hidden counts as completed. Faces, postures and gaze move
+towards their goal with time constants rather than fixed fades (face 120 ms, posture 300 ms, an eye jump
+20 ms, the head following the eyes 250 ms), so a change in the middle of another never jumps, and the
+result depends only on the time that passed: the avatar looks the same at 30 and 60 fps.
 
 ### Events
 
@@ -458,3 +469,92 @@ Changed from the plan:
 
 Next: Phase 4. Spike S1 ran on the iPhone ([spike-s1-mobile.md](spike-s1-mobile.md)); Android is still
 to do. Not measured yet: frames shown per second in a visible window, Windows and Linux, phones.
+
+## Phase 4 record
+
+Built, on `feat/digital-human`:
+
+- `avatar-core`:
+  - `face.ts` (FacialController): the six faces as ARKit shapes (`EXPRESSION_SHAPES`, after the facial
+    action units that make them), blended in and out.
+  - `eyes.ts` (EyeController): blinks; each state's way of looking (`GAZE_STYLES`); `setGaze` points,
+    aimed from each eye, so near points make the eyes converge; eye-head coordination.
+  - `procedural.ts` (ProceduralAnimation): breathing, head drift, each state's and reaction's posture,
+    listening nods.
+  - `controller.ts`: `setGaze` and `setExpression` work, and reject bad values with a `TypeError` (the
+    extension calls them from plain JavaScript); each frame composes the layers; after `dispose()` the
+    last pose holds. Two new required options: `random` (`{ next: () => Math.random() }` in a client,
+    seeded in tests) and `eyes` (the manifest's).
+  - `random.ts`: each layer forks its own stream from `random`, so a seed gives the same avatar at any
+    frame rate, and one more glance doesn't move every later blink.
+- `avatar-types`: `EyeCentres` and the manifest's `eyes`.
+- `avatar-assets`: the build measures the eye centres from the eye mesh (`src/build/eyes.ts`, through
+  the skin, which also undoes the quantization of the shipped files) and writes them into the manifest.
+  The idle clip no longer breathes, so both GLBs were rebuilt (944 bytes smaller each, otherwise the
+  same).
+- `avatar-renderer-web`: the portrait camera sits at the eyes' height, where core puts the user, so
+  looking straight ahead is eye contact; `view.camera` is exposed (to turn a pointer into a `setGaze`
+  point); the `eyeLook*` shapes' range is core's `EYE_RANGE`. The preview page gained every reaction, a
+  face picker and "Look at the pointer".
+
+The numbers, all exported constants in `avatar-core`:
+
+| What             | Value                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| Blinks           | every 2 to 6 s, start to start; 15% get a second; 70 ms closing, 150 ms opening          |
+| Blink hold       | no blink starts while the face's `eyeWide` is 0.4 or more (surprised)                    |
+| Eye range        | ±30° sideways, ±25° up and down, from the head                                           |
+| Eye-head split   | the eyes alone cover 12° sideways and 8° up or down; the head turns the rest (≤ 35°/20°) |
+| Speed            | an eye jump has a 20 ms time constant (95% in 60 ms); the head follows with 250 ms       |
+| The user         | 1 m in front of the eyes; eye contact moves between their eyes (64 mm apart) and mouth   |
+| Looks            | idle 1 to 3.5 s each, 30% at the user; listening 0.6 to 2 s; speaking 70% at the user    |
+| Breathing        | one breath per 4.3 s idle, 4.0 listening, 5.0 thinking, 3.6 speaking; ±10%; 40% in       |
+| Head drift       | up to 2.5° sideways, 1.5° up and down, 1.2° tilt at rest; 60% listening, 40% thinking    |
+| Nods (listening) | every 4 to 9 s; 6° over 600 ms; 30% get a second                                         |
+| Face and posture | time constants 120 ms and 300 ms                                                         |
+
+Proven by:
+
+- 129 avatar-core tests, with seeded random numbers and a fake clock: blink timing over an hour of
+  frames, the double-blink rate, no blinks while surprised; per-eye aim at a point, convergence,
+  eyes-only small shifts, big shifts led by the eyes with the head following and the eyes turning back,
+  the limits for targets all around (behind included), the gaze held while the head nods; each state's
+  gaze; breathing rates and smoothness across state changes; drift bounds; nods; postures and
+  intensity; the face's blend, frame-rate independence and smooth switches; the controller's face
+  priority, input checks, and the same frames for the same seed.
+- 36 avatar-assets tests, new: the shipped files' eye centres, measured again through the skin, match
+  the manifest to the millimetre; the idle clip doesn't move the chest.
+- 27 renderer tests, new: the portrait camera at eye height (Node); in Chromium, the real model smiles
+  and turns its eyes through its `eyeLook*` shapes from core's frames.
+- Frame cost, re-measured with the layers on: the same as Phase 3, and core's `frame()` takes about
+  1 µs in Node on this Mac ([performance.md](performance.md)).
+
+![Phase 4 on coach-01: idle, happy, sad, surprised, thinking, and looking at the pointer](renders/phase4-faces.jpg)
+
+_The preview page in Chromium (software WebGL), OPTIMIZED, portrait._
+
+Bugs the tests and renders caught: after a long `setGaze`, the looks the eyes had missed would have
+played back one per frame (the next look now starts fresh); the happy face was too faint on this model
+(the smile went from 0.65 to 0.85 after the render).
+
+Decisions to review:
+
+- **Breathing moved from the idle clip into core.** The Phase 3 clip breathed on a fixed 4 s loop;
+  core's breathing changes with the state and from breath to breath, and the two together would beat
+  against each other. Rebuilding the model added another ~8 MB to the git history.
+- **The manifest records where the eyes are** (`eyes`), which aiming at a point needs. Another model
+  drops in as long as its build measures them (or they're written in by hand).
+- **The user's place is fixed**: 1 m in front of the eyes (`VIEWER_DISTANCE_M`), where the portrait
+  camera now is. In full-body framing the camera is lower and further away, so eye contact looks above
+  it; a client can aim with `setGaze` at `view.camera.position` instead.
+
+Limits that remain:
+
+- Not photorealistic (unchanged). The face is MPFB's face units: no eyelid that follows the gaze down,
+  no wrinkles.
+- No lip sync yet: the mouth moves only with the faces (Phase 5). Speaking's glances and breaths aren't
+  timed to the speech yet; Phase 5 can tie them to phrases.
+- A target behind the avatar: eyes and head stop at their limits; nothing turns the body.
+- Measured in Node and in Chromium on this Mac only; no phone with these layers yet (Phase 8).
+
+Next: Phase 5 (speech and lip sync).

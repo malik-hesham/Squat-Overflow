@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import type { QualityProfile } from '@squat-overflow/avatar-types';
 import validator from 'gltf-validator';
 import { describe, expect, it } from 'vitest';
+import { readGlb, readSkinnedMesh } from '../scripts/skinned-mesh.mts';
+import { eyeCentres } from './build/eyes.ts';
 import { materialSettings } from './build/materials.ts';
 import { checkModel, checkProfilesMatch } from './checks.ts';
 import { readGlbJson } from './glb.ts';
@@ -59,6 +61,40 @@ describe.each(PROFILES)('%s model file', (profile) => {
         mode: expected.alphaMode,
         double: expected.doubleSided,
       });
+    }
+  });
+});
+
+describe.each(PROFILES)('%s model file: what the engine animates', (profile) => {
+  it('has its eyes where the manifest says, to the millimetre', async () => {
+    const eyes = eyeCentres(readSkinnedMesh(await readGlb(bytesOf(profile)), 'Eyes'));
+
+    for (const side of ['left', 'right'] as const) {
+      for (let i = 0; i < 3; i++) {
+        expect(Math.abs((eyes[side][i] ?? 0) - (COACH_01.eyes[side][i] ?? 0))).toBeLessThan(0.001);
+      }
+    }
+  });
+
+  it("leaves breathing to the engine: the idle clip doesn't move the chest", async () => {
+    const doc = await readGlb(bytesOf(profile));
+    const idle = doc
+      .getRoot()
+      .listAnimations()
+      .find((a) => a.getName() === COACH_01.animations.idle.clip);
+    expect(idle).toBeDefined();
+    const chest = (idle?.listChannels() ?? []).filter(
+      (c) =>
+        c.getTargetNode()?.getName() === COACH_01.skeleton.chest && c.getTargetPath() === 'rotation'
+    );
+
+    for (const channel of chest) {
+      const values = channel.getSampler()?.getOutput();
+      const first = values?.getElement(0, new Array<number>()) ?? [];
+      for (let i = 1; i < (values?.getCount() ?? 0); i++) {
+        const value = values?.getElement(i, new Array<number>()) ?? [];
+        for (const [k, v] of value.entries()) expect(v).toBeCloseTo(first[k] ?? 0, 6);
+      }
     }
   });
 });

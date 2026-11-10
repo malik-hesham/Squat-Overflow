@@ -1,4 +1,11 @@
-import type { AvatarEvent, AvatarEventType, CommandOutcome } from '@squat-overflow/avatar-types';
+import type {
+  AvatarEvent,
+  AvatarEventType,
+  AvatarFrame,
+  CommandOutcome,
+  EyeCentres,
+  Vec3,
+} from '@squat-overflow/avatar-types';
 import { describe, expect, it } from 'vitest';
 import type { AvatarClips } from './animation.ts';
 import {
@@ -7,7 +14,9 @@ import {
   createAvatarController,
   type CoreAvatar,
 } from './controller.ts';
-import { FakeAudio, FakeClock, settle } from './testing/fakes.ts';
+import { EXPRESSION_SHAPES } from './face.ts';
+import { POSTURES } from './procedural.ts';
+import { FakeAudio, FakeClock, SeededRandom, settle } from './testing/fakes.ts';
 
 const CLIPS: AvatarClips = {
   idle: { durationMs: 4000, loop: true },
@@ -25,10 +34,13 @@ const ALL_EVENTS: AvatarEventType[] = [
   'disposed',
 ];
 
-function setup() {
+const EYES: EyeCentres = { left: [0.03, 1.69, 0.137], right: [-0.03, 1.69, 0.137] };
+
+function setup(seed = 1) {
   const clock = new FakeClock();
   const audio = new FakeAudio();
-  const avatar = createAvatarController({ clock, audio, clips: CLIPS });
+  const random = new SeededRandom(seed);
+  const avatar = createAvatarController({ clock, audio, clips: CLIPS, random, eyes: EYES });
   const events: AvatarEvent[] = [];
   for (const type of ALL_EVENTS) avatar.on(type, (e) => events.push(e));
   return { clock, audio, avatar, events };
@@ -514,5 +526,177 @@ describe('avatar controller: commands from inside event listeners', () => {
       { type: 'stateChanged', from: 'listening', to: 'idle' }, // dispose interrupts first
       { type: 'disposed' },
     ]);
+  });
+});
+
+describe('avatar controller: face, eyes and body', () => {
+  const FRAME = 1000 / 60;
+  const DEG = Math.PI / 180;
+
+  /** Runs frames for `ms` and returns them. */
+  function frames(avatar: CoreAvatar, clock: FakeClock, ms: number): AvatarFrame[] {
+    const out: AvatarFrame[] = [];
+    for (let t = 0; t < ms - 1e-9; t += FRAME) {
+      clock.advance(FRAME);
+      out.push(avatar.frame());
+    }
+    return out;
+  }
+  const last = (all: AvatarFrame[]): AvatarFrame => {
+    const frame = all.at(-1);
+    if (!frame) throw new Error('no frames');
+    return frame;
+  };
+  /** The frame's face without blinks (they come and go at random). */
+  const face = (frame: AvatarFrame) => {
+    const rest = { ...frame.blendshapes };
+    delete rest.eyeBlinkLeft;
+    delete rest.eyeBlinkRight;
+    return rest;
+  };
+  const near = (a: object, b: object) => {
+    const x = a as Record<string, number>;
+    const y = b as Record<string, number>;
+    expect(Object.keys(x).sort()).toEqual(Object.keys(y).sort());
+    for (const key of Object.keys(y)) expect(x[key]).toBeCloseTo(y[key] ?? 0, 3);
+  };
+
+  it('is the same avatar, frame for frame, for the same seed', async () => {
+    const a = setup(5);
+    const b = setup(5);
+    for (const { avatar, clock } of [a, b]) {
+      await avatar.execute({ type: 'listen' });
+      frames(avatar, clock, 3000);
+      void avatar.execute({ type: 'react', reaction: 'surprised' });
+      frames(avatar, clock, 3000);
+      avatar.setGaze([0.4, 1.5, 1]);
+    }
+
+    expect(frames(a.avatar, a.clock, 5000)).toEqual(frames(b.avatar, b.clock, 5000));
+  });
+
+  it("wears setExpression's face, and 'neutral' takes it off", () => {
+    const { avatar, clock } = setup();
+
+    avatar.setExpression('happy');
+    near(face(last(frames(avatar, clock, 3000))), EXPRESSION_SHAPES.happy);
+
+    avatar.setExpression('neutral');
+    expect(face(last(frames(avatar, clock, 3000)))).toEqual({});
+  });
+
+  it('wears the thinking face while thinking, unless setExpression says otherwise', async () => {
+    const { avatar, clock } = setup();
+
+    await avatar.execute({ type: 'think' });
+    near(face(last(frames(avatar, clock, 3000))), EXPRESSION_SHAPES.thinking);
+
+    avatar.setExpression('confused');
+    near(face(last(frames(avatar, clock, 3000))), EXPRESSION_SHAPES.confused);
+  });
+
+  it("shows a reaction's face over setExpression, scaled by its intensity, then goes back", async () => {
+    const { avatar, clock } = setup();
+    avatar.setExpression('happy');
+
+    const reaction = avatar.execute({
+      type: 'react',
+      reaction: 'sad',
+      intensity: 0.5,
+      durationMs: 3000,
+    });
+    const half = Object.fromEntries(
+      Object.entries(EXPRESSION_SHAPES.sad).map(([k, v]) => [k, v / 2])
+    );
+    near(face(last(frames(avatar, clock, 2500))), half);
+
+    frames(avatar, clock, 600);
+    await expect(reaction).resolves.toBe('completed');
+    near(face(last(frames(avatar, clock, 3000))), EXPRESSION_SHAPES.happy);
+  });
+
+  it("shows a speak command's expression while it speaks, and a reaction over it", async () => {
+    const { audio, avatar, clock } = setup();
+    void avatar.execute({ type: 'speak', speech: HELLO, expression: 'happy' });
+    near(face(last(frames(avatar, clock, 3000))), EXPRESSION_SHAPES.happy);
+
+    void avatar.execute({ type: 'react', reaction: 'surprised', durationMs: 5000 });
+    near(face(last(frames(avatar, clock, 3000))), EXPRESSION_SHAPES.surprised);
+    expect(avatar.state).toBe('speaking');
+
+    avatar.interrupt();
+    audio.last.end();
+    await settle();
+    expect(face(last(frames(avatar, clock, 3000)))).toEqual({});
+  });
+
+  it('rejects an expression it does not know', () => {
+    const { avatar } = setup();
+    expect(() => {
+      avatar.setExpression('angry' as never);
+    }).toThrow(TypeError);
+  });
+
+  it('turns the eyes and head to a setGaze point, and gives the gaze back on null', () => {
+    const { avatar, clock } = setup();
+    const left: Vec3 = [1, 1.69, 0.6]; // well to the avatar's left
+
+    avatar.setGaze(left);
+    const looking = last(frames(avatar, clock, 2000));
+    expect(looking.eyes.left.yaw).toBeGreaterThan(5 * DEG);
+    expect(looking.eyes.right.yaw).toBeGreaterThan(5 * DEG);
+    expect(looking.neck.yaw + looking.head.yaw).toBeGreaterThan(30 * DEG);
+    expect(looking.neck.yaw).toBeGreaterThan(0);
+
+    avatar.setGaze(null);
+    const back = last(frames(avatar, clock, 3000));
+    expect(Math.abs(back.neck.yaw + back.head.yaw)).toBeLessThan(5 * DEG);
+  });
+
+  it('rejects a setGaze target that is not three finite numbers', () => {
+    const { avatar } = setup();
+    for (const bad of [[0, 1], [0, Number.NaN, 1], [0, 1, Infinity], 'ahead', {}, [0, 1, 2, 3]]) {
+      expect(() => {
+        avatar.setGaze(bad as never);
+      }).toThrow(TypeError);
+    }
+  });
+
+  it('blinks with both eyes, and not while the eyes are wide', () => {
+    const { avatar, clock } = setup();
+    const open = frames(avatar, clock, 7000);
+    const shut = open.filter((f) => (f.blendshapes.eyeBlinkLeft ?? 0) > 0.9);
+    expect(shut.length).toBeGreaterThan(0);
+    for (const f of open) expect(f.blendshapes.eyeBlinkLeft).toBe(f.blendshapes.eyeBlinkRight);
+
+    void avatar.execute({ type: 'react', reaction: 'surprised', durationMs: 20_000 });
+    frames(avatar, clock, 1000); // the eyes widen
+    const surprised = frames(avatar, clock, 15_000);
+    expect(surprised.every((f) => f.blendshapes.eyeBlinkLeft === undefined)).toBe(true);
+  });
+
+  it('breathes and leans in while listening', async () => {
+    const { avatar, clock } = setup();
+    await avatar.execute({ type: 'listen' });
+    const all = frames(avatar, clock, 6000);
+
+    expect(Math.max(...all.map((f) => f.breath))).toBeGreaterThan(0.9);
+    expect(Math.min(...all.slice(-200).map((f) => f.neck.pitch))).toBeLessThan(
+      POSTURES.listening.neck.pitch / 2
+    );
+  });
+
+  it('stands still after dispose, in the last pose it had', () => {
+    const { avatar, clock } = setup();
+    const before = last(frames(avatar, clock, 2500));
+
+    avatar.dispose();
+    clock.advance(1000);
+
+    expect(avatar.frame()).toEqual(before);
+    avatar.setGaze([1, 1, 1]);
+    avatar.setExpression('happy');
+    clock.advance(1000);
+    expect(avatar.frame()).toEqual(before);
   });
 });

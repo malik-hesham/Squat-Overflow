@@ -2,7 +2,7 @@
 import { COACH_01 } from '@squat-overflow/avatar-assets';
 import modelUrl from '@squat-overflow/avatar-assets/models/coach-01/optimized.glb?url';
 import { createAvatarController } from '@squat-overflow/avatar-core';
-import { FakeAudio } from '@squat-overflow/avatar-core/testing';
+import { FakeAudio, SeededRandom } from '@squat-overflow/avatar-core/testing';
 import type { AvatarFrame, AvatarFrameSource } from '@squat-overflow/avatar-types';
 import { useThree } from '@react-three/fiber';
 import { act, type ReactNode } from 'react';
@@ -148,6 +148,8 @@ describe('useAvatarState', () => {
       clock: { now: () => performance.now() },
       audio: new FakeAudio(),
       clips: COACH_01.animations,
+      random: new SeededRandom(1),
+      eyes: COACH_01.eyes,
     });
     function State() {
       return <p id="state">{useAvatarState(avatar)}</p>;

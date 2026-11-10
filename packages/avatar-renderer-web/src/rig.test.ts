@@ -6,6 +6,7 @@ import {
   type AvatarFrame,
   type VisemeId,
 } from '@squat-overflow/avatar-types';
+import { EYE_RANGE } from '@squat-overflow/avatar-core';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BREATH_PITCH_MAX, createAvatarRig, EYE_PITCH_MAX, EYE_YAW_MAX } from './rig.ts';
@@ -27,6 +28,7 @@ const MANIFEST: AvatarAssetManifest = {
     optimized: { uri: 'o.glb', bytes: 1, sha256: '', triangles: 1 },
   },
   morphTargets: { arkit, visemes },
+  eyes: { left: [0.03, 1.69, 0.137], right: [-0.03, 1.69, 0.137] },
   skeleton: { hips: 'pelvis', spine: 'spine_01', chest: 'spine_03', neck: 'neck_01', head: 'head' },
   animations: {
     idle: { clip: 'idle', durationMs: 4000, loop: true },
@@ -233,6 +235,9 @@ describe('createAvatarRig: head and neck', () => {
 
 describe('createAvatarRig: eyes', () => {
   it('uses the full eyeLook shapes for 30° sideways and 25° up or down', () => {
+    // A shape at full weight is the furthest core turns the eyes.
+    expect(EYE_YAW_MAX).toBe(EYE_RANGE.yaw);
+    expect(EYE_PITCH_MAX).toBe(EYE_RANGE.pitch);
     expect(EYE_YAW_MAX).toBeCloseTo(deg(30));
     expect(EYE_PITCH_MAX).toBeCloseTo(deg(25));
   });

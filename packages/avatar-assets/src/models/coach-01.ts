@@ -29,14 +29,14 @@ export const COACH_01 = {
   "profiles": {
     "high": {
       "uri": "high.glb",
-      "bytes": 5782260,
-      "sha256": "0bef3130ebe9f97b0a3be53b8da7efd6de20adfdc15fc1521165048f37ced750",
+      "bytes": 5781316,
+      "sha256": "29e65be6e58c3e3586de1c8de780ae746a76b43f3abee4ff71f48052720c80bb",
       "triangles": 93024
     },
     "optimized": {
       "uri": "optimized.glb",
-      "bytes": 2311504,
-      "sha256": "c46a3134193c67e2ee9462438d25fdd0f32d847970e6067dcb3568c432248d52",
+      "bytes": 2310560,
+      "sha256": "4b948fa12341fdfdb417dcc24fb48b2669a9342b2f25fa626e63bee13db24652",
       "triangles": 39388
     }
   },
@@ -112,6 +112,18 @@ export const COACH_01 = {
       "O": "viseme_O",
       "U": "viseme_U"
     }
+  },
+  "eyes": {
+    "left": [
+      0.03,
+      1.6885,
+      0.1371
+    ],
+    "right": [
+      -0.03,
+      1.6885,
+      0.1371
+    ]
   },
   "skeleton": {
     "hips": "pelvis",

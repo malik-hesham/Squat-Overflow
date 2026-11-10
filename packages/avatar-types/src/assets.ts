@@ -1,5 +1,13 @@
 import type { ArkitBlendshape } from './blendshapes.ts';
+import type { Vec3 } from './math.ts';
 import type { VisemeId } from './visemes.ts';
+
+/** Where the centres of the avatar's eyeballs are at rest, in avatar space. Gaze is aimed from here. */
+export interface EyeCentres {
+  /** The avatar's own left eye (+X side). */
+  readonly left: Vec3;
+  readonly right: Vec3;
+}
 
 /** HIGH: desktop. OPTIMIZED: extension and mobile. Both are the same person, rig and face shapes. */
 export type QualityProfile = 'high' | 'optimized';
@@ -82,6 +90,8 @@ export interface AvatarAssetManifest {
   readonly morphTargets: {
     readonly arkit: Readonly<Record<ArkitBlendshape, string>>;
   } & VisemeSource;
+  /** Where its eyes are (measured from the eye mesh by the build); gaze is aimed from here. */
+  readonly eyes: EyeCentres;
   /** Eye bones may be missing: the eyeLook* blendshapes then turn the eyes. */
   readonly skeleton: Readonly<
     Record<Exclude<HumanoidBone, 'leftEye' | 'rightEye'>, string> &

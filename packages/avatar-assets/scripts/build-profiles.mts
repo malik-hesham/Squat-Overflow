@@ -10,9 +10,11 @@ import { dedup, meshopt, prune, textureCompress } from '@gltf-transform/function
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
 import sharp from 'sharp';
 import { ARKIT_BLENDSHAPES, VISEMES } from '../../avatar-types/src/index.ts';
+import { eyeCentres } from '../src/build/eyes.ts';
 import { materialSettings } from '../src/build/materials.ts';
 import { readGlbJson } from '../src/glb.ts';
 import { summarizeGltf } from '../src/summary.ts';
+import { readSkinnedMesh } from './skinned-mesh.mts';
 
 const PROFILES = {
   high: { maxTexture: 2048, webpQuality: 90 },
@@ -30,8 +32,11 @@ const io = new NodeIO()
 
 const files: Record<string, { uri: string; bytes: number; sha256: string; triangles: number }> = {};
 let idleMs = 0;
+/** Each profile's eye centres; the manifest gets their average (the eye meshes differ by < 1 mm). */
+const measured: ReturnType<typeof eyeCentres>[] = [];
 for (const [profile, settings] of Object.entries(PROFILES)) {
   const doc = await io.read(`build/${profile}.glb`);
+  measured.push(eyeCentres(readSkinnedMesh(doc, 'Eyes')));
   for (const material of doc.getRoot().listMaterials()) {
     const s = materialSettings(material.getName());
     material.setAlphaMode(s.alphaMode).setDoubleSided(s.doubleSided);
@@ -74,6 +79,12 @@ for (const [profile, settings] of Object.entries(PROFILES)) {
 }
 
 const constName = human.id.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+/** Averaged over the profiles, to 0.1 mm. */
+const eye = (side: 'left' | 'right') =>
+  [0, 1, 2].map(
+    (i) =>
+      Math.round((measured.reduce((sum, e) => sum + e[side][i], 0) / measured.length) * 1e4) / 1e4
+  );
 const manifest = {
   id: human.id,
   name: human.name,
@@ -83,6 +94,7 @@ const manifest = {
     arkit: Object.fromEntries(ARKIT_BLENDSHAPES.map((name) => [name, name])),
     visemes: Object.fromEntries(VISEMES.map((v) => [v, `viseme_${v}`])),
   },
+  eyes: { left: eye('left'), right: eye('right') },
   skeleton: human.skeleton,
   animations: { idle: { clip: 'idle', durationMs: idleMs, loop: true } },
 };

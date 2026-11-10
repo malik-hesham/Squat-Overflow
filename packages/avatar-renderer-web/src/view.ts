@@ -19,6 +19,8 @@ export interface AvatarViewOptions {
 
 export interface AvatarView {
   readonly renderer: THREE.WebGLRenderer;
+  /** The camera, in avatar space: e.g. to turn a pointer position into a setGaze target. */
+  readonly camera: THREE.PerspectiveCamera;
   /** Starts drawing every animation frame. It pauses by itself while the page is hidden. */
   start(): void;
   stop(): void;
@@ -82,6 +84,7 @@ export function createAvatarView(options: AvatarViewOptions): AvatarView {
   let disposed = false;
   return {
     renderer,
+    camera,
     start() {
       if (disposed) return;
       running = true;

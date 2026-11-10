@@ -1,23 +1,32 @@
-import type {
-  AnimationSlot,
-  AudioPlayback,
-  AudioPort,
-  AvatarCommand,
-  AvatarController,
-  AvatarEvent,
-  AvatarEventListener,
-  AvatarEventType,
-  AvatarFrame,
-  AvatarFrameSource,
-  AvatarState,
-  CommandOutcome,
-  MonotonicClock,
-  Reaction,
-  SpeechEndReason,
-  SpeechResponse,
+import {
+  AVATAR_EXPRESSIONS,
+  type AnimationSlot,
+  type AudioPlayback,
+  type AudioPort,
+  type AvatarCommand,
+  type AvatarController,
+  type AvatarEvent,
+  type AvatarEventListener,
+  type AvatarEventType,
+  type AvatarExpression,
+  type AvatarFrame,
+  type AvatarFrameSource,
+  type AvatarState,
+  type CommandOutcome,
+  type EyeCentres,
+  type HeadRotation,
+  type MonotonicClock,
+  type RandomSource,
+  type Reaction,
+  type SpeechEndReason,
+  type SpeechResponse,
+  type Vec3,
 } from '@squat-overflow/avatar-types';
 import { AnimationManager, type AvatarClips } from './animation.ts';
 import { AvatarEvents } from './events.ts';
+import { EyeController } from './eyes.ts';
+import { FacialController, type FaceShapes, type FaceTarget } from './face.ts';
+import { NECK_SHARE, ProceduralAnimation } from './procedural.ts';
 import {
   INITIAL_STATE,
   transition,
@@ -31,6 +40,10 @@ export interface AvatarCoreOptions {
   readonly audio: AudioPort;
   /** The model's clips, from its manifest. */
   readonly clips: AvatarClips;
+  /** Random numbers for blinks, glances, breaths and drift (Math.random; seeded in tests). */
+  readonly random: RandomSource;
+  /** Where the model's eyes are, from its manifest; setGaze aims from here. */
+  readonly eyes: EyeCentres;
   /** Where errors thrown by event listeners go (the client's logger). */
   readonly reportError?: (error: unknown) => void;
 }
@@ -60,11 +73,14 @@ const AHEAD = { yaw: 0, pitch: 0 } as const;
 interface Speech {
   readonly playback: AudioPlayback;
   readonly settle: (outcome: CommandOutcome) => void;
+  /** The face the speak command asked for. */
+  readonly expression: AvatarExpression | undefined;
 }
 
 interface ActiveReaction {
   /** Clock time when it ends on its own. */
   readonly endsAt: number;
+  readonly intensity: number;
   readonly settle: (outcome: CommandOutcome) => void;
 }
 
@@ -73,6 +89,14 @@ class Controller implements CoreAvatar {
   readonly #audio: AudioPort;
   readonly #events: AvatarEvents;
   readonly #animation: AnimationManager;
+  readonly #face = new FacialController();
+  readonly #eyes: EyeController;
+  readonly #body: ProceduralAnimation;
+  /** setGaze's target and setExpression's face (rank 4 in section 4's priority table). */
+  #gaze: Vec3 | null = null;
+  #expression: AvatarExpression = 'neutral';
+  /** The pose last handed out; after dispose the avatar keeps it. */
+  #pose: AvatarFrame;
   #machine: MachineState = INITIAL_STATE;
   #speech: Speech | null = null;
   #reaction: ActiveReaction | null = null;
@@ -87,7 +111,18 @@ class Controller implements CoreAvatar {
     this.#audio = options.audio;
     this.#events = new AvatarEvents(options.reportError);
     this.#animation = new AnimationManager(options.clips);
+    this.#eyes = new EyeController(options.random, options.eyes);
+    this.#body = new ProceduralAnimation(options.random);
     this.#lastFrameAt = options.clock.now();
+    this.#pose = {
+      blendshapes: {},
+      visemes: {},
+      head: STILL,
+      neck: STILL,
+      eyes: { left: AHEAD, right: AHEAD },
+      breath: 0,
+      clips: this.#animation.clips(),
+    };
   }
 
   get state(): AvatarState {
@@ -110,9 +145,13 @@ class Controller implements CoreAvatar {
         this.#apply({ kind: command.type });
         return Promise.resolve('completed');
       case 'speak':
-        return this.#speak(command.speech);
+        return this.#speak(command.speech, command.expression);
       case 'react':
-        return this.#react(command.reaction, command.durationMs ?? DEFAULT_REACTION_MS);
+        return this.#react(
+          command.reaction,
+          command.durationMs ?? DEFAULT_REACTION_MS,
+          command.intensity ?? 1
+        );
     }
   }
 
@@ -123,14 +162,23 @@ class Controller implements CoreAvatar {
     this.#flush();
   }
 
-  // The eye and face layers come in Phase 4 (docs/digital-human/architecture.md). Until then these
-  // fail loudly instead of accepting a value and doing nothing.
-  setGaze(): void {
-    throw new Error('setGaze: the eye layer is built in Phase 4');
+  setGaze(target: Vec3 | null): void {
+    // Plain-JavaScript clients (the extension) call this too: a bad point would turn into NaN eyes.
+    if (target !== null && !isPoint(target)) {
+      throw new TypeError('setGaze: target must be [x, y, z] in metres (finite numbers), or null');
+    }
+    if (this.#disposed) return;
+    this.#gaze = target === null ? null : [target[0], target[1], target[2]];
   }
 
-  setExpression(): void {
-    throw new Error('setExpression: the face layer is built in Phase 4');
+  setExpression(expression: AvatarExpression): void {
+    if (!(AVATAR_EXPRESSIONS as readonly unknown[]).includes(expression)) {
+      throw new TypeError(
+        `setExpression: expression must be one of ${AVATAR_EXPRESSIONS.join(', ')}`
+      );
+    }
+    if (this.#disposed) return;
+    this.#expression = expression;
   }
 
   setSpeaking(enabled: boolean): void {
@@ -159,26 +207,62 @@ class Controller implements CoreAvatar {
   }
 
   frame(): AvatarFrame {
-    if (!this.#disposed) {
-      // After dispose the avatar stands still: the renderer may ask once more while tearing down.
-      const now = this.#clock.now();
-      this.#expireReaction();
-      this.#animation.advance(Math.min(Math.max(now - this.#lastFrameAt, 0), MAX_FRAME_STEP_MS));
-      this.#lastFrameAt = now;
-      this.#flush();
-    }
+    // After dispose the avatar stands still: the renderer may ask once more while tearing down.
+    if (this.#disposed) return this.#pose;
+    const now = this.#clock.now();
+    this.#expireReaction();
+    const step = Math.min(Math.max(now - this.#lastFrameAt, 0), MAX_FRAME_STEP_MS);
+    this.#lastFrameAt = now;
+    this.#animation.advance(step);
+    this.#pose = this.#compose(step);
+    this.#flush();
+    return this.#pose;
+  }
+
+  /**
+   * One frame of the face, eyes and body. The procedural layer moves the head first; the eyes then
+   * take the gaze, add their share of the head turn, and make up the rest so the gaze stays put.
+   */
+  #compose(step: number): AvatarFrame {
+    const { activity, reaction } = this.#machine;
+    const intensity = this.#reaction?.intensity ?? 1;
+    const face = this.#face.update(step, this.#faceTarget());
+    const body = this.#body.update(step, { activity, reaction, intensity });
+    const eyes = this.#eyes.update(step, {
+      mode: visibleState(this.#machine),
+      target: this.#gaze,
+      head: add(body.neck, body.head),
+      eyeWide: ((face.eyeWideLeft ?? 0) + (face.eyeWideRight ?? 0)) / 2,
+    });
     return {
-      blendshapes: {},
+      blendshapes: withBlink(face, eyes.blink),
       visemes: {},
-      head: STILL,
-      neck: STILL,
-      eyes: { left: AHEAD, right: AHEAD },
-      breath: 0,
+      neck: add(body.neck, eyes.headTurn, NECK_SHARE),
+      head: add(body.head, eyes.headTurn, 1 - NECK_SHARE),
+      eyes: { left: eyes.left, right: eyes.right },
+      breath: body.breath,
       clips: this.#animation.clips(),
     };
   }
 
-  #speak(speech: SpeechResponse): Promise<CommandOutcome> {
+  /**
+   * Which face to wear, highest first (section 4): the reaction (also as an overlay on speech), the
+   * speak command's expression, setExpression, the state's own (thinking).
+   */
+  #faceTarget(): FaceTarget {
+    const { activity, reaction } = this.#machine;
+    if (reaction !== null)
+      return { expression: reaction, intensity: this.#reaction?.intensity ?? 1 };
+    const spoken = this.#speech?.expression;
+    if (spoken !== undefined) return { expression: spoken, intensity: 1 };
+    if (this.#expression !== 'neutral') return { expression: this.#expression, intensity: 1 };
+    return { expression: activity === 'thinking' ? 'thinking' : 'neutral', intensity: 1 };
+  }
+
+  #speak(
+    speech: SpeechResponse,
+    expression: AvatarExpression | undefined
+  ): Promise<CommandOutcome> {
     return new Promise((settle, fail) => {
       this.#apply({ kind: 'speak' });
       this.#queue.push({ type: 'speechStarted', durationMs: speech.duration });
@@ -190,7 +274,7 @@ class Controller implements CoreAvatar {
         fail(asError(error));
         return;
       }
-      const current: Speech = { playback, settle };
+      const current: Speech = { playback, settle, expression };
       this.#speech = current;
       playback.finished.then(
         (how) => {
@@ -212,10 +296,10 @@ class Controller implements CoreAvatar {
     });
   }
 
-  #react(reaction: Reaction, durationMs: number): Promise<CommandOutcome> {
+  #react(reaction: Reaction, durationMs: number, intensity: number): Promise<CommandOutcome> {
     return new Promise((settle) => {
       this.#apply({ kind: 'react', reaction }); // cuts short the reaction before, if any
-      this.#reaction = { endsAt: this.#clock.now() + durationMs, settle };
+      this.#reaction = { endsAt: this.#clock.now() + durationMs, intensity, settle };
     });
   }
 
@@ -283,6 +367,33 @@ class Controller implements CoreAvatar {
     if (after !== before) this.#queue.push({ type: 'stateChanged', from: before, to: after });
     this.#animation.play(slotFor(this.#machine));
   }
+}
+
+function isPoint(value: unknown): value is Vec3 {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((n) => typeof n === 'number' && Number.isFinite(n))
+  );
+}
+
+/** `a + b × share`, axis by axis. */
+function add(a: HeadRotation, b: HeadRotation, share = 1): HeadRotation {
+  return {
+    yaw: a.yaw + b.yaw * share,
+    pitch: a.pitch + b.pitch * share,
+    roll: a.roll + b.roll * share,
+  };
+}
+
+/** The face with the blink on both eyes (left out while the eyes are open). */
+function withBlink(face: FaceShapes, blink: number): FaceShapes {
+  if (blink === 0) return face;
+  return {
+    ...face,
+    eyeBlinkLeft: Math.min(1, (face.eyeBlinkLeft ?? 0) + blink),
+    eyeBlinkRight: Math.min(1, (face.eyeBlinkRight ?? 0) + blink),
+  };
 }
 
 /** Audio layers fail with anything; callers of speak always get an Error. */

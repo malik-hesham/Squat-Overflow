@@ -1,6 +1,9 @@
 // In-memory stand-ins for the platform ports, for tests (here and in the renderer packages).
 import type { AudioPlayback, AudioPort, MonotonicClock } from '@squat-overflow/avatar-types';
 
+/** Repeatable random numbers: the same seed gives the same blinks, glances and drift. */
+export { SeededRandom } from '../random.ts';
+
 /** A clock that only moves when told to. */
 export class FakeClock implements MonotonicClock {
   #now = 0;

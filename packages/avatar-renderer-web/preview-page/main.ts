@@ -1,12 +1,17 @@
 // A page to look at the avatar: `pnpm --filter @squat-overflow/avatar-renderer-web dev`.
 // ?profile=high|optimized, ?framing=portrait|full, ?measure=<frames> times frames (see README).
-// Face expressions, gaze and blinking come with Phase 4 and speech with Phase 5, so for now the
-// buttons change the state and the body clip only.
+// The buttons change the state, "Face" sets setExpression, and "Look at the pointer" aims setGaze
+// at the pointer. Speech comes with Phase 5.
 import { COACH_01 } from '@squat-overflow/avatar-assets';
 import highUrl from '@squat-overflow/avatar-assets/models/coach-01/high.glb?url';
 import optimizedUrl from '@squat-overflow/avatar-assets/models/coach-01/optimized.glb?url';
 import { createAvatarController } from '@squat-overflow/avatar-core';
-import type { AvatarCommand, AudioPort, Reaction } from '@squat-overflow/avatar-types';
+import type {
+  AvatarCommand,
+  AvatarExpression,
+  AudioPort,
+  Reaction,
+} from '@squat-overflow/avatar-types';
 import { createAvatarView, loadAvatarModel, type Framing } from '../src/index.ts';
 
 const params = new URLSearchParams(location.search);
@@ -27,6 +32,8 @@ const avatar = createAvatarController({
   clock: { now: () => performance.now() },
   audio: noSpeech,
   clips: COACH_01.animations,
+  random: { next: () => Math.random() },
+  eyes: COACH_01.eyes,
   reportError: (error) => {
     console.error(error);
   },
@@ -53,6 +60,32 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('button')) {
     void avatar.execute(run);
   });
 }
+
+const expression = document.querySelector<HTMLSelectElement>('#expression');
+expression?.addEventListener('change', () => {
+  avatar.setExpression(expression.value as AvatarExpression);
+});
+
+// The pointer as a point in avatar space: on the camera's plane (where the user sits), as far off
+// centre as it is on screen at the avatar's distance.
+const follow = document.querySelector<HTMLInputElement>('#follow');
+follow?.addEventListener('change', () => {
+  if (!follow.checked) avatar.setGaze(null);
+});
+canvas.addEventListener('pointermove', (event) => {
+  if (!follow?.checked) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const y = 1 - ((event.clientY - rect.top) / rect.height) * 2;
+  const { camera } = view;
+  const depth = camera.position.z - COACH_01.eyes.left[2];
+  const half = depth * Math.tan(((camera.fov / 2) * Math.PI) / 180);
+  avatar.setGaze([
+    camera.position.x + x * half * camera.aspect,
+    camera.position.y + y * half,
+    camera.position.z,
+  ]);
+});
 
 const measure = Number(params.get('measure') ?? 0);
 if (measure > 0) {

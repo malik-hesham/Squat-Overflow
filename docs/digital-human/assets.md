@@ -16,7 +16,9 @@ the pipeline fills (`AvatarAssetManifest`, `HUMANOID_BONES`, `ANIMATION_SLOTS`, 
 
 Both: the `game_engine` rig (53 bones, no eye bones, so gaze uses the `eyeLook*` shapes), the 52 ARKit
 shapes and 15 visemes on the body and carried over to brows, lashes, eyes, teeth, tongue and hair, an
-`idle` clip (4 s loop: arms down from the A-pose, slow breathing), meshopt geometry. `pnpm test` in the
+`idle` clip (4 s loop: arms down from the A-pose, held; breathing, head and eyes are avatar-core's
+procedural layer since Phase 4), the eye centres in the manifest (`eyes`, measured from the eye mesh by
+the build), meshopt geometry. `pnpm test` in the
 package proves the files match the manifest (see its README).
 
 Where it differs from the targets below, and why:
