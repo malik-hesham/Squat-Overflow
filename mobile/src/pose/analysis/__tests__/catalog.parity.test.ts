@@ -5,13 +5,13 @@ import {
   CATALOG,
   CONNECTIONS,
   DEFAULT_EXERCISE,
-  DEMOS,
   EXERCISES,
   ISSUE_TEXT,
   JOINTS,
-  MAX_DEMO_SECONDS,
+  Session,
   exerciseCatalog,
 } from '../../../../../extension/lib/pose/index.js';
+import { demoLandmarks, demoMotion } from '../../../../../extension/lib/demo-model.js';
 import { diff, loadFixture } from './helpers';
 
 interface CatalogFixture {
@@ -63,11 +63,22 @@ it('every exercise definition matches, including the workout set', () => {
   expect(diff(ours, fx.exercises, 0)).toEqual([]);
 });
 
-it('every exercise has a short demo video', () => {
-  expect(Object.keys(DEMOS).sort()).toEqual(Object.keys(EXERCISES).sort());
-  for (const d of Object.values(DEMOS)) {
-    expect(d.youtube_id).toMatch(/^[\w-]{11}$/);
-    expect(d.seconds).toBeGreaterThan(0);
-    expect(d.seconds).toBeLessThan(MAX_DEMO_SECONDS);
+// A shared rule (extension/tests/check.mjs pins it too): every exercise has a 3D demo, and seen
+// from the coach's camera the demo counts its reps cleanly on the same rep counter the phone uses.
+it('every exercise has a 3D demo that the coach counts cleanly', () => {
+  for (const key of Object.keys(EXERCISES)) {
+    const motion = demoMotion(key);
+    expect(motion).not.toBeNull();
+    const { seconds, reps } = motion!;
+    const session = new Session(key);
+    const events = [];
+    for (let i = 0; i < Math.round(seconds * 2 * 30); i++) {
+      const t = i / 30;
+      const out = session.process(demoLandmarks(key, t, { width: 640, height: 480 }), 640, 480, t);
+      expect(out.feedback).toEqual([]);
+      if (out.rep_event) events.push(out.rep_event);
+    }
+    expect({ key, reps: events.length, partial: events.filter((r) => r.partial).length }).toEqual({ key, reps: reps * 2, partial: 0 });
+    for (const r of events) expect(r.issues).toEqual([]);
   }
 });

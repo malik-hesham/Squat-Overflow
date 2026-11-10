@@ -18,7 +18,7 @@ WHAT IT DOES
 Reminds you on a schedule you choose: every 30, 45, 60, 90 or 120 minutes, or a custom interval, only on your workdays and working hours.
 Waits for you: no reminder while you're in a Google Meet, Zoom or Teams call, presenting fullscreen, or away from the computer. Connect Google Calendar to also skip busy times.
 Builds a short routine for the areas you pick: neck tension, rounded shoulders, upper back, shoulder and rotator cuff, lower back, wrist and hand, knees, and eyes.
-Counts your reps and scores your form live with your webcam, with a short demo clip of each exercise next to the camera.
+Counts your reps and scores your form live with your webcam, with a 3D demo of each exercise next to the camera that works offline.
 Turns breaks into progress: XP for every break, 8 levels, daily and weekly challenges, badges, streaks and an activity heatmap.
 Keeps you private: show yourself blurred or as a 3D character instead of on camera.
 Practice mode: try any exercise on its own, outside a scheduled break.
@@ -45,7 +45,7 @@ Your webcam is analysed on your computer, by a pose model that ships inside the 
 | Asset | Dimensions | Status | File |
 |-------|-----------|--------|------|
 | Store icon | 128×128 PNG | ✅ Ready | `extension/icons/icon-128.png` |
-| Screenshot 1 | 1280×800 | ⬜ Not created | Break window: camera with skeleton overlay, rep counter, demo clip |
+| Screenshot 1 | 1280×800 | ⬜ Not created | Break window: camera with skeleton overlay, rep counter, 3D demo |
 | Screenshot 2 | 1280×800 | ⬜ Not created | Toolbar popup: level, XP bar, next break, leaderboard |
 | Screenshot 3 | 1280×800 | ⬜ Not created | Settings page: areas, workdays, interval, Personal/Competitive |
 | Screenshot 4 | 1280×800 | ⬜ Not created | Privacy mode: blurred body or 3D avatar in the break window |

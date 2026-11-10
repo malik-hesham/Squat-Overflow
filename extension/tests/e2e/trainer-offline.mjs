@@ -65,6 +65,25 @@ try {
   assert.deepEqual(errors, []);
   const seen = await page.evaluate(() => window.__poseSeen.frames);
   console.log(`ok trainer: ${seen} frames analysed on the device, calibration recording`);
+  // The 3D demo opens next to the exercise picker, draws, and follows a change of exercise.
+  await page.locator("#demoBtn").click();
+  await page.locator("#demoPanel").waitFor({ state: "visible", timeout: 5000 });
+  await page.waitForTimeout(500);
+  const painted = () =>
+    page.evaluate(() => {
+      const c = /** @type {HTMLCanvasElement} */ (document.getElementById("demoView"));
+      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i]) n++;
+      return n;
+    });
+  assert.ok((await painted()) > 1000, "the demo drew nothing");
+  const before = await page.locator("#demoView").getAttribute("aria-label");
+  await page.locator("#exercise").selectOption("hip_hinge");
+  assert.notEqual(await page.locator("#demoView").getAttribute("aria-label"), before);
+  assert.equal(await page.locator("#demoBtn").textContent(), "Hide demo");
+  assert.deepEqual(errors, []);
+  console.log(`ok trainer: the 3D demo plays offline (${await painted()} px)`);
   const outside = requests.filter((u) => !/^(chrome-extension|data|blob):/.test(u));
   assert.deepEqual(outside, [], "requests left the extension");
   console.log(`ok nothing left the extension (${requests.length} requests)`);

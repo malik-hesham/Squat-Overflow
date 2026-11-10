@@ -10,4 +10,8 @@ declare global {
     CLOSE_MODEL_FAILED: number;
     openPoseSocket: () => import("./lib/pose/local-socket.js").PoseSocket;
   };
+  var Demo3D: {
+    has: (key: string) => boolean;
+    createPlayer: typeof import("./lib/demo-player.js").createDemoPlayer;
+  };
 }

@@ -58,7 +58,8 @@ const els = {
   howTo: $("howTo"),
   demo: $("demo"),
   demoBtn: $("demoBtn"),
-  demoCredit: $("demoCredit"),
+  demoPanel: $("demoPanel"),
+  demoView: /** @type {HTMLCanvasElement} */ ($("demoView")),
   startBtn: /** @type {HTMLButtonElement} */ ($("startBtn")),
   resetBtn: /** @type {HTMLButtonElement} */ ($("resetBtn")),
   voice: /** @type {HTMLInputElement} */ ($("voice")),
@@ -122,7 +123,8 @@ const state = {
   latest: null,
   latestAt: 0,
   thresholds: null,
-  demoWindowId: null,
+  demoPlayer: null, // the 3D demo, made on first use
+  demoOpen: false,
   history: [],
   reps: [],
   cueSeen: new Map(),
@@ -767,60 +769,27 @@ function renderExerciseOptions() {
 function renderExerciseMeta() {
   const ex = currentExercise();
   els.howTo.textContent = ex.how_to ?? "";
-  renderDemo(ex.demo);
+  renderDemo(ex);
   els.cameraHint.textContent = CAMERA_HINTS[ex.camera] ?? "";
   els.hudMetric.textContent = ex.metric;
   els.chartTitle.textContent = ex.metric;
 }
 
 // ---------------------------------------------------------------------------
-// Demo videos: a short YouTube clip per exercise, opened on youtube.com in a
-// small popup window. It is not embedded here because Chrome sends no Referer
-// from extension pages and YouTube's player refuses such embeds (Error 153).
-// Nothing is loaded from YouTube until the user clicks.
+// The 3D demo: a figure doing the exercise, made on the device (lib/demo-model.js), so it needs no
+// network. The same figure as the break window's.
 // ---------------------------------------------------------------------------
-const YOUTUBE_ID = /^[\w-]{11}$/;
-const DEMO_WINDOW = { width: 480, height: 400 };
-
-function validDemo(demo) {
-  return demo && YOUTUBE_ID.test(demo.youtube_id) ? demo : null;
-}
-
-function demoUrl(demo) {
-  return `https://www.youtube.com/watch?v=${demo.youtube_id}`;
-}
-
-function renderDemo(demo) {
-  demo = validDemo(demo);
-  els.demo.hidden = !demo;
-  if (!demo) return;
-  els.demoBtn.textContent = `▶ Watch demo (${demo.seconds}s)`;
-  els.demoBtn.title = demo.title ?? "";
-  els.demoCredit.textContent = `Video by ${demo.channel || "a YouTube creator"}, opens on YouTube`;
-}
-
-// Reuse one popup for all demos so clicking through exercises doesn't pile up windows.
-async function openDemo() {
-  const demo = validDemo(currentExercise().demo);
-  if (!demo) return;
-  const url = demoUrl(demo);
-  if (state.demoWindowId != null) {
-    try {
-      const [tab] = await chrome.tabs.query({ windowId: state.demoWindowId });
-      await chrome.tabs.update(tab.id, { url, active: true });
-      await chrome.windows.update(state.demoWindowId, { focused: true });
-      return;
-    } catch {
-      state.demoWindowId = null; // the user closed it
-    }
-  }
-  try {
-    const win = await chrome.windows.create({ url, type: "popup", ...DEMO_WINDOW });
-    state.demoWindowId = win.id;
-  } catch (err) {
-    console.warn("Could not open demo window, using a tab:", err);
-    window.open(url, "_blank", "noopener");
-  }
+function renderDemo(ex) {
+  const has = globalThis.Demo3D.has(ex.key);
+  els.demo.hidden = !has;
+  const open = has && state.demoOpen;
+  els.demoPanel.hidden = !open;
+  els.demoBtn.textContent = open ? "Hide demo" : "▶ Watch demo";
+  els.demoBtn.setAttribute("aria-expanded", String(open));
+  if (!open) return state.demoPlayer?.hide();
+  els.demoView.setAttribute("aria-label", `3D demo: ${ex.label}`);
+  state.demoPlayer ??= globalThis.Demo3D.createPlayer(els.demoView);
+  state.demoPlayer.show(ex.key);
 }
 
 async function start() {
@@ -1759,7 +1728,10 @@ async function init() {
     sendJson({ type: "privacy", enabled: wantsMask() });
   });
   els.exportBtn.addEventListener("click", exportCsv);
-  els.demoBtn.addEventListener("click", openDemo);
+  els.demoBtn.addEventListener("click", () => {
+    state.demoOpen = !state.demoOpen;
+    renderDemo(currentExercise());
+  });
   window.addEventListener("resize", drawChart);
   onBreakHash(); // opened from a break reminder
 }

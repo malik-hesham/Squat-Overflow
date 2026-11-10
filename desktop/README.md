@@ -23,7 +23,7 @@ This is a proof of concept. "What has been checked" below says what has run and 
 | `chrome.runtime.sendMessage` / `onMessage` | Passed through the shell to the hidden page, and the answer back |
 | `chrome.idle.queryState` | Seconds since the last keyboard or mouse input (the `user-idle` crate) |
 | On-device pose (`lib/pose`, MediaPipe) | The same code and model, in the break window's webview |
-| Demo clips on youtube.com | Open in the user's browser. The app never loads a web page in its own windows |
+| 3D exercise demos (`lib/demo-model.js`, `lib/demo-player.js`) | The same figure, drawn on the page's canvas, with nothing loaded from the web. A web link opens in the user's browser; the app never loads a web page in its own windows |
 
 The app keeps the extension's Content Security Policy (`tauri.conf.json`), and it does real work: the vendored MediaPipe tries to send a log request to `odml.pa.googleapis.com`, and the policy blocks it here as it does in the extension.
 

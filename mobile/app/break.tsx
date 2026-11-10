@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Text } from '@/components/ui/text';
-import { DemoVideo } from '@/src/components/DemoVideo';
+import { DemoModel } from '@/src/components/DemoModel';
 import { Bar, Muted } from '@/src/components/kit';
 import { useAppData } from '@/src/core/AppData';
 import { breakAction, breakDone, type BreakResult, type DoneOutcome } from '@/src/core/engine';
@@ -23,6 +23,7 @@ import {
   breakXp,
   buildRoutine,
   canSnooze,
+  demoMotion,
   levelFor,
   needsPositioning,
   nextOpenMove,
@@ -40,7 +41,6 @@ import { cn } from '@/lib/utils';
 
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
-const YOUTUBE_ID = /^[\w-]{11}$/;
 
 type Move = {
   key: string;
@@ -49,7 +49,6 @@ type Move = {
   camera: string;
   stance: string;
   how_to: string;
-  demo: { youtube_id: string } | null;
   target: number;
 };
 type Progress = { reps: number; scores: number[]; base: number };
@@ -278,7 +277,6 @@ export default function BreakScreen() {
     if (st.finished) return;
     if (s === 'offline' || s === 'camera-denied') {
       endPositioning();
-      setDemo(false);
     }
     setStatus(s);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -324,7 +322,9 @@ export default function BreakScreen() {
   const totalTarget = st.moves.reduce((n, m) => n + m.target, 0) || 1;
   const totalDone = st.progress.reduce((n, q) => n + q.reps, 0);
   const progress = move ? st.progress[st.i] : null;
-  const demoId = move?.demo && YOUTUBE_ID.test(move.demo.youtube_id) && !fallback ? move.demo.youtube_id : null;
+  // The 3D demo (made on the phone, works offline). It stays open from move to move, and stays
+  // available when the coach can't run: follow the figure, then Done.
+  const hasDemo = !!move && demoMotion(move.key) != null;
 
   if (screen === 'summary' && outcome) {
     return <Summary outcome={outcome} lang={lang} onBack={() => router.back()} />;
@@ -440,15 +440,18 @@ export default function BreakScreen() {
                 <Text>{t(lang, 'swap')}</Text>
               </Button>
             ) : null}
-            {demoId ? (
-              <Button variant="outline" size="sm" onPress={() => setDemo((d) => !d)}>
+            {hasDemo ? (
+              <Button variant="outline" size="sm" onPress={() => setDemo((d) => !d)} accessibilityState={{ expanded: demo }}>
                 <Text>{t(lang, demo ? 'hideDemo' : 'watchDemo')}</Text>
               </Button>
             ) : null}
           </View>
 
-          {demo && demoId ? (
-            <DemoVideo youtubeId={demoId} />
+          {demo && hasDemo && move ? (
+            <View className="gap-1">
+              <DemoModel moveKey={move.key} label={t(lang, 'demoLabel', { move: move.label })} />
+              <Muted className="text-center text-xs">{t(lang, 'demoHint')}</Muted>
+            </View>
           ) : null}
 
           <View className="bg-card border-border gap-3 rounded-xl border p-3">

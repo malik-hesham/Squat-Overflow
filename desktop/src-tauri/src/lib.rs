@@ -370,7 +370,7 @@ fn window_close(window: WebviewWindow) {
     let _ = window.close();
 }
 
-// ---- The rest: demo clips, idle time, the popup's height, page logs --------------------------
+// ---- The rest: web links, idle time, the popup's height, page logs ---------------------------
 
 /// Opens a page on the web in the user's browser. Only https, so a page can't start other programs.
 #[tauri::command]

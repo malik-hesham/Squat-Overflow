@@ -26,7 +26,6 @@ export {
 } from "./exercises.js";
 export { CONNECTIONS, JOINTS, Pose, angle, angleFromHorizontal, angleFromVertical } from "./geometry.js";
 export { Calibrator, validate as validateCalibration } from "./calibration.js";
-export { DEMOS, MAX_DEMO_SECONDS, demoToJson } from "./demos.js";
 export { exerciseCatalog } from "./catalog.js";
 export { alignWorldY } from "./world.js";
 
@@ -53,6 +52,4 @@ export { alignWorldY } from "./world.js";
 /** @typedef {import("./calibration.js").CalibrationRecording} CalibrationRecording */
 /** @typedef {import("./calibration.js").CalibrationStatus} CalibrationStatus */
 /** @typedef {import("./calibration.js").Thresholds} Thresholds */
-/** @typedef {import("./demos.js").DemoVideo} DemoVideo */
-/** @typedef {import("./demos.js").DemoVideoJson} DemoVideoJson */
 /** @typedef {import("./catalog.js").CatalogEntry} CatalogEntry */
