@@ -8,6 +8,7 @@ import {
   type AvatarFrame,
   type AvatarState,
   type CommandOutcome,
+  type SpeechEndReason,
   type Vec3,
   type VisemeEvent,
   type VisemeId,
@@ -67,6 +68,10 @@ describe('type contracts', () => {
       readonly from: AvatarState;
       readonly to: AvatarState;
     }>();
+  });
+
+  it('ends every speech with a reason, failure included, so listeners can pair start and end', () => {
+    expectTypeOf<SpeechEndReason>().toEqualTypeOf<'completed' | 'interrupted' | 'failed'>();
   });
 
   it('types a viseme as a VisemeId, not any string', () => {

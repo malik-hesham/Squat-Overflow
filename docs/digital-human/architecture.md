@@ -1,6 +1,7 @@
 # Digital human engine: architecture and plan
 
-Status: **Phase 1 done** (workspace and shared types). Phases 2 to 9 are planned, not built.
+Status: **Phases 1 and 2 done** (workspace, shared types, `avatar-core`). Phases 3 to 9 are planned, not
+built. All phases go on one branch, `feat/digital-human`, one commit per phase.
 
 The engine renders one interactive 3D human (idle, listening, thinking, speaking, reacting) in the three
 Squat Overflow clients: the browser extension, the desktop app and the mobile app. It follows the repo
@@ -188,11 +189,13 @@ Two layers:
 
 1. **Activity** (idle, listening, thinking, speaking). Exactly one is active. The newest command wins.
    Leaving `speaking` for anything stops the audio, emits `speechEnded { reason: 'interrupted' }` and
-   resolves that `speak` call with `'interrupted'`.
+   resolves that `speak` call with `'interrupted'`. Speech that plays to its end goes back to idle.
 2. **Reaction** (happy, sad, surprised, confused, neutral). Short and on top. In idle, listening or
-   thinking, `react` moves to `reacting` for `durationMs` and then returns to the activity underneath. In
-   `speaking`, a reaction never cuts the speech: it becomes an expression overlay and the state stays
-   `speaking`.
+   thinking, `react` moves to `reacting` for `durationMs` (default 1500 ms) and then returns to the
+   activity underneath. In `speaking`, a reaction never cuts the speech: it becomes an expression overlay
+   and the state stays `speaking`. Any command other than `react` ends the current reaction, overlay
+   included. If speech ends while an overlay reaction still has time left, the avatar shows `reacting`
+   until it's over, then idle.
 
 Priority, highest first:
 
@@ -225,8 +228,27 @@ What each state does (built in Phases 2, 4 and 5):
   talking gesture clips.
 - **reacting**: the reaction's expression and clip.
 
-Transitions blend: expressions, posture and clip weights move toward their targets with smoothing driven
-by `update(dt)`, so nothing jumps. Exact times are set and tested in Phase 2 and 4.
+Transitions blend, driven by the renderer calling `frame()` once per displayed frame. Body clips
+crossfade over 300 ms (`CLIP_FADE_MS`) and their weights always sum to 1, also when the target changes
+mid-fade; a clip that comes back while still fading out keeps its place. A reaction without a clip of its
+own (`neutral`, or one the model lacks) keeps the activity's clip, and a missing activity clip falls back
+to idle. After a long gap between frames (a hidden page) the animation moves on at most 100 ms
+(`MAX_FRAME_STEP_MS`) instead of jumping. Reactions are timed on the clock, not on frames, so a reaction
+whose time ran out while the page was hidden counts as completed. Expression and posture smoothing comes
+with the face and eye layers in Phase 4.
+
+### Events
+
+- Order: `stateChanged` (into speaking), then `speechStarted`; at the end `speechEnded`, then
+  `stateChanged` (out of speaking). Every `speechStarted` is followed by exactly one `speechEnded`,
+  whose reason is `completed`, `interrupted` (a command, `interrupt()`, or the system stopped the audio,
+  e.g. a phone call) or `failed` (the audio couldn't load or play; the `speak` call rejects with an
+  `Error`). `dispose()` interrupts first and emits `disposed` last.
+- Listeners only ever see a consistent avatar: events are delivered after the call that caused them has
+  finished changing state. A command issued from inside a listener runs in full and its events follow in
+  order. So "when speaking starts, interrupt" stops the audio and still pairs the speech events.
+- A listener that throws doesn't stop the avatar or the other listeners; its error goes to the
+  `reportError` option (the client's logger).
 
 ### Lip sync on the audio clock
 
@@ -246,11 +268,11 @@ Each phase ends with its tests passing, `pnpm check` green, this doc updated, an
 | Phase | Builds                                                                                                                                                                                                                   | Proven by                                                                                                                                        |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | Workspace (pnpm, Turborepo, strict TS, ESLint, Prettier, Vitest, CI job), `avatar-types`, `workspace-check`                                                                                                              | Unit tests for parsers and constants, type tests, boundary check on the real workspace                                                           |
-| 2     | `avatar-core`: `AvatarStateMachine`, `AvatarController`, `AvatarEvents`, `InteractionManager`, `AnimationManager` (clip weights)                                                                                         | The transition table above as tests; interruption; promise outcomes; dispose; fake clock and audio                                               |
+| 2     | `avatar-core`: `AvatarStateMachine`, `AvatarController`, `AvatarEvents`, `AnimationManager` (clip weights)                                                                                                               | The transition table above as tests; interruption; promise outcomes; dispose; fake clock and audio                                               |
 | 3     | `avatar-assets` (manifest, validator, build script) and the human GLB (see assets.md); `avatar-renderer-web`: `GLBLoader`, `HumanAvatar`, `AvatarScene`, `CameraController`, `LightingController`, `WebAnimationAdapter` | Validator on the real GLB (bones, 52 + 15 morphs, both profiles match); adapter tests on a three.js scene in Node; Playwright render in Chromium |
 | S1    | **Mobile renderer spike** on a physical iPhone and an Android device, with the Phase 3 GLB                                                                                                                               | Skinning, morph targets, textures and frame time measured per candidate stack (section 7)                                                        |
 | 4     | `FacialController`, `EyeController`, `ProceduralAnimation`: expressions, blinking, gaze, eye-head coordination, breathing, idle drift                                                                                    | Seeded random and fake clock: blink intervals, gaze limits, expression blending                                                                  |
-| 5     | `VisemeController`; `speech-client` with a mock provider; `services/speech-api` with a real TTS adapter; web audio port                                                                                                  | Viseme sampling against a fake audio clock (pause, stall, seek, interrupt); provider viseme mapping tables                                       |
+| 5     | `VisemeController`; `InteractionManager` (microphone voice start/stop → listen and barge-in, think); `speech-client` with a mock provider; `services/speech-api` with a real TTS adapter; web audio port                 | Viseme sampling against a fake audio clock (pause, stall, seek, interrupt); provider viseme mapping tables                                       |
 | 6     | Extension side panel: vendored renderer bundle, panel page, service worker messaging, show/hide, start/stop                                                                                                              | Extension check script, CSP check, Playwright run of the panel unpacked in Chromium                                                              |
 | 7     | Desktop: floating, frameless, always-on-top window, microphone permission, IPC through the shim                                                                                                                          | Shim unit tests, log-based checks (no camera, no screen needed)                                                                                  |
 | 8     | Mobile: `avatar-renderer-native` on the stack S1 picked, asset caching, audio port                                                                                                                                       | Jest for the adapter; device runs                                                                                                                |
@@ -351,3 +373,39 @@ Limits that remain after Phase 1:
 - The mobile app has not been built against a repo with a root `package.json`; only the workspace
   detection was checked. Phase 8 builds it.
 - Nothing about rendering, assets, audio or performance is proven yet.
+
+## Phase 2 record
+
+Built: `packages/avatar-core`.
+
+- `state-machine.ts` (AvatarStateMachine): `transition(state, input)` is pure and returns the next state
+  plus the effects (`stopSpeech`, `endReaction`). Section 4's table is its test, row by row.
+- `controller.ts` (AvatarController): `createAvatarController({ clock, audio, clips, reportError })`
+  returns the shared `AvatarController` plus `frame()` for renderers and `state`. It carries out the
+  effects: plays and stops audio through the `AudioPort`, times reactions on the `MonotonicClock`, settles
+  each command's promise and delivers the events (section 4, "Events").
+- `animation.ts` (AnimationManager): clip weights and times with 300 ms crossfades.
+- `events.ts` (AvatarEvents): typed listeners; a throwing listener goes to `reportError`.
+- `testing/fakes.ts`: a hand-driven clock and audio, for these tests and the renderers' later.
+
+Changed in `avatar-types`: `speechEnded` gained the reason `failed`, so every `speechStarted` has a
+matching end even when the audio can't play.
+
+Not built in Phase 2, on purpose:
+
+- `setGaze` and `setExpression` **throw** "built in Phase 4" instead of accepting a value and doing
+  nothing. The eye and face layers that use them are Phase 4.
+- `frame()` returns the rest pose for the face, head, eyes and breathing (all zero, no blendshapes or
+  visemes); only the body clips move. Phase 4 fills the face and procedural layers, Phase 5 the visemes.
+- `InteractionManager` moved to Phase 5: it maps microphone voice start/stop to commands (barge-in), and
+  the microphone arrives there.
+
+Verified on 2026-11-10: `pnpm check` passes (avatar-core 72 tests, avatar-types 57, workspace-check 15,
+which now also proves avatar-core compiles with no DOM or Node globals), from a clean copy with a frozen
+lockfile as well.
+
+Bugs the tests caught while building: a fade run in many small frames ended a hair under full weight and
+left the old clips at near-zero weight (fixed by finishing a fade within 1e-9); a listener issuing a
+command mid-`speak` could leave the audio playing while the avatar said idle (fixed by delivering events
+only once the controller is consistent); `speak` could reject with a non-Error value from the audio layer
+(now always an `Error`).

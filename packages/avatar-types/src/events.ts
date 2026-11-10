@@ -1,6 +1,7 @@
 import type { AvatarState } from './states.ts';
 
-export type SpeechEndReason = 'completed' | 'interrupted';
+/** completed: played to the end. interrupted: cut short (a command, interrupt(), or the system stopped the audio). failed: the audio couldn't be loaded or played. */
+export type SpeechEndReason = 'completed' | 'interrupted' | 'failed';
 
 export type AvatarEvent =
   | { readonly type: 'stateChanged'; readonly from: AvatarState; readonly to: AvatarState }

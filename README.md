@@ -42,7 +42,7 @@ Blurred mode blurs the on-screen preview. The pose model runs in the extension, 
 ## Digital human engine (in progress)
 
 `packages/` is a pnpm + Turborepo workspace for an interactive 3D human that will run in the extension,
-the desktop app and the mobile app. Phase 1 (shared types and the workspace) is built; the plan, the
+the desktop app and the mobile app. Phases 1 and 2 (the workspace, shared types and `avatar-core`) are built; the plan, the
 package boundaries and the risks are in [docs/digital-human/architecture.md](docs/digital-human/architecture.md),
 and the 3D asset pipeline in [docs/digital-human/assets.md](docs/digital-human/assets.md). Nothing in the
 clients uses it yet.

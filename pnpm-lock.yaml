@@ -57,6 +57,19 @@ importers:
         specifier: 'catalog:'
         version: 8.72.2(eslint@10.14.0)(typescript@6.0.3)
 
+  packages/avatar-core:
+    dependencies:
+      '@squat-overflow/avatar-types':
+        specifier: workspace:*
+        version: link:../avatar-types
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.1.0(@types/node@24.19.2)(vite@8.3.7(@types/node@24.19.2)(yaml@2.9.1))
+
   packages/avatar-types:
     devDependencies:
       typescript:
