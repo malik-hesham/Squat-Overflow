@@ -51,7 +51,7 @@ On Linux, in a container (Debian 12, WebKitGTK 2.50, a virtual display, no GPU a
 
 - The app builds and `cargo test` passes.
 - `service-worker.js` runs, the countdown ticks, the popup opens as a window with its content rendered, and Pause works.
-- **The pose model doesn't run there as shipped.** WebKitGTK has WebGL2 on a canvas element but not on an `OffscreenCanvas`, and MediaPipe makes an `OffscreenCanvas` of its own, so both of its modes fail. Given a canvas element (MediaPipe's `canvas` option) both work: 35 ms a frame on the CPU. So a break on Linux needs `extension/lib/pose/detector.js` to pass a canvas where `OffscreenCanvas` has no WebGL2. That isn't done here: the detector is shared with Chrome, Firefox and the Mac app, and the change should be tested in each.
+- **The pose model doesn't run there as shipped.** WebKitGTK has WebGL2 on a canvas element but not on an `OffscreenCanvas`, and MediaPipe makes an `OffscreenCanvas` of its own, so both of its modes fail. Given a canvas element (MediaPipe's `canvas` option) both work: 35 ms a frame on the CPU. So a break on Linux needs `extension/lib/pose/detector.js` to pass a canvas where `OffscreenCanvas` has no WebGL2. That isn't done here: the detector is shared with Chrome and Firefox, and the change should be tested in each.
 
 **Not checked yet:**
 
@@ -68,8 +68,8 @@ On Linux, in a container (Debian 12, WebKitGTK 2.50, a virtual display, no GPU a
 
 Things the extension does that this app doesn't, or does differently:
 
-- **No sign-in, team board or sync.** `chrome.identity.launchWebAuthFlow` has no counterpart yet, so the app is built local only (`API_URL` empty, like a store build with no API server): the pages hide sign-in and the board, and the app makes no requests. The Mac and phone apps' flow (`/auth/mobile-callback` to a custom URL scheme) would fit here.
-- **Meetings.** Before a reminder, `service-worker.js` looks for a fullscreen browser window and for a Meet, Zoom or Teams tab playing sound. The app can't see browser tabs, and `chrome.windows.getAll()` lists only its own windows, so it never defers for a meeting. The Mac app's rule (defer while the microphone is in use or the front app is fullscreen) needs code per system.
+- **No sign-in, team board or sync.** `chrome.identity.launchWebAuthFlow` has no counterpart yet, so the app is built local only (`API_URL` empty, like a store build with no API server): the pages hide sign-in and the board, and the app makes no requests. The phone app's flow (`/auth/mobile-callback` to a custom URL scheme) would fit here.
+- **Meetings.** Before a reminder, `service-worker.js` looks for a fullscreen browser window and for a Meet, Zoom or Teams tab playing sound. The app can't see browser tabs, and `chrome.windows.getAll()` lists only its own windows, so it never defers for a meeting. Deferring while the microphone is in use or the front app is fullscreen would need code per system.
 - **Screen lock.** `chrome.idle.queryState` can answer `"locked"`. Here a locked screen counts as idle once there has been no input for the same time, not at once.
 - **No Google Calendar busy times**, for the same reason as sign-in.
 - **Windows shows no countdown next to the icon.** The system tray there has no text. Drawing the badge onto the icon, as Chrome does, is the way to close this.
@@ -80,8 +80,7 @@ Things the extension does that this app doesn't, or does differently:
 ## Open questions
 
 - **Linux webview.** Besides the pose model (above), WebKitGTK decides whether the camera, speech and Ogg audio work, and it varies by distribution.
-- **Meme clips on older macOS.** They are Ogg Vorbis, which WebKit plays only in recent versions. The Mac app bundles AAC copies for this reason (`mobile/assets/sounds/memes`).
-- **This app and `macos/`.** On a Mac it does the same job as the SwiftUI app, with fewer gaps in some places (the 3D characters, Practice, the heatmap and themes come with the pages) and more in others (sign-in, meetings). Whether it replaces that app or only covers Windows and Linux is a product decision.
+- **Meme clips on older macOS.** They are Ogg Vorbis, which WebKit plays only in recent versions. The phone app bundles AAC copies for this reason (`mobile/assets/sounds/memes`).
 
 ## Build and run
 

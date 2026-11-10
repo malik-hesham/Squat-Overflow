@@ -937,23 +937,6 @@ check("manifest: WASM may run (the pose model), and pages can't reach a pose ser
   assert.match(csp, /script-src 'self' 'wasm-unsafe-eval';/);
   assert.doesNotMatch(csp, /\bwss?:\/\//);
 });
-check("macOS pose page: the manifest's policy, with no host to connect to", () => {
-  // macos/SquatOverflowBar/PoseWeb/bridge.html runs lib/pose and the vendored MediaPipe in a web view.
-  // MediaPipe posts usage statistics to odml.pa.googleapis.com unless the page's policy refuses it.
-  const directives = (/** @type {string} */ csp) =>
-    Object.fromEntries(csp.split(";").map((d) => d.trim().split(/\s+/)).map(([name, ...sources]) => [name, sources.join(" ")]));
-  const manifest = directives(JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8")).content_security_policy.extension_pages);
-  const html = readFileSync(new URL("../../macos/SquatOverflowBar/PoseWeb/bridge.html", import.meta.url), "utf8");
-  const meta = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/);
-  assert.ok(meta, "bridge.html has no Content-Security-Policy");
-  const page = directives(meta[1]);
-  assert.equal(page["script-src"], manifest["script-src"]);
-  assert.equal(page["object-src"], manifest["object-src"]);
-  // The manifest also lists the API server and Google sign-in; in the Mac app Swift makes those calls.
-  assert.equal(page["connect-src"], "'self'");
-  assert.ok(manifest["connect-src"].split(" ").includes("'self'"));
-  assert.ok(html.indexOf(meta[0]) < html.indexOf("<script"), "the policy must come before the page's script");
-});
 check("i18n: no pose server strings left, in any language", () => {
   const keys = translationKeys("en");
   for (const key of ["serverUrl", "errServer", "coachOffline", "offlineText", "coachBusy", "busyText"]) assert.ok(!keys.includes(key), `${key} is still there`);
