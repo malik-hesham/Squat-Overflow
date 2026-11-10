@@ -42,6 +42,41 @@ async function extensionWorker(context) {
   throw new Error("the extension's service worker never started");
 }
 
+/** Painted pixels on the demo canvas, and a fingerprint of them. */
+const demoPixels = (page) =>
+  page.evaluate(() => {
+    const c = /** @type {HTMLCanvasElement} */ (document.getElementById("demoView"));
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let painted = 0;
+    let sum = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i]) (painted++, (sum = (sum + d[i - 3] * 7 + d[i - 2] * 3 + i) % 1e9));
+    return { painted, sum };
+  });
+
+/** The 3D demo plays with the network off: it opens beside the camera, draws, moves, follows the move, and hides. */
+async function checkDemo(page) {
+  const button = page.locator("#demo");
+  await button.waitFor({ state: "visible", timeout: 5000 });
+  assert.equal(await button.textContent(), "▶ Watch demo");
+  await button.click();
+  await page.locator("#demoPanel").waitFor({ state: "visible", timeout: 5000 });
+  assert.equal(await button.getAttribute("aria-expanded"), "true");
+  await page.waitForFunction(() => document.getElementById("demoView").getAttribute("aria-label")?.startsWith("3D demo: "));
+  await page.waitForTimeout(500);
+  const first = await demoPixels(page);
+  assert.ok(first.painted > 2000, `the demo drew ${first.painted} pixels`);
+  await page.waitForTimeout(700);
+  assert.notEqual((await demoPixels(page)).sum, first.sum, "the figure should move");
+  const label = await page.locator("#demoView").getAttribute("aria-label");
+  await page.locator("#swap").click(); // another move: the open demo follows it
+  await page.waitForFunction((l) => document.getElementById("demoView").getAttribute("aria-label") !== l, label);
+  assert.equal(await page.locator("#demoPanel").isVisible(), true);
+  await button.click();
+  assert.equal(await page.locator("#demoPanel").isVisible(), false);
+  assert.equal(await button.textContent(), "▶ Watch demo");
+  console.log(`ok 3D demo offline: ${first.painted} px drawn, it moves, follows a swap and hides`);
+}
+
 const context = await chromium.launchPersistentContext(profile, {
   executablePath: process.env.CHROME,
   headless: true,
@@ -80,6 +115,7 @@ try {
     await page.waitForTimeout(2000);
     const rate = ((await page.evaluate(() => window.__poseSeen.frames)) - before) / 2;
     assert.ok(rate <= 35, `${rate} analyses a second for a 30 fps camera`);
+    if (!privacy) await checkDemo(page);
     await page.locator("#done").click();
     await page.locator("#summary").waitFor({ state: "visible", timeout: 10_000 }).catch(() => {});
     console.log(`ok break (privacy ${privacy ? "on" : "off"}): frames analysed on the device at ${rate}/s, exercise ${seen.last.exercise}`);

@@ -56,6 +56,10 @@
           <div id="cue" class="cue" hidden></div>
           <div id="lookGrid" class="look-grid" role="radiogroup" aria-label="Camera look" data-i18n-aria="cameraLook" hidden></div>
         </div>
+        <figure id="demoPanel" class="demo-panel" hidden>
+          <canvas id="demoView" role="img" tabindex="0"></canvas>
+          <figcaption class="muted small" data-i18n="demoHint">Drag to turn the figure</figcaption>
+        </figure>
       </div>
 
       <div class="guide">
@@ -65,7 +69,7 @@
         </div>
         <div class="guide-actions">
           <button id="swap" class="small" title="Show me a different exercise" data-i18n-title="swapTitle" data-i18n="swap">↻ Swap</button>
-          <button id="demo" class="small" hidden></button>
+          <button id="demo" class="small" aria-controls="demoPanel" aria-expanded="false" hidden></button>
         </div>
       </div>
 

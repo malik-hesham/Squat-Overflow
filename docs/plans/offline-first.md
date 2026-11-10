@@ -41,7 +41,7 @@ So the analysis exists twice (server and mobile), and the extension can't run a 
 
 **Signed in: sync. Signed out: local only.** This is the existing sync design (`docs/plans/cross-platform-sync.md`): breaks wait in the outbox and go up when the user is signed in and online. Signed out, `syncNow` returns `signed-out` before any request. This plan only adds tests that pin "no request while signed out" and "offline keeps the outbox" in each client.
 
-**Demo clips open YouTube, not our server.** The break page stops wrapping clips in `GET /embed/:id`. It opens the clip the way the trainer already does (YouTube's own page in a small popup window), and hides the button while `navigator.onLine` is false. Demos are the only online part of a break.
+**Demo clips open YouTube, not our server.** The break page stops wrapping clips in `GET /embed/:id`. It opens the clip the way the trainer already does (YouTube's own page in a small popup window), and hides the button while `navigator.onLine` is false. Demos are the only online part of a break. *Superseded on 2026-11-10: the YouTube clips are gone. Each move's demo is a 3D figure made on the device (`extension/lib/demo-model.js`, drawn by `lib/demo-player.js` and mobile's `DemoModel.tsx`), so nothing in a break is online.*
 
 **The server shrinks.** It drops `src/pose/`, `src/analysis/`, `src/catalog.ts`, `models/`, `GET /embed/:id`, the `/ws` gateway, the TF.js, `pngjs` and `ws` dependencies and `FORMCOACH_MAX_SESSIONS`. `GET /health` returns `{ version }`. It keeps auth, leaderboard, sync, `/privacy` and `/auth/mobile-callback`. Docs call it "the API server". The single-host AWS design is unchanged and costs nothing extra; the server needs less memory, so `deploy/` keeps the same Free-tier instance type.
 

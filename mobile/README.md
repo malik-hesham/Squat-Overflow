@@ -13,6 +13,7 @@ The Squat Overflow extension as a React Native app: break reminders, camera-coac
 | `chrome.storage.local` | AsyncStorage (`src/core/storage.ts`, `src/core/store.ts`) |
 | On-device pose: MediaPipe `pose_landmarker_lite.task` in the page + `lib/pose` (rep counting, form, calibration) | The same model file through MediaPipe's native SDK (`modules/squat-pose`) + the same `extension/lib/pose` modules, imported as-is (`src/pose/analysis/index.ts`) |
 | Google Calendar freeBusy | The phone's own calendars (`expo-calendar`), busy times only |
+| 3D exercise demo (`lib/demo-model.js` on a canvas) | The same figure from the same module, drawn with `react-native-svg` (`src/components/DemoModel.tsx`). Same moves, camera swing, drag to turn and Reduce Motion behaviour; nothing is loaded from the network |
 | Blurred preview / 3D characters | Privacy mode blurs the camera (`expo-blur`, `src/pose/privacy.ts`); on Android before 12, which has no real blur, the picture is hidden and only the skeleton shows. Characters come later |
 
 The pose analysis, XP, schedule grid, routine, challenge, badge, leaderboard and i18n logic is **not copied**: the app imports the extension's pure modules from `../extension/lib` (see `src/core/shared.ts` and `metro.config.js`), so both clients score and schedule breaks identically and post comparable numbers to the same leaderboard. Only modules with no `chrome.*` or DOM access at import time can be shared.

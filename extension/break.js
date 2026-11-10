@@ -11,11 +11,11 @@ import { avatarFitness, fitnessCaption } from "./lib/fitness.js";
 import { initLang, t, exerciseText, areaName, levelName, issueText, nameText } from "./lib/i18n.js";
 import { Avatar } from "./avatar.js";
 import { createMemePlayer, repMarks } from "./lib/memes.js";
+import { demoMotion } from "./lib/demo-model.js";
+import { createDemoPlayer } from "./lib/demo-player.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
-const YOUTUBE_ID = /^[\w-]{11}$/;
-const DEMO_WINDOW = { width: 480, height: 400 };
 
 /** @param {string} id */
 const $ = (id) => document.getElementById(id);
@@ -31,7 +31,7 @@ const els = /** @type {Els} */ (Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
-    "lastScore", "cue", "howto", "hint", "demo", "swap", "summary", "confetti", "total", "lines", "levelUp",
+    "lastScore", "cue", "howto", "hint", "demo", "demoPanel", "demoView", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "memes", "lookBtn", "lookName",
     "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
@@ -45,7 +45,8 @@ const state = {
   progress: [],
   i: 0,
   client: null,
-  demoWindowId: null,
+  demo: null, // the 3D demo player, made on first use
+  demoOpen: false, // stays open from move to move until the user hides it
   finished: false,
   positioning: false,
   positionTimer: 0,
@@ -349,7 +350,6 @@ function onStatus(status) {
   setStarting(false);
   els.lookBtn.hidden = els.lookGrid.hidden = true;
   els.fallback.hidden = false;
-  els.demo.hidden = true;
   const [title, text] = FALLBACK[status];
   els.fallbackTitle.textContent = t(state.lang, title);
   els.fallbackText.textContent = t(state.lang, text);
@@ -431,6 +431,7 @@ async function finish() {
   endPositioning();
   setStarting(false);
   state.client?.stop();
+  state.demo?.hide();
   els.done.disabled = els.snooze.disabled = els.skip.disabled = true;
   const result = currentResult();
   meme(result.scored ? "done" : "unscored");
@@ -444,45 +445,29 @@ async function leave(action) {
   if (state.finished) return;
   state.finished = true;
   state.client?.stop();
+  state.demo?.hide();
   await send({ type: "break-action", action });
   closeWindow();
 }
 
-// Demo clips open on youtube.com in a small popup, like the trainer's: YouTube refuses embeds from
-// extension pages (no Referer, Error 153). Nothing is loaded from YouTube until the user clicks, and
-// the button is hidden while offline, the only part of a break that needs the network.
-function validDemo(move) {
-  return move?.demo && YOUTUBE_ID.test(move.demo.youtube_id) && navigator.onLine && els.fallback.hidden ? move.demo : null;
-}
-
+// The 3D demo: a figure doing the move, made on the device (lib/demo-model.js), so it works offline
+// and sends nothing anywhere. It also helps when the coach can't run: follow the figure, then Done.
 function showDemo(move) {
-  const demo = validDemo(move);
-  els.demo.hidden = !demo;
-  if (!demo) return;
-  els.demo.textContent = t(state.lang, "watchDemo", { n: demo.seconds });
-  els.demo.title = t(state.lang, "demoCredit", { channel: demo.channel || "YouTube" });
+  const has = !!move && demoMotion(move.key) != null;
+  els.demo.hidden = !has;
+  const open = has && state.demoOpen;
+  els.demoPanel.hidden = !open;
+  els.demo.textContent = t(state.lang, open ? "hideDemo" : "watchDemo");
+  els.demo.setAttribute("aria-expanded", String(open));
+  if (!open) return state.demo?.hide();
+  els.demoView.setAttribute("aria-label", t(state.lang, "demoLabel", { move: move.label }));
+  state.demo ??= createDemoPlayer(/** @type {HTMLCanvasElement} */ (els.demoView));
+  state.demo.show(move.key);
 }
 
-// One popup for all demos, so stepping through moves doesn't pile up windows.
-async function openDemo() {
-  const demo = validDemo(state.moves[state.i]);
-  if (!demo) return;
-  const url = `https://www.youtube.com/watch?v=${demo.youtube_id}`;
-  if (state.demoWindowId != null) {
-    try {
-      const [tab] = await chrome.tabs.query({ windowId: state.demoWindowId });
-      await chrome.tabs.update(tab.id, { url, active: true });
-      await chrome.windows.update(state.demoWindowId, { focused: true });
-      return;
-    } catch {
-      state.demoWindowId = null; // the user closed it
-    }
-  }
-  try {
-    state.demoWindowId = (await chrome.windows.create({ url, type: "popup", ...DEMO_WINDOW })).id;
-  } catch {
-    window.open(url, "_blank", "noopener");
-  }
+function toggleDemo() {
+  state.demoOpen = !state.demoOpen;
+  showDemo(state.moves[state.i]);
 }
 
 function swap(ev) {
@@ -553,8 +538,7 @@ async function init() {
   els.skip.addEventListener("click", () => leave("skip"));
   els.back.addEventListener("click", closeWindow);
   els.swap.addEventListener("click", swap);
-  els.demo.addEventListener("click", openDemo);
-  for (const ev of ["online", "offline"]) window.addEventListener(ev, () => showDemo(state.moves[state.i]));
+  els.demo.addEventListener("click", toggleDemo);
   els.voice.checked = settings.voice;
   els.voice.addEventListener("change", onVoiceChange);
   els.memes.checked = settings.memes;

@@ -18,7 +18,9 @@ import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
-import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, exerciseCatalog, JOINTS } from "../lib/pose/index.js";
+import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS } from "../lib/pose/index.js";
+import { DEMO_COLORS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
+import { paintDemo } from "../lib/demo-player.js";
 import { readFileSync, readdirSync } from "node:fs";
 
 /** @typedef {import("../lib/vendor/three.js").Mesh} Mesh  what the avatar scene traversals below look at */
@@ -63,7 +65,6 @@ const CATALOG = Object.entries(AREA_KEYS).flatMap(([category, keys]) =>
     camera: SIDE_ON.has(key) ? "side" : "front",
     stance: STANDING.has(key) ? "standing" : "seated",
     how_to: `do ${key}`,
-    demo: null,
   })),
 );
 
@@ -617,7 +618,7 @@ check("nextOpenMove: next unfinished exercise after the current one, wrapping, -
 
 check("swapMove cycles through every exercise in the area, skipping ones used elsewhere", () => {
   const byKey = (k) => CATALOG.find((e) => e.key === k);
-  const move = (k) => ({ key: k, label: k, area: byKey(k).category, camera: byKey(k).camera, how_to: "", demo: null, target: BREAK_REPS });
+  const move = (k) => ({ key: k, label: k, area: byKey(k).category, camera: byKey(k).camera, how_to: "", target: BREAK_REPS });
   const cycle = (moves, i, n) => {
     const seen = [];
     let ms = moves;
@@ -941,7 +942,16 @@ check("i18n: no pose server strings left, in any language", () => {
   const keys = translationKeys("en");
   for (const key of ["serverUrl", "errServer", "coachOffline", "offlineText", "coachBusy", "busyText"]) assert.ok(!keys.includes(key), `${key} is still there`);
   for (const key of keys) assert.doesNotMatch(t("en", key), /pose server/i, key);
-  for (const key of ["coachUnavailable", "unavailableText", "watchDemo", "demoCredit"]) assert.ok(keys.includes(key), `missing ${key}`);
+  for (const key of ["coachUnavailable", "unavailableText"]) assert.ok(keys.includes(key), `missing ${key}`);
+});
+check("i18n: the 3D demo's strings exist in every language, the YouTube credit is gone", () => {
+  for (const lang of LANGS.filter((l) => l !== "auto")) {
+    const keys = translationKeys(lang);
+    for (const key of ["watchDemo", "hideDemo", "demoHint", "demoLabel"]) assert.ok(keys.includes(key), `${lang}: missing ${key}`);
+    assert.ok(!keys.includes("demoCredit"), `${lang}: demoCredit is still there`);
+    for (const key of keys) assert.doesNotMatch(t(lang, key), /youtube|يوتيوب/i, `${lang}: ${key}`);
+  }
+  assert.match(t("en", "demoLabel", { move: "Chin tuck" }), /Chin tuck/);
 });
 /**
  * A side-view squat at knee angle `deg`, in normalised image coordinates (the shape of
@@ -963,12 +973,266 @@ function squatPose(deg) {
   return lms;
 }
 
-check("pose: the catalog lists the office moves in order, the first is the default, demos link to YouTube", () => {
+check("pose: the catalog lists the office moves in order, the first is the default", () => {
   const catalog = exerciseCatalog();
   assert.deepEqual(catalog.map((e) => e.key), OFFICE_EXERCISES.map((e) => e.key));
   assert.equal(DEFAULT_EXERCISE, catalog[0].key);
   assert.ok(catalog.every((e) => Object.hasOwn(POSE_CATALOG, e.key)));
-  assert.ok(catalog.filter((e) => e.demo).every((e) => /^https:\/\/www\.youtube\.com\//.test(e.demo.url)));
+});
+
+// ---- 3D exercise demo (lib/demo-model.js) ------------------------------------
+const DEMO_KEYS = Object.keys(EXERCISES);
+const FPS = 30;
+/**
+ * Samples a demo at 30 fps.
+ * @param {string} key
+ * @returns {[number, number[][]][]} [t, joints] per frame
+ */
+function demoLoop(key, loops = 1) {
+  const { seconds } = demoMotion(key);
+  return Array.from({ length: Math.round(seconds * FPS * loops) }, (_, i) => [i / FPS, demoPose(key, i / FPS)]);
+}
+const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const MIRROR = [[1, 4], [2, 5], [3, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]];
+/** The same pose seen in a mirror: x flips and left and right swap. */
+function mirrored(joints) {
+  const out = joints.map(([x, y, z]) => [-x, y, z]);
+  for (const [l, r] of MIRROR) [out[l], out[r]] = [out[r], out[l]];
+  return out;
+}
+const BONES = [[11, 13], [13, 15], [15, 19], [12, 14], [14, 16], [16, 20], [11, 12], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [27, 29], [27, 31], [28, 30], [28, 32]];
+
+check("3D demo: every exercise has one, an unknown move has none", () => {
+  for (const key of DEMO_KEYS) {
+    const m = demoMotion(key);
+    assert.ok(m, `${key} has no demo`);
+    assert.ok(m.seconds >= 2 && m.seconds <= 8, `${key}: a loop of ${m.seconds} s`);
+    assert.ok(m.reps === 1 || m.reps === 2, `${key}: ${m.reps} reps a loop`);
+    const pose = demoPose(key, 0);
+    assert.equal(pose.length, 33);
+    assert.ok(pose.every((p) => p.length === 3 && p.every(Number.isFinite)), `${key}: a joint is not a 3D point`);
+  }
+  assert.equal(demoMotion("moonwalk"), null);
+  assert.equal(demoPose("moonwalk", 0), null);
+});
+
+check("3D demo: each loop ends where it starts, and no joint jumps between frames", () => {
+  for (const key of DEMO_KEYS) {
+    const { seconds } = demoMotion(key);
+    for (const t of [0, 0.7, 1.9]) {
+      const a = demoPose(key, t);
+      const b = demoPose(key, t + seconds);
+      assert.ok(a.every((p, i) => gap(p, b[i]) < 1e-9), `${key} doesn't loop at ${t} s`);
+    }
+    const frames = demoLoop(key);
+    frames.forEach(([t, pose], i) => {
+      const prev = i ? frames[i - 1][1] : demoPose(key, -1 / FPS);
+      const jump = Math.max(...pose.map((p, j) => gap(p, prev[j])));
+      // 8 cm a frame is 2.4 m/s: quicker than any move here, far slower than a jump cut.
+      assert.ok(jump < 0.08, `${key}: a joint jumps ${jump.toFixed(3)} m at ${t.toFixed(2)} s`);
+    });
+  }
+});
+
+check("3D demo: a move done one side at a time works both sides in each loop", () => {
+  for (const key of DEMO_KEYS.filter((k) => demoMotion(k).reps === 2)) {
+    const half = demoMotion(key).seconds / 2;
+    for (const t of [0.4, 1, 1.3]) {
+      const second = demoPose(key, t + half);
+      const first = mirrored(demoPose(key, t));
+      assert.ok(first.every((p, i) => gap(p, second[i]) < 1e-9), `${key}: the second side isn't the first one mirrored at ${t} s`);
+    }
+  }
+  // The moves whose instructions say to switch sides.
+  for (const key of ["neck_tilt", "head_turn", "cross_body_stretch", "seated_side_bend", "knee_to_chest", "standing_side_bend", "seated_knee_ext", "heel_slide", "hamstring_curl"]) {
+    assert.equal(demoMotion(key).reps, 2, `${key} should work both sides`);
+  }
+});
+
+check("3D demo: the figure is rigid, no limb stretches or shrinks", () => {
+  for (const key of DEMO_KEYS) {
+    const frames = demoLoop(key);
+    for (const [a, b] of BONES) {
+      const lengths = frames.map(([, p]) => gap(p[a], p[b]));
+      const spread = Math.max(...lengths) - Math.min(...lengths);
+      assert.ok(spread < 1e-6, `${key}: bone ${a}-${b} changes length by ${spread.toFixed(4)} m`);
+    }
+  }
+});
+
+check("3D demo: the body stands (or sits) on the floor, and a planted foot doesn't slide", () => {
+  for (const key of DEMO_KEYS) {
+    const frames = demoLoop(key);
+    for (const [t, pose] of frames) {
+      const low = Math.min(...pose.map((p) => p[1]));
+      assert.ok(Math.abs(low) < 1e-6, `${key}: the lowest point is ${low.toFixed(3)} m off the floor at ${t.toFixed(2)} s`);
+    }
+    if (key === "heel_slide") continue; // the move is a slide
+    frames.forEach(([t, pose], i) => {
+      if (!i) return;
+      const prev = frames[i - 1][1];
+      for (const toe of [31, 32]) {
+        if (pose[toe][1] > 0.01 || prev[toe][1] > 0.01) continue; // not on the floor
+        const slide = Math.hypot(pose[toe][0] - prev[toe][0], pose[toe][2] - prev[toe][2]);
+        assert.ok(slide < 0.002, `${key}: the foot on the floor slides ${slide.toFixed(4)} m at ${t.toFixed(2)} s`);
+      }
+    });
+  }
+});
+
+check("3D demo: a camera sees the figure the way MediaPipe reports a person", () => {
+  const size = { width: 640, height: 480 };
+  const front = demoLandmarks("t_raise", 0, size);
+  assert.equal(front.length, 33);
+  assert.ok(front.every((l) => l.length === 3 && l[2] === 1 && l[0] > 0 && l[0] < 1 && l[1] > 0 && l[1] < 1), "a joint is off the picture");
+  assert.ok(front[11][0] > front[12][0], "the person's left shoulder is on the right of the picture");
+  assert.ok(front[0][1] < front[11][1] && front[11][1] < front[23][1] && front[23][1] < front[27][1], "y grows downwards");
+  // A side-camera move is seen from the side: the shoulders line up, the nose points away from the ears.
+  const side = demoLandmarks("chin_tuck", 0, size);
+  assert.ok(Math.abs(side[11][0] - side[12][0]) < 0.01, "the shoulders should line up from the side");
+  assert.ok(Math.abs(side[0][0] - side[7][0]) > 0.02);
+  // Any other angle on request.
+  const turned = demoLandmarks("chin_tuck", 0, { ...size, yaw: 0 });
+  assert.ok(turned[11][0] - turned[12][0] > 0.05);
+  assert.equal(demoLandmarks("moonwalk", 0, size), null);
+});
+
+check("3D demo: from its camera, every demo counts its reps on the coach's own rep counter, cleanly", () => {
+  const W = 640;
+  const H = 480;
+  for (const key of DEMO_KEYS) {
+    const { seconds, reps } = demoMotion(key);
+    const session = new Session(key);
+    const loops = 3;
+    const events = [];
+    for (let i = 0; i < Math.round(seconds * loops * FPS); i++) {
+      const t = i / FPS;
+      const out = session.process(demoLandmarks(key, t, { width: W, height: H }), W, H, t);
+      assert.deepEqual(out.feedback, [], `${key}: the coach says ${JSON.stringify(out.feedback)} at ${t.toFixed(2)} s`);
+      if (out.rep_event) events.push(out.rep_event);
+    }
+    const partial = events.filter((r) => r.partial);
+    assert.deepEqual(partial.map((r) => r.peak_angle), [], `${key}: partial reps`);
+    assert.equal(events.length, reps * loops, `${key}: ${events.length} reps in ${loops} loops, expected ${reps * loops}`);
+    for (const r of events) assert.deepEqual(r.issues, [], `${key}: rep ${r.index} flagged ${r.issues}`);
+  }
+});
+
+check("3D demo: the view swings gently around the coach's camera, and the user can turn it", () => {
+  const size = { width: 320, height: 240 };
+  assert.equal(demoView("t_raise", 0, size).yaw, 0); // a front-camera move starts face on
+  assert.equal(demoView("chin_tuck", 0, size).yaw, 90); // a side-camera one from the person's left
+  const swing = [0, 2, 4, 6, 8, 10, 12, 14].map((t) => demoView("t_raise", t, size).yaw);
+  assert.ok(Math.max(...swing) > 15 && Math.min(...swing) < -15 && Math.max(...swing.map(Math.abs)) <= 30, `swings ${swing}`);
+  assert.equal(demoView("t_raise", 4, { ...size, turn: 90 }).yaw, demoView("t_raise", 4, size).yaw + 90);
+  assert.equal(demoView("t_raise", 4, { ...size, still: true }).yaw, 0); // reduced motion: no swing
+  assert.ok(demoView("t_raise", 0, size).pitch > 0, "seen from a little above, so the floor shows");
+  assert.equal(demoView("moonwalk", 0, size), null);
+});
+
+check("3D demo: dragging right turns the figure's front to the right, from any camera", () => {
+  const size = { width: 640, height: 480 };
+  // Like grabbing a globe: the side of the head facing the camera (the nose from the front, the
+  // near ear from the side) follows the finger, measured from the middle of the head.
+  for (const [key, near] of /** @type {[string, number][]} */ ([["t_raise", 0], ["chin_tuck", 7]])) {
+    const facing = (turn) => {
+      const l = demoLandmarks(key, 0, demoView(key, 0, { ...size, turn, still: true }));
+      return l[near][0] - (l[7][0] + l[8][0]) / 2;
+    };
+    assert.ok(facing(demoTurn(40)) > facing(0), `${key}: dragging right turns the figure to the left`);
+    assert.ok(facing(demoTurn(-40)) < facing(0), `${key}: dragging left turns the figure to the right`);
+  }
+  assert.equal(demoTurn(0), 0);
+});
+
+check("3D demo: an arm keeps its lengths even when the elbow hint points along it", () => {
+  const len = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  /** @typedef {[number, number, number]} P3 */
+  /** @type {P3} */
+  const shoulder = [0.19, 1.4, 0];
+  for (const [target, pole] of /** @type {[P3, P3][]} */ ([
+    [[0.19, 1.0, 0], [0, -1, 0]], // reaching straight down, hint straight down
+    [[0.19, 1.0, 0], [0, 1, 0]], // hint straight back up the arm
+    [[0.5, 1.4, 0.2], [0, 0, 0]], // no hint at all
+  ])) {
+    const [elbow, wrist] = reach(shoulder, target, pole, 0.29, 0.26);
+    assert.ok(Math.abs(len(shoulder, elbow) - 0.29) < 1e-9, `upper arm ${len(shoulder, elbow)} for pole ${pole}`);
+    assert.ok(Math.abs(len(elbow, wrist) - 0.26) < 1e-9, `forearm ${len(elbow, wrist)} for pole ${pole}`);
+    assert.ok(len(wrist, target) < 1e-6, "the wrist reaches a reachable spot");
+  }
+});
+
+check("3D demo: the scene fits its canvas, is painted far to near, and turns with the camera", () => {
+  const size = { width: 320, height: 240 };
+  const inside = (x, y, r) => x - r >= -0.5 && y - r >= -0.5 && x + r <= size.width + 0.5 && y + r <= size.height + 0.5;
+  for (const key of DEMO_KEYS) {
+    for (const yaw of [0, 45, 90, 135, 180, 270]) {
+      for (const t of [0, 1.3, 2.1]) {
+        const shapes = demoScene(key, t, { ...size, yaw, pitch: 12 });
+        assert.ok(shapes.length > 30, `${key}: ${shapes.length} shapes`);
+        shapes.forEach((sh, i) => {
+          assert.ok(["capsule", "circle", "ellipse"].includes(sh.kind), sh.kind);
+          assert.ok(Object.values(sh).every((v) => typeof v === "string" || Number.isFinite(v)), `${key}: ${JSON.stringify(sh)}`);
+          const ok = sh.kind === "capsule" ? inside(sh.x1, sh.y1, sh.r) && inside(sh.x2, sh.y2, sh.r) : sh.kind === "circle" ? inside(sh.x, sh.y, sh.r) : inside(sh.x, sh.y, Math.max(sh.rx, sh.ry));
+          assert.ok(ok, `${key} at yaw ${yaw}: ${sh.part} ${sh.kind} leaves the canvas`);
+          if (i) assert.ok(shapes[i - 1].depth >= sh.depth, `${key}: shape ${i} is painted out of depth order`);
+        });
+      }
+    }
+  }
+  const view = { ...size, yaw: 0, pitch: 12 };
+  assert.deepEqual(demoScene("t_raise", 1, view), demoScene("t_raise", 1, view));
+  assert.notDeepEqual(demoScene("t_raise", 1, view), demoScene("t_raise", 1, { ...view, yaw: 30 }));
+  assert.notDeepEqual(demoScene("t_raise", 0, view), demoScene("t_raise", 1.5, view));
+  assert.equal(demoScene("moonwalk", 0, view), null);
+});
+
+check("3D demo: the joints the coach watches stand out, and a seated move has a chair", () => {
+  const view = { width: 320, height: 240, yaw: 30, pitch: 12 };
+  const accent = (key) => demoScene(key, 0, view).filter((sh) => sh.fill === DEMO_COLORS.accent).length;
+  assert.ok(accent("t_raise") >= 6, "t_raise watches shoulders, elbows and wrists"); // both sides
+  assert.ok(accent("seated_knee_ext") >= 6, "knee moves watch hips, knees and ankles");
+  const parts = (key) => new Set(demoScene(key, 0, view).map((sh) => sh.part));
+  for (const key of DEMO_KEYS) {
+    const seated = demoMotion(key).stance === "seated" || key === "sit_to_stand";
+    assert.equal(parts(key).has("chair"), seated, `${key}: ${seated ? "no chair to sit on" : "a chair it doesn't use"}`);
+    assert.ok(parts(key).has("shadow") && parts(key).has("head"), key);
+  }
+});
+
+check("3D demo: the canvas painter paints each shape once, in the scene's order", () => {
+  const calls = [];
+  const ctx = new Proxy({}, {
+    get: (_, name) => (name in ctx_props ? ctx_props[name] : (...args) => calls.push([name, ...args])),
+    set: (_, name, value) => (calls.push([`=${String(name)}`, value]), true),
+  });
+  const ctx_props = {};
+  /** @type {import("../lib/demo-model.js").Shape[]} */
+  const shapes = [
+    { kind: "ellipse", x: 50, y: 90, rx: 30, ry: 6, fill: "rgba(0,0,0,0.2)", depth: 9, part: "shadow" },
+    { kind: "capsule", x1: 10, y1: 10, x2: 40, y2: 50, r: 4, fill: "#aa8866", depth: 5, part: "body" },
+    { kind: "circle", x: 40, y: 50, r: 3, fill: "#3ddc97", depth: 4, part: "joint" },
+  ];
+  paintDemo(/** @type {CanvasRenderingContext2D} */ (/** @type {unknown} */ (ctx)), shapes);
+  const draws = calls.filter(([n]) => ["fill", "stroke"].includes(n)).map(([n]) => n);
+  assert.deepEqual(draws, ["fill", "stroke", "fill"]);
+  assert.ok(calls.some(([n, ...a]) => n === "ellipse" && a[0] === 50 && a[2] === 30));
+  assert.ok(calls.some(([n, v]) => n === "=lineWidth" && v === 8), "a capsule is a round-capped line as wide as it is thick");
+  assert.ok(calls.some(([n, v]) => n === "=lineCap" && v === "round"));
+  assert.ok(calls.some(([n, ...a]) => n === "arc" && a[0] === 40 && a[2] === 3));
+});
+
+check("3D demo: no YouTube left, the catalog has no clips and no page links to youtube.com", () => {
+  for (const e of exerciseCatalog()) assert.ok(!("demo" in e), `${e.key} still carries a demo clip`);
+  const moves = buildRoutine(exerciseCatalog(), { areas: AREAS.slice(0, 2), lastKey: null, n: 0 });
+  for (const m of moves) assert.ok(!("demo" in m), `the routine still gives ${m.key} a demo field`);
+  assert.throws(() => readFileSync(new URL("../lib/pose/demos.js", import.meta.url)), /ENOENT/);
+  const files = [
+    "break.html", "break.js", "break.css", "trainer.html", "trainer.js", "trainer.css", "avatar-global.js", "service-worker.js", "manifest.json",
+    ...readdirSync(new URL("../lib/pose/", import.meta.url)).map((f) => `lib/pose/${f}`),
+    "lib/demo-model.js", "lib/demo-player.js",
+  ];
+  for (const f of files) assert.doesNotMatch(readFileSync(new URL(`../${f}`, import.meta.url), "utf8"), /youtube/i, f);
 });
 
 check("pose: three squats on the device count three clean reps", () => {

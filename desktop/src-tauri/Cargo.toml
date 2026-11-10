@@ -19,5 +19,5 @@ serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }
 # Seconds since the last keyboard or mouse input, for chrome.idle.queryState
 user-idle = "0.6"
-# Opens demo clips in the user's browser
+# Opens web links in the user's browser (the app never shows a web page itself)
 open = "5"

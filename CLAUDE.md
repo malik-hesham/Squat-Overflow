@@ -2,7 +2,7 @@
 
 ## The browser extension is the reference client
 
-`extension/` defines every feature and every business rule: what a break does, XP, levels, streaks, challenges, badges, the schedule, privacy, demo clips, sounds, i18n strings and the leaderboard. The other clients follow it:
+`extension/` defines every feature and every business rule: what a break does, XP, levels, streaks, challenges, badges, the schedule, privacy, the 3D exercise demos, sounds, i18n strings and the leaderboard. The other clients follow it:
 
 - `mobile/` (React Native, iOS and Android)
 - `desktop/` (the status bar app for macOS, Windows and Linux, a Rust/Tauri shell)

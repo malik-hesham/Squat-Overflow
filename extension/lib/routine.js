@@ -48,7 +48,6 @@ const toMove = (e) => ({
   camera: e.camera,
   stance: e.stance ?? "seated",
   how_to: e.how_to,
-  demo: e.demo ?? null,
   target: BREAK_REPS,
 });
 

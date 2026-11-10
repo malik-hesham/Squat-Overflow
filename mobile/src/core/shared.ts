@@ -41,6 +41,7 @@ export { busyNow, agenda } from '../../../extension/lib/calendar.js';
 export { companyFromEmail } from '../../../extension/lib/auth.js';
 export { MEMES, takeTurn, repMarks, createMemePlayer } from '../../../extension/lib/memes.js';
 export { createSerial } from '../../../extension/lib/serial.js';
+export { DEMO_COLORS, demoMotion, demoScene, demoTurn, demoView } from '../../../extension/lib/demo-model.js';
 export { THEMES, themeId } from '../../../extension/lib/themes.js';
 export {
   LANGS,

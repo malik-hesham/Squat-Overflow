@@ -101,8 +101,8 @@
 
   const windows = {
     onRemoved: event(),
-    // A page on the web (a demo clip on youtube.com) opens in the user's browser, never in a window
-    // of this app, where it would sit next to the shell's commands.
+    // A page on the web opens in the user's browser, never in a window of this app, where it would
+    // sit next to the shell's commands.
     async create({ url, width, height, focused } = {}) {
       if (isWeb(url)) {
         await invoke("open_external", { url });
@@ -129,12 +129,6 @@
     async create({ url }) {
       const win = await windows.create({ url });
       return win.tabs[0] ?? { id: win.id, windowId: win.id, url };
-    },
-    // The extension only sends a tab to a new address for demo clips, which are on the web.
-    async update(id, { url } = {}) {
-      if (url == null) return;
-      if (!isWeb(url)) throw new Error(`tabs.update: only web addresses are supported, got ${url}`);
-      await invoke("open_external", { url });
     },
   };
 

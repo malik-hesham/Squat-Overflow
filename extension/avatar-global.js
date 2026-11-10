@@ -5,8 +5,11 @@
 import { Avatar } from "./avatar.js";
 import { CONNECTIONS, exerciseCatalog } from "./lib/pose/index.js";
 import { CLOSE_MODEL_FAILED, openPoseSocket } from "./lib/pose/local-socket.js";
+import { demoMotion } from "./lib/demo-model.js";
+import { createDemoPlayer } from "./lib/demo-player.js";
 
 globalThis.Avatar = Avatar;
+globalThis.Demo3D = { has: (key) => demoMotion(key) != null, createPlayer: createDemoPlayer };
 globalThis.PoseLocal = {
   exerciseCatalog,
   CONNECTIONS,
