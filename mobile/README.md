@@ -39,6 +39,15 @@ npx expo run:ios           # or: npx expo run:android
 
 If `pod install` fails with `Unicode Normalization not appropriate for ASCII-8BIT`, set a UTF-8 locale first: `export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`.
 
+### iOS 27 needs the scene life cycle
+
+iOS 27 stops an app built with Xcode 27 (the iOS 27 SDK) at launch if it doesn't use the UIScene life cycle. iOS 26 simulators don't check this, so the crash only shows on an iOS 27 phone. Expo SDK 56's template has no scenes, so `plugins/withSceneLifecycle.js` adds them on every prebuild:
+
+- `Info.plist` gets a `UIApplicationSceneManifest` with one window scene.
+- `ios/SquatOverflow/AppDelegate.swift` gets a `SceneDelegate` class. It creates the window, starts React Native in it, and hands incoming links on to the `AppDelegate`. `didFinishLaunching` still builds the React Native factory.
+
+Keep the plugin in `app.json`. When an Expo upgrade's template adopts scenes itself, prebuild stops with an error from the plugin; remove the plugin then.
+
 Simulators and emulators have no front camera. In development builds the break screen then runs a simulated coach (a rep every couple of seconds) so the whole flow can be tried; it says so on screen. Real pose detection needs a physical phone.
 
 ## Tests
