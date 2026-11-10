@@ -37,11 +37,12 @@ On macOS 26 (Apple silicon), by running a debug build and reading the log (`SO_T
 - With setup done: the countdown reaches the menu bar and ticks every second in the last minute (`51s`, `50s`, …), from the hidden page.
 - A click on the icon opens the popup under it, with the level, next break, challenges and heatmap rendered.
 - Pause from the menu sets `pausedUntil` in the store and turns the label into Resume; Resume turns it back.
+- `chrome.windows.create` from the hidden page opens one of the app's pages in a focused window, `#manual` kept (checked with `popup.html` through `SO_DEBUG_EVAL`, which doesn't need the camera). It used to refuse every page on macOS and Linux, so Break now and Practice did nothing: pages there load from `tauri://localhost`, and a `tauri://` origin is opaque, never equal to another.
 - With the language set to Arabic, the menu labels, the tooltip, the popup and the Settings page are in Arabic.
 - The pose model loads in the app's webview with WebGL2 and analyses frames (a blank test frame, no camera).
 - No page error and no blocked request under the extension's own Content Security Policy.
 
-Checked by tests: `cargo test` (storage changes and alarm timing), the extension's `node tests/check.mjs`, and its offline break test in Chromium (`tests/e2e/break-offline.mjs`) after the one change this needed in the extension (see below).
+Checked by tests: `cargo test` (storage changes, alarm timing, and which addresses `chrome.windows.create` opens), the extension's `node tests/check.mjs`, and its offline break test in Chromium (`tests/e2e/break-offline.mjs`) after the one change this needed in the extension (see below).
 
 The same checks pass in the packaged `.app` (`cargo tauri build --debug`), with one exception:
 
