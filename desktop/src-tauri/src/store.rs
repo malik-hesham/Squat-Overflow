@@ -1,5 +1,5 @@
 //! `chrome.storage.local` for the desktop app: one JSON file with the extension's own keys
-//! (extension/lib/store.js), like the Mac app's store.json.
+//! (extension/lib/store.js).
 
 use serde_json::{json, Map, Value};
 use std::{fs, io, path::PathBuf, sync::Mutex};

@@ -19,7 +19,7 @@ Routes:
 |---|---|
 | `GET /health` | `{ ok, version }` |
 | `GET /privacy` | The store's privacy policy page |
-| `GET /auth/mobile-callback` | Google's redirect target for the mobile and Mac sign-in; relays the result to `squatoverflow://auth` |
+| `GET /auth/mobile-callback` | Google's redirect target for the mobile sign-in; relays the result to `squatoverflow://auth` |
 | `POST /auth/google` `{id_token, nonce}` | Exchange the extension's Google ID token (+ the raw nonce whose SHA-256 Google signed) for a session |
 | `POST /auth/refresh` `{refresh_token}` | New session; the refresh token is single-use |
 | `GET /leaderboard?period=week\|all` | Bearer token. My company's board: top 10, plus my row if I'm lower |

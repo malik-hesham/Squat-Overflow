@@ -47,10 +47,6 @@ jobs:
       - run: npm run typecheck
         working-directory: extension
       - run: node extension/tests/check.mjs
-      # The Mac app ports these rules to Swift and its tests replay the extension's answers
-      # (macos/SquatCore). A rule changed here needs fresh fixtures and a green `swift test`.
-      - name: Mac parity fixtures match the extension
-        run: node macos/scripts/parity-fixtures.mjs --check
       - run: node --test 'scripts/tests/*.test.mjs'
       # The pose model runs in the extension, so the zip always builds. With the API_URL variable set
       # (https://<your API server>) it also has sign-in, the team board and sync; without, it's local only.

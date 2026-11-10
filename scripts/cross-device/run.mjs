@@ -1,19 +1,18 @@
 #!/usr/bin/env node
-// Cross-device check (docs/plans/offline-first.md, item 12): an offline break on Chrome, the phone
-// and the Mac each counts locally, uploads once when the network is back, and shows on the others.
+// Cross-device check (docs/plans/offline-first.md, item 12): an offline break on Chrome and on the
+// phone each counts locally, uploads once when the network is back, and shows on the others.
 //
 //   cd server && npm run build && cd ..
 //   PLAYWRIGHT=/path/to/playwright/index.mjs [CHROME=/path/to/chromium] node scripts/cross-device/run.mjs
 //
 // Needs Postgres's initdb/pg_ctl/psql on PATH, Playwright and a Chromium (as in extension/tests/e2e),
-// Node, and Swift. Everything runs on this machine and is thrown away afterwards:
+// and Node. Everything runs on this machine and is thrown away afterwards:
 //  - a fresh Postgres database (its own data folder and port 55432);
 //  - the real API server from server/dist on 127.0.0.1:18765 (api.mjs). Only Google's key check
 //    is a local test key, so each client gets a real session from the server's own /auth/google;
 //  - Chrome: the real extension in Chromium (chrome.mjs), from a temp copy whose config.js points
 //    at that server;
-//  - phone: mobile's real engine and sync code under Jest (mobile/src/core/__tests__/crossDevice.live.test.ts);
-//  - Mac: SquatCore's real Engine and SyncClient under swift test (CrossDeviceLiveTests.swift).
+//  - phone: mobile's real engine and sync code under Jest (mobile/src/core/__tests__/crossDevice.live.test.ts).
 // "Network off" means the API server is stopped. The clients take turns through files in <work>/sig.
 import { execFileSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -41,7 +40,7 @@ const exited = []; // clients that stopped before the check ended
 async function waitFor(n, ms = 240_000) {
   for (const end = Date.now() + ms; Date.now() < end; ) {
     if (exited.length) throw new Error(`${exited.join(", ")} exited early; see its output above`);
-    for (const who of ["chrome", "phone", "mac"]) {
+    for (const who of ["chrome", "phone"]) {
       if (existsSync(sig(`${who}-error`))) throw new Error(`${who}: ${readFileSync(sig(`${who}-error`), "utf8")}`);
     }
     if (existsSync(sig(n))) return read(n);
@@ -97,32 +96,31 @@ try {
   const config = join(ext, "config.js");
   writeFileSync(config, readFileSync(config, "utf8").replace(/^export const API_URL = ".*";$/m, `export const API_URL = "${API}";`));
 
-  // Own process groups, so the cleanup below also ends what npx and swift start.
+  // Own process groups, so the cleanup below also ends what npx starts.
   const env = { ...process.env, XD_DIR: work, XD_API: API };
   const clients = {
     chrome: spawn("node", [join(here, "chrome.mjs"), ext, work], { env, stdio: ["ignore", "inherit", "inherit"], detached: true }),
     phone: spawn("npx", ["jest", "src/core/__tests__/crossDevice.live.test.ts", "--testTimeout=900000"], { cwd: join(root, "mobile"), env, stdio: "ignore", detached: true }),
-    mac: spawn("swift", ["test", "--filter", "CrossDeviceLiveTests"], { cwd: join(root, "macos", "SquatCore"), env, stdio: "ignore", detached: true }),
   };
   for (const [who, child] of Object.entries(clients)) {
     children.push(child);
     child.on("exit", () => existsSync(sig(`${who}-final-done`)) || exited.push(who));
   }
 
-  for (const who of ["chrome", "phone", "mac"]) await waitFor(`${who}-ready`, 600_000);
+  for (const who of ["chrome", "phone"]) await waitFor(`${who}-ready`, 600_000);
   check(events().length === 0, "a fresh account: the server has no breaks yet");
 
   log("--- network off: one break on each device");
   apiDown();
   signal("go-offline");
-  for (const who of ["chrome", "phone", "mac"]) {
+  for (const who of ["chrome", "phone"]) {
     const off = await waitFor(`${who}-offline-done`);
     const { before, after } = off;
     log(`${who}: before ${JSON.stringify(before)}`);
     log(`${who}: after  ${JSON.stringify(after)}`);
     check(after.breaks === before.breaks + 1 && after.today === before.today + 1, `${who}: the offline break is in today's count right away`);
     check(after.outbox === 1, `${who}: the offline break waits in the outbox`);
-    // The fake camera shows nobody, so Chrome's break scores 0 XP; the phone and the Mac report reps.
+    // The fake camera shows nobody, so Chrome's break scores 0 XP; the phone reports reps.
     if (who !== "chrome") check(after.xp > before.xp, `${who}: XP went up offline (${before.xp} -> ${after.xp})`);
     if (off.syncWhileOffline) check(off.syncWhileOffline.ok === false, `${who}: a sync attempt while offline fails and keeps the queue`);
   }
@@ -130,8 +128,8 @@ try {
 
   log("--- back online, one device at a time");
   await apiUp();
-  const expected = { phone: 1, chrome: 2, mac: 3 };
-  for (const who of ["phone", "chrome", "mac"]) {
+  const expected = { phone: 1, chrome: 2 };
+  for (const who of ["phone", "chrome"]) {
     signal(`${who}-sync`);
     const synced = await waitFor(`${who}-synced`);
     const ev = events();
@@ -142,17 +140,17 @@ try {
   }
 
   log("--- final sync everywhere");
-  for (const who of ["chrome", "phone", "mac"]) signal(`${who}-final`);
-  for (const who of ["chrome", "phone", "mac"]) {
+  for (const who of ["chrome", "phone"]) signal(`${who}-final`);
+  for (const who of ["chrome", "phone"]) {
     const fin = await waitFor(`${who}-final-done`);
     log(`${who}: ${JSON.stringify(fin.after)}`);
-    check(fin.after.breaks === 3 && fin.after.today === 3, `${who}: sees all 3 breaks, 3 today`);
-    check(new Set(fin.after.devices).size === 3, `${who}: the breaks came from 3 devices (${[...new Set(fin.after.devices)].join(", ")})`);
+    check(fin.after.breaks === 2 && fin.after.today === 2, `${who}: sees both breaks, 2 today`);
+    check(new Set(fin.after.devices).size === 2, `${who}: the breaks came from 2 devices (${[...new Set(fin.after.devices)].join(", ")})`);
   }
   const ev = events();
   check(
-    ev.length === 3 && new Set(ev.map((e) => e.split(":")[1])).size === 3,
-    `server: exactly 3 distinct breaks after every device synced twice (${ev.map((e) => e.split(":")[0]).join(", ")})`,
+    ev.length === 2 && new Set(ev.map((e) => e.split(":")[1])).size === 2,
+    `server: exactly 2 distinct breaks after every device synced twice (${ev.map((e) => e.split(":")[0]).join(", ")})`,
   );
   log("server:", sql("select 'xp=' || sum(xp) || ' breaks=' || count(*) from break_events"));
 } catch (err) {
@@ -165,9 +163,9 @@ try {
     } catch {}
   }
   api?.kill();
-  // swift test runs xctest outside its process group; end a test still waiting on a signal.
+  // End a Jest run still waiting on a signal.
   try {
-    execFileSync("pkill", ["-f", "CrossDeviceLiveTests|crossDevice.live.test"]);
+    execFileSync("pkill", ["-f", "crossDevice.live.test"]);
   } catch {}
   try {
     execFileSync("pg_ctl", ["-D", pgData, "-m", "fast", "stop"], { env: pgEnv, stdio: "ignore" });

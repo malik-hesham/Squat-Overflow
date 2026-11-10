@@ -4,8 +4,8 @@
  * device: the runtime, the WASM and the model are all files of the extension.
  *
  * Browser-only (it needs WebGL or WASM). A frame is a video element (the extension's pages) or any
- * other image source with a width and height, such as an ImageBitmap (the Mac app's PoseBridge,
- * macos/SquatOverflowBar/PoseWeb). `detect` returns what lib/pose/gateway.js expects.
+ * other image source with a width and height, such as an ImageBitmap. `detect` returns what
+ * lib/pose/gateway.js expects.
  */
 import { FilesetResolver, PoseLandmarker } from "../vendor/mediapipe/vision_bundle.mjs";
 
