@@ -11,3 +11,6 @@ deploy/.env
 
 # Turborepo cache
 .turbo/
+
+# Vitest browser mode failure screenshots
+.vitest/

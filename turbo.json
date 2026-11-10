@@ -6,6 +6,8 @@
       "dependsOn": ["^typecheck"]
     },
     "lint": {},
-    "test": {}
+    "test": {
+      "passThroughEnv": ["CHROMIUM_PATH"]
+    }
   }
 }

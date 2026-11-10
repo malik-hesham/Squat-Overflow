@@ -20,5 +20,10 @@ export default defineConfig(
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
+  },
+  {
+    // Tool config files (vitest.config.ts) are in no tsconfig: lint them without type information.
+    files: ['**/*.config.ts'],
+    extends: [tseslint.configs.disableTypeChecked],
   }
 );

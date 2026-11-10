@@ -1,7 +1,7 @@
 # Digital human engine: architecture and plan
 
-Status: **Phases 1 and 2 done** (workspace, shared types, `avatar-core`). Phases 3 to 9 are planned, not
-built. All phases go on one branch, `feat/digital-human`, one commit per phase.
+Status: **Phases 1 to 3 done** (workspace, shared types, `avatar-core`, the human model, the web
+renderer). Phases 4 to 9 are planned, not built. All phases go on one branch, `feat/digital-human`.
 
 The engine renders one interactive 3D human (idle, listening, thinking, speaking, reacting) in the three
 Squat Overflow clients: the browser extension, the desktop app and the mobile app. It follows the repo
@@ -282,7 +282,8 @@ The web renderer (Phase 3) is proven before any client integration starts.
 
 ## 6. Performance plan
 
-Targets: desktop 60 fps, browser 30 to 60 fps, mobile 30 to 60 fps. **Nothing has been measured yet.**
+Targets: desktop 60 fps, browser 30 to 60 fps, mobile 30 to 60 fps. What has been measured, and how, is in
+[performance.md](performance.md); only measured numbers go there.
 Numbers from headless Chromium with SwiftShader (what CI has) say nothing about real GPUs and will not be
 reported as performance.
 
@@ -299,7 +300,8 @@ Ranked by how much they could change the plan.
    open (CC0) assets is a realistic-proportioned, rigged human with ARKit blendshapes and visemes. It
    **will not be photorealistic**: that needs scanned skin textures and a likeness source such as an
    Avaturn export. three.js also has no skin subsurface scattering; realistic skin needs a custom shader.
-   The asset slot takes a real export later without code changes (assets.md).
+   The asset slot takes a real export later without code changes (assets.md). _Phase 3:_ built as
+   `coach-01`; it looks like a realistic young man, not a photo (see the render in assets.md).
 2. **Mobile rendering stack (spike S1).** `expo-three` 8.0.0 requires `three ^0.166.0` (current is 0.187),
    so it would pin mobile to an old three. three.js needs WebGL2, and its morph targets use a 2D-array
    float texture; whether `expo-gl` implements everything three uses for that has to be checked on a
@@ -311,7 +313,8 @@ Ranked by how much they could change the plan.
 3. **Extension CSP.** three's `KTX2Loader` and `DRACOLoader` start workers from `blob:` URLs. The
    extension's CSP (`script-src 'self' 'wasm-unsafe-eval'`) blocks those. Plan: meshopt for geometry
    (its decoder runs WebAssembly on the main thread, which the CSP allows) and a packaged worker file for
-   the KTX2 transcoder. To verify in Phase 6. The side panel needs the `sidePanel` permission (Chrome 114+);
+   the KTX2 transcoder. To verify in Phase 6. _Phase 3:_ the models use meshopt and WebP, which need no
+   worker; KTX2 is left for Phase 9 (assets.md says why). The side panel needs the `sidePanel` permission (Chrome 114+);
    a new permission needs a Chrome Web Store justification.
 4. **Desktop webviews.** macOS WKWebView, Windows WebView2 and Linux WebKitGTK differ in WebGL2 support,
    compressed texture formats and microphone permission prompts. Linux WebKitGTK performance depends a
@@ -326,11 +329,14 @@ Ranked by how much they could change the plan.
    its monthly cost is stated before it ships. Mock speech responses come first.
 7. **Animation licensing.** Mixamo clips are free to use in a product but not to redistribute as raw
    files, and this repo is public. Clips must come from openly licensed motion capture, be authored, or be
-   procedural. Checked per clip in Phase 3.
+   procedural. Checked per clip in Phase 3. _Phase 3:_ the only clip, `idle`, is made by the build script
+   itself (no third-party motion data). MPFB also has a `cmu_mb` rig matching the freely usable CMU
+   motion-capture library, an option for more clips.
 8. **Size and memory.** One 4K RGBA texture is about 64 MB of GPU memory before mipmaps when not
    compressed. HIGH stays desktop-only; the extension and app ship OPTIMIZED. A GLB in git grows the repo
    for good; Git LFS or downloading on first run (`asset-delivery`) is decided in Phase 3 once the size is
-   known.
+   known. _Phase 3:_ HIGH is 5.78 MB and OPTIMIZED 2.31 MB, committed to git directly; each rebuild adds
+   about 8 MB to the history. Worth moving to Git LFS if the model gets rebuilt often.
 9. **Tooling versions.** `typescript-eslint` 8.72 supports TypeScript below 6.1 only, and TypeScript 7's
    package has no compiler API. The workspace uses TypeScript 6.0.3, the same as `mobile/`. Move to 7 when
    `typescript-eslint` supports it.
@@ -409,3 +415,40 @@ left the old clips at near-zero weight (fixed by finishing a fade within 1e-9); 
 command mid-`speak` could leave the audio playing while the avatar said idle (fixed by delivering events
 only once the controller is consistent); `speak` could reject with a non-Error value from the audio layer
 (now always an `Error`).
+
+## Phase 3 record
+
+Built, on `feat/digital-human`:
+
+- `packages/avatar-assets`: the human `coach-01`, built from MakeHuman's CC0 assets in Blender with
+  MPFB by script (`sources/human.json`, `scripts/`), two profiles, a generated manifest the compiler
+  checks, and tests on the shipped files (checksum, glTF validator, every mapped face shape, bone and
+  clip, matching profiles, material modes). Details and measured sizes: [assets.md](assets.md).
+- `packages/avatar-renderer-web`: `loadAvatarModel` (GLBLoader), `createAvatarRig`
+  (WebAnimationAdapter), `createAvatarView` (AvatarScene with camera framing, lights and the render
+  loop, which pauses while the page is hidden), and a preview page.
+- `tools/workspace-check`: the no-globals rule covers shipped code only, so tests can read files.
+- CI installs Chromium for the renderer's browser tests.
+
+Proven by: the rig's 14 tests in Node (every frame field: shapes, visemes and viseme mixes, clips,
+head, neck, chest, gaze by shapes or by eye bones); 6 tests in Chromium with the real model file (it
+loads, draws over a transparent background, opens its jaw on cue, pauses while hidden, frees its GPU
+memory on dispose, and draws avatar-core's frames: all 39,388 triangles of OPTIMIZED); a first frame-cost
+measurement on this Mac ([performance.md](performance.md)).
+
+Bugs the tests and renders caught: every MPFB material exported as transparent and double-sided, which
+showed the teeth through the face; the high-poly eyes' clear cornea hid the iris once made opaque; the
+idle clip had a 33 ms flat spot at its loop point; the environment map's scene leaked GPU memory on
+dispose.
+
+Changed from the plan:
+
+- **No React Three Fiber yet.** The renderer is framework-free because the extension (and so the
+  desktop app) is plain JavaScript and nothing here would use React components. `HumanAvatar` and
+  `AvatarScene` as React components can wrap `createAvatarView` in Phase 6 if the side panel uses
+  React. Zustand isn't used: avatar-core's controller holds the state.
+- **WebP, not KTX2** (assets.md).
+- `setGaze` and `setExpression` still throw: the eye and face layers are Phase 4.
+
+Next: spike S1 (the mobile renderer on a real iPhone and an Android device, with this model), then
+Phase 4. Not measured yet: frames shown per second in a visible window, Windows and Linux, phones.

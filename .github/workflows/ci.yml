@@ -71,8 +71,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The web renderer's tests run in Chromium (software WebGL); install it and its system libraries.
+      - run: pnpm --filter @squat-overflow/avatar-renderer-web exec playwright install --with-deps chromium
       # Typecheck, typed lint, tests and Prettier for packages/, services/ and tools/. The tests
-      # include the package boundary check (tools/workspace-check).
+      # include the package boundary check (tools/workspace-check) and the model file checks.
       - run: pnpm check
 
   deploy:
