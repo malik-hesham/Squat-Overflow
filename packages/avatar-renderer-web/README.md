@@ -24,6 +24,36 @@ view.start(); // draws every animation frame; pauses by itself while the page is
 - `createAvatarView` (AvatarScene, CameraController, LightingController): the canvas, a soft studio
   light rig, portrait or full-body framing, the render loop.
 
+## React
+
+`@squat-overflow/avatar-renderer-web/react` wraps the same pieces for React apps (React Three Fiber;
+React 19 and R3F 9 are optional peer dependencies, so the vanilla entry doesn't pull them in):
+
+```tsx
+import {
+  AvatarScene,
+  HumanAvatar,
+  useAvatarModel,
+  useAvatarState,
+} from '@squat-overflow/avatar-renderer-web/react';
+
+function Assistant({ avatar }: { avatar: CoreAvatar }) {
+  const model = useAvatarModel(modelUrl, COACH_01); // null until loaded; freed on unmount
+  const state = useAvatarState(avatar); // 'idle', 'listening', ...
+  return (
+    <>
+      <p>{state}</p>
+      <AvatarScene framing="portrait">
+        {model ? <HumanAvatar model={model} frames={avatar} /> : null}
+      </AvatarScene>
+    </>
+  );
+}
+```
+
+`AvatarScene` uses the vanilla view's light rig and framing and stops its loop while the page is hidden.
+No Zustand: the controller already holds the state, and `useAvatarState` subscribes to it.
+
 ## Preview page
 
 ```bash

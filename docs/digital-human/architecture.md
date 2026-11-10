@@ -433,7 +433,9 @@ Built, on `feat/digital-human`:
 Proven by: the rig's 14 tests in Node (every frame field: shapes, visemes and viseme mixes, clips,
 head, neck, chest, gaze by shapes or by eye bones); 6 tests in Chromium with the real model file (it
 loads, draws over a transparent background, opens its jaw on cue, pauses while hidden, frees its GPU
-memory on dispose, and draws avatar-core's frames: all 39,388 triangles of OPTIMIZED); a first frame-cost
+memory on dispose, and draws avatar-core's frames: all 39,388 triangles of OPTIMIZED); 4 more for the
+React components (whole model drawn and posed every frame, pause while hidden, everything freed on
+unmount, `useAvatarState` follows the controller); a first frame-cost
 measurement on this Mac ([performance.md](performance.md)).
 
 Bugs the tests and renders caught: every MPFB material exported as transparent and double-sided, which
@@ -443,10 +445,10 @@ dispose.
 
 Changed from the plan:
 
-- **No React Three Fiber yet.** The renderer is framework-free because the extension (and so the
-  desktop app) is plain JavaScript and nothing here would use React components. `HumanAvatar` and
-  `AvatarScene` as React components can wrap `createAvatarView` in Phase 6 if the side panel uses
-  React. Zustand isn't used: avatar-core's controller holds the state.
+- **React components came after the Phase 3 review** (you asked for them): `AvatarScene`,
+  `HumanAvatar`, `useAvatarModel` and `useAvatarState` in `@squat-overflow/avatar-renderer-web/react`,
+  on React Three Fiber, sharing the vanilla view's light rig and framing. The vanilla API stays for the
+  plain-JavaScript extension pages. No Zustand: the controller already holds the state.
 - **WebP, not KTX2** (assets.md).
 - `setGaze` and `setExpression` still throw: the eye and face layers are Phase 4.
 

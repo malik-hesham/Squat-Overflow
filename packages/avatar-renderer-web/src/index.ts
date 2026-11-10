@@ -8,4 +8,6 @@ export {
   type AvatarRig,
   type AvatarRigOptions,
 } from './rig.ts';
-export { createAvatarView, type AvatarView, type AvatarViewOptions, type Framing } from './view.ts';
+export { FIELD_OF_VIEW, frameCamera, type Framing } from './camera.ts';
+export { createLighting } from './lighting.ts';
+export { createAvatarView, type AvatarView, type AvatarViewOptions } from './view.ts';
