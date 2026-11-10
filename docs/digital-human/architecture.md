@@ -112,9 +112,9 @@ Each dependency field counts (`dependencies`, `devDependencies`, `peerDependenci
 are in [`tools/workspace-check/src/rules.ts`](../../tools/workspace-check/src/rules.ts).
 
 "Host globals" means the package's compiled program loads no DOM or web worker lib and no Node or React
-Native global types (`@types/node` is also forbidden by name). The check builds the package's real
-TypeScript program and lists the files it loads, so a global pulled in indirectly (for example by a
-test library's types) fails it too. The compiler then rejects `window`, `document`, `fetch`,
+Native global types. The check builds the package's real TypeScript program from what it ships (test
+files are left out; a test that reads files from disk starts with `/// <reference types="node" />`) and
+lists the files it loads, so a global pulled in indirectly fails it too. The compiler then rejects `window`, `document`, `fetch`,
 `setTimeout`, `console` and `performance` in those packages. Time, randomness, audio and network reach them only through the ports
 in `avatar-types` (`MonotonicClock`, `RandomSource`, `AudioPort`, an injected fetch). This is what keeps
 `avatar-core` free of browser APIs, and it also makes it deterministic to test.

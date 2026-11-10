@@ -21,12 +21,9 @@ const UI = [
   'zustand',
 ];
 
-/** Host global types; the pure packages also prove they load none (findGlobalTypes). */
-const HOST_TYPES = ['@types/node', '@types/web'];
-
 /** No platform at all: core logic and contracts that run unchanged on every client. */
 function platformFree(internal: readonly string[]): BoundaryRule {
-  return { internal, forbidden: [...UI, ...NATIVE, ...TAURI, ...HOST_TYPES], pure: true };
+  return { internal, forbidden: [...UI, ...NATIVE, ...TAURI], pure: true };
 }
 
 export const RULES: Rules = {

@@ -1,8 +1,42 @@
 # Digital human: 3D asset requirements and import pipeline
 
-Status: planned for Phase 3. No model is in the repo yet. The types the pipeline fills
-(`AvatarAssetManifest`, `HUMANOID_BONES`, `ANIMATION_SLOTS`, `ARKIT_BLENDSHAPES`, `VISEMES`) are in
-[`packages/avatar-types/src`](../../packages/avatar-types/src).
+Status: **built in Phase 3** as `coach-01` in [`packages/avatar-assets`](../../packages/avatar-assets)
+(sources, licences and rebuild steps: [SOURCES.md](../../packages/avatar-assets/SOURCES.md)). The types
+the pipeline fills (`AvatarAssetManifest`, `HUMANOID_BONES`, `ANIMATION_SLOTS`, `ARKIT_BLENDSHAPES`,
+`VISEMES`) are in [`packages/avatar-types/src`](../../packages/avatar-types/src).
+
+![coach-01, HIGH profile, rendered with three.js](renders/coach-01-review.jpg)
+
+## What was built (measured 2026-11-10)
+
+| Profile   | File            | Size    | Triangles | Body                                 | Eyes      | Textures              |
+| --------- | --------------- | ------- | --------- | ------------------------------------ | --------- | --------------------- |
+| HIGH      | `high.glb`      | 5.78 MB | 93,024    | MakeHuman base mesh, subdivided once | high-poly | WebP, at most 2048 px |
+| OPTIMIZED | `optimized.glb` | 2.31 MB | 39,388    | MakeHuman base mesh                  | low-poly  | WebP, at most 1024 px |
+
+Both: the `game_engine` rig (53 bones, no eye bones, so gaze uses the `eyeLook*` shapes), the 52 ARKit
+shapes and 15 visemes on the body and carried over to brows, lashes, eyes, teeth, tongue and hair, an
+`idle` clip (4 s loop: arms down from the A-pose, slow breathing), meshopt geometry. `pnpm test` in the
+package proves the files match the manifest (see its README).
+
+Where it differs from the targets below, and why:
+
+- **More triangles than planned** (targets: 50–80k and 15–25k). In OPTIMIZED the teeth alone are about
+  7,000 triangles and the clothes 7,000. Cutting them is Phase 9 work; the face topology stays, since
+  the face shapes live on it.
+- **OPTIMIZED is not a separate low-poly body.** Decimating a mesh destroys its shape keys, and MPFB's
+  low-poly proxies don't carry them. So OPTIMIZED is the base mesh and HIGH the base mesh subdivided:
+  the same face shapes on both, by construction.
+- **WebP, not KTX2, for now.** KTX-Software has no Homebrew package and its macOS installer needs an
+  admin password; KTX2 also can't be decoded on mobile (no WebAssembly in Hermes) and needs a worker the
+  extension's CSP blocks. WebP shrinks the download but not GPU memory. KTX2 for the desktop profile is
+  Phase 9.
+- **Look:** realistic proportions, not photorealistic. The skin has a colour map only (no normal or
+  subsurface map), the irises are MakeHuman's `brown` (reddish), and the hairline has a hard edge
+  because hair is alpha-tested. Two-pass hair (alpha-tested core, blended edges) is renderer work.
+- **Materials are set by the build, not exported as is:** MPFB's materials came out of Blender as
+  transparent and double-sided, which showed the teeth through the face. `materialSettings` makes skin,
+  teeth, tongue and clothes opaque, and eyes, hair, brows and lashes alpha-tested.
 
 ## What the engine needs from a model
 
@@ -39,7 +73,7 @@ mobile OPTIMIZED file may need plain geometry and pre-transcoded or PNG/JPEG tex
 
 ## Where the model comes from
 
-You asked me to build the human. The plan for Phase 3, to confirm before I start:
+You asked me to build the human. The plan, as written before Phase 3 (built as above):
 
 1. **Base: MakeHuman's open assets** (body mesh, skins, eyes, eyebrows, eyelashes, teeth, tongue, hair,
    clothes; the assets are CC0) built in **Blender** with a script, run headless. Blender is not installed
@@ -83,13 +117,13 @@ The validator also runs in `pnpm check`, so a broken or mismatched model fails C
 
 ## Importing a model (for example an Avaturn export)
 
-Once Phase 3 is built:
+Not built yet: an `inspect` command that lists a foreign GLB's bones and morph targets and drafts a
+manifest for it. The pieces exist (`readGlbJson` and `summarizeGltf` in `avatar-assets`); the command
+comes when there is a real export to import. The steps will be:
 
 1. Export the avatar as `.glb` with ARKit blendshapes (and visemes, if offered). In Avaturn, that is the
    T2 body type. Check the exact export options on avaturn.me; I couldn't confirm its morph target names.
 2. Put the file in `packages/avatar-assets/sources/<id>/source.glb` and its licence terms in
    `SOURCES.md`.
-3. Run `pnpm --filter @squat-overflow/avatar-assets run inspect sources/<id>/source.glb`. It lists the bones
-   and morph targets and prints a draft `manifest.json` mapping them to the canonical names.
-4. Fix any name the draft couldn't map, then run `build-profiles`. The validator says exactly what is
-   missing.
+3. Map its names to the canonical ones in a manifest (the draft the `inspect` command will print).
+4. Run the post-processing and `pnpm test`: the checks say exactly what is missing.

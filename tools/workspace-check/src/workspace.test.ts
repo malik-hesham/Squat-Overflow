@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { checkDependencies } from './boundaries.ts';
 import { findGlobalTypes } from './globals.ts';
 import { RULES } from './rules.ts';
-import { loadWorkspace, programFiles } from './workspace.ts';
+import { loadWorkspace, programFiles, shippedProgramFiles } from './workspace.ts';
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const packages = loadWorkspace(ROOT);
@@ -30,11 +30,36 @@ describe('the workspace', () => {
   });
 
   it.each(pure.map((p) => [p.name, p.dir] as const))(
-    '%s compiles with no browser, Node or React Native globals',
+    '%s ships code that compiles with no browser, Node or React Native globals',
     (_name, dir) => {
-      expect(findGlobalTypes(programFiles(`${ROOT}/${dir}/tsconfig.json`))).toEqual([]);
+      expect(findGlobalTypes(shippedProgramFiles(`${ROOT}/${dir}/tsconfig.json`))).toEqual([]);
     }
   );
+});
+
+describe('shippedProgramFiles', () => {
+  it('leaves out test files, which may use Node, so only shipped code has to be pure', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'workspace-check-'));
+    try {
+      writeFileSync(join(dir, 'index.ts'), 'export const x = 1;\n');
+      writeFileSync(
+        join(dir, 'index.test.ts'),
+        '/// <reference types="node" />\nexport const here = process.cwd();\n'
+      );
+      writeFileSync(
+        join(dir, 'tsconfig.json'),
+        JSON.stringify({ compilerOptions: { lib: ['es2022'], types: [] } })
+      );
+
+      const files = shippedProgramFiles(join(dir, 'tsconfig.json'));
+
+      expect(files.some((f) => f.endsWith('/index.ts'))).toBe(true);
+      expect(files.some((f) => f.endsWith('.test.ts'))).toBe(false);
+      expect(findGlobalTypes(files)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('programFiles', () => {
