@@ -1,0 +1,19 @@
+# The digital human engine (docs/digital-human/architecture.md). extension/, mobile/, server/
+# and vscode-extension/ are not part of this workspace: they keep their own npm lockfiles.
+packages:
+  - packages/*
+  - services/*
+  - tools/*
+
+# One version of each tool for every package. TypeScript stays on 6.0 (as in mobile/) until
+# typescript-eslint supports 7: TypeScript 7's package has no compiler API.
+catalog:
+  '@eslint/js': ^10.0.1
+  '@types/node': ^24.19.2
+  eslint: ^10.14.0
+  prettier: ^3.9.10
+  turbo: ^2.11.10
+  typescript: ~6.0.3
+  typescript-eslint: ^8.72.2
+  vitest: ^5.1.0
+  yaml: ^2.9.1

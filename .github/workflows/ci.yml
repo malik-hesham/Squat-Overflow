@@ -59,6 +59,22 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+  packages:
+    name: Digital human packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # pnpm's version comes from packageManager in the root package.json.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Typecheck, typed lint, tests and Prettier for packages/, services/ and tools/. The tests
+      # include the package boundary check (tools/workspace-check).
+      - run: pnpm check
+
   deploy:
     name: AWS deploy script
     runs-on: ubuntu-latest
