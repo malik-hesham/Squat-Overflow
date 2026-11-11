@@ -19,6 +19,8 @@ The figure that shows each exercise is drawn on the device from `extension/lib/d
 
 A move can show a short video of a person doing it instead of the figure. The API server serves it at `/demos/<move>.mp4`; the break window, the Practice page, the desktop app and the phone ask for it when the user opens the demo, and play it in place of the figure once it loads. Offline, with no video for the move, or in a build with no server, the figure stays.
 
+`node extension/scripts/make-demo-video.mjs --list` is the shot list: for each move, whether the person sits or stands, which way they face the camera, one rep or one each side, and any hold, with a tick on the moves that already have a video.
+
 Record one rep (or one rep each side) on a phone, held level, with the whole body in the middle of the frame and a plain wall behind. Then run (needs `ffmpeg`):
 
 ```bash

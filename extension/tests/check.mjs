@@ -2556,7 +2556,7 @@ Promise.all(pending).then(
 // show the drawn figure until the video plays, and keep it when there is no video.
 {
   const { demoVideoUrl } = await import("../lib/demo-video.js");
-  const { mp4Info, demoVideoProblems, makeDemoVideo, removeDemoVideo } = await import("../scripts/make-demo-video.mjs");
+  const { mp4Info, demoVideoProblems, makeDemoVideo, removeDemoVideo, shotList } = await import("../scripts/make-demo-video.mjs");
   const { execFileSync, spawnSync } = await import("node:child_process");
   const { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -2653,6 +2653,28 @@ Promise.all(pending).then(
 
   check("demo videos: the videos in server/demos pass", () => {
     assert.deepEqual(demoVideoProblems(fileURLToPath(new URL("../..", import.meta.url))), []);
+  });
+
+  check("demo videos: --list is a shot list from the catalog: how to film each move, ticked once it has a video", () => {
+    const root = mkdtempSync(join(tmpdir(), "so-demo-videos-"));
+    try {
+      mkdirSync(join(root, "server/demos"), { recursive: true });
+      writeFileSync(join(root, "server/demos/seated_march.mp4"), fakeMp4());
+      const list = shotList(root);
+      const moves = exerciseCatalog();
+      assert.match(list, new RegExp(`^Demo videos: 1 of ${moves.length} filmed\\.`), "how far along");
+      assert.match(list, /\[x\] seated_march +Seated march: seated, side-on to the camera, one rep each side\n +Sit near the front of your chair/);
+      assert.match(list, /\[ \] chin_tuck +Chin tuck: seated, side-on to the camera, one rep\n/);
+      assert.match(list, /\[ \] mini_squat +Mini squat: standing, side-on to the camera, one rep\n/);
+      assert.match(list, /\[ \] seated_side_bend +Side-bend stretch: seated, facing the camera, one rep each side, hold 5 s \(shorter on camera: the clip is at most 8 s\)\n/);
+      assert.match(list, /shoulder_blade_squeeze +[^\n]*, hold 3 s\n/, "a short hold fits as it is");
+      for (const move of moves) assert.ok(list.includes(` ${move.key} `) && list.includes(move.how_to), move.key);
+      const headings = [...new Set(moves.map((m) => m.category))];
+      assert.deepEqual(headings.map((h) => list.indexOf(`\n${h}\n`) > 0), headings.map(() => true), "a heading per area");
+      assert.deepEqual([...headings].sort((a, b) => list.indexOf(`\n${a}\n`) - list.indexOf(`\n${b}\n`)), headings, "in catalog order");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   check("demo videos: --remove takes a move's video off the server, so the move shows the figure", () => {

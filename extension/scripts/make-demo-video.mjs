@@ -186,18 +186,55 @@ export function removeDemoVideo({ root, key }) {
   rmSync(file);
 }
 
+/** A move's how-to that does one side, then the other: film a rep each side. */
+const BOTH_SIDES = /each side|other side|then the other|switch sides/i;
+
+/**
+ * What to film for each move, from the catalog, by area: whether the person sits or stands, which
+ * way they face the camera (the angle the pose model reads the move from), one rep or one each side,
+ * any hold, and the how-to the apps show. A move with a video in `root`/server/demos is ticked.
+ * @param {string} root
+ */
+export function shotList(root) {
+  const moves = exerciseCatalog();
+  const filmed = (key) => existsSync(join(root, "server/demos", `${key}.mp4`));
+  const width = Math.max(...moves.map((m) => m.key.length));
+  const lines = [
+    `Demo videos: ${moves.filter((m) => filmed(m.key)).length} of ${moves.length} filmed. Film one rep (one each side where it says so)`,
+    `in under ${MAX_SECONDS} s: phone level, the person in the middle of the frame (the video keeps the middle square),`,
+    "the whole body in view, a plain wall behind. Then: node extension/scripts/make-demo-video.mjs <move> <clip>",
+  ];
+  let area = "";
+  for (const move of moves) {
+    if (move.category !== area) lines.push("", (area = move.category));
+    const sides = BOTH_SIDES.test(move.how_to) ? 2 : 1;
+    const plan = [
+      move.stance,
+      move.camera === "front" ? "facing the camera" : "side-on to the camera",
+      sides === 2 ? "one rep each side" : "one rep",
+      ...(move.hold > 0
+        ? [`hold ${move.hold} s${sides * (move.hold + 2) > MAX_SECONDS ? ` (shorter on camera: the clip is at most ${MAX_SECONDS} s)` : ""}`]
+        : []),
+    ];
+    lines.push(`  [${filmed(move.key) ? "x" : " "}] ${move.key.padEnd(width)} ${move.label}: ${plan.join(", ")}`, `      ${move.how_to}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 const USAGE = `usage:
   node extension/scripts/make-demo-video.mjs <move> <clip> [--from <s>] [--to <s>]   make a move's demo video
-  node extension/scripts/make-demo-video.mjs --remove <move>                          back to the drawn figure`;
+  node extension/scripts/make-demo-video.mjs --remove <move>                          back to the drawn figure
+  node extension/scripts/make-demo-video.mjs --list                                   what to film for each move, and which have a video`;
 
 /** @param {string[]} argv */
 function main(argv) {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { from: { type: "string" }, to: { type: "string" }, remove: { type: "string" } },
+    options: { from: { type: "string" }, to: { type: "string" }, remove: { type: "string" }, list: { type: "boolean" } },
   });
   const root = fileURLToPath(new URL("../..", import.meta.url));
+  if (values.list) return void process.stdout.write(shotList(root));
   const seconds = (v) => {
     if (v == null) return undefined;
     const n = Number(v);
