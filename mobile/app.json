@@ -78,6 +78,7 @@
           "deploymentTarget": "16.4"
         }
       ],
+      "./plugins/withSceneLifecycle",
       "expo-web-browser",
       "expo-secure-store"
     ],
