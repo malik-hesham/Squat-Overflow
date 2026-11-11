@@ -39,15 +39,6 @@ Blurred mode blurs the on-screen preview. The pose model runs in the extension, 
 
 `desktop/` is a status bar app with a Rust shell (Tauri). It runs the extension's own pages and `service-worker.js`, unchanged, behind a small `chrome.*` shim, so it has no rules of its own to keep in step. See [desktop/README.md](desktop/README.md) for what has been checked and what hasn't.
 
-## Digital human engine (in progress)
-
-`packages/` is a pnpm + Turborepo workspace for an interactive 3D human that will run in the extension,
-the desktop app and the mobile app. Phases 1 to 3 are built: the workspace, shared types, `avatar-core`, the human model
-(`packages/avatar-assets`) and the web renderer (`pnpm --filter @squat-overflow/avatar-renderer-web dev` opens a preview); the plan, the
-package boundaries and the risks are in [docs/digital-human/architecture.md](docs/digital-human/architecture.md),
-and the 3D asset pipeline in [docs/digital-human/assets.md](docs/digital-human/assets.md). Nothing in the
-clients uses it yet.
-
 ## Tests
 
 ```bash
@@ -55,7 +46,6 @@ cd server && npm test
 node extension/tests/check.mjs
 node --test 'scripts/tests/*.test.mjs'
 cd extension && npm ci && npm run typecheck
-pnpm install && pnpm check    # digital human workspace: typecheck, lint, tests, formatting
 ```
 
 `extension/tests/e2e/` has Playwright checks that run a break and the Practice page offline in Chromium with a fake camera (see the top of each file).

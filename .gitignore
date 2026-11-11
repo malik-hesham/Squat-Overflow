@@ -8,9 +8,3 @@ node_modules/
 
 # Server secrets for deploy/docker-compose.yml
 deploy/.env
-
-# Turborepo cache
-.turbo/
-
-# Vitest browser mode failure screenshots
-.vitest/

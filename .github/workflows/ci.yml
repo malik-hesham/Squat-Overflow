@@ -59,24 +59,6 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
-  packages:
-    name: Digital human packages
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      # pnpm's version comes from packageManager in the root package.json.
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # The web renderer's tests run in Chromium (software WebGL); install it and its system libraries.
-      - run: pnpm --filter @squat-overflow/avatar-renderer-web exec playwright install --with-deps chromium
-      # Typecheck, typed lint, tests and Prettier for packages/, services/ and tools/. The tests
-      # include the package boundary check (tools/workspace-check) and the model file checks.
-      - run: pnpm check
-
   deploy:
     name: AWS deploy script
     runs-on: ubuntu-latest
