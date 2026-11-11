@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Text } from '@/components/ui/text';
-import { DemoModel } from '@/src/components/DemoModel';
+import { ExerciseDemo } from '@/src/components/ExerciseDemo';
 import { Bar, Muted } from '@/src/components/kit';
 import { useAppData } from '@/src/core/AppData';
 import { breakAction, breakDone, type BreakResult, type DoneOutcome } from '@/src/core/engine';
@@ -334,8 +334,8 @@ export default function BreakScreen() {
   const totalTarget = st.moves.reduce((n, m) => n + m.target, 0) || 1;
   const totalDone = st.progress.reduce((n, q) => n + q.reps, 0);
   const progress = move ? st.progress[st.i] : null;
-  // The 3D demo (made on the phone, works offline). It stays open from move to move, and stays
-  // available when the coach can't run: follow the figure, then Done.
+  // The demo: the move's filmed GIF, or the 3D figure (both on the phone, so it works offline). It
+  // stays open from move to move, and stays available when the coach can't run: follow it, then Done.
   const hasDemo = !!move && demoMotion(move.key) != null;
 
   if (screen === 'summary' && outcome) {
@@ -459,12 +459,7 @@ export default function BreakScreen() {
             ) : null}
           </View>
 
-          {demo && hasDemo && move ? (
-            <View className="gap-1">
-              <DemoModel moveKey={move.key} label={t(lang, 'demoLabel', { move: move.label })} />
-              <Muted className="text-center text-xs">{t(lang, 'demoHint')}</Muted>
-            </View>
-          ) : null}
+          {demo && hasDemo && move ? <ExerciseDemo move={move} lang={lang} /> : null}
 
           <View className="bg-card border-border gap-3 rounded-xl border p-3">
             <PrefRow label={t(lang, 'voiceCues')} value={voice} onChange={(v) => togglePref('voice', v)} />

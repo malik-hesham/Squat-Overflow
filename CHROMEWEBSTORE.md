@@ -31,7 +31,7 @@ HOW TO USE IT
 3. Click the toolbar icon any time to see your level, upcoming break and leaderboard, or to start a break now.
 
 PRIVACY
-Your webcam is analysed on your computer, by a pose model that ships inside the extension. Camera frames are never sent anywhere, and breaks work offline. Your progress stays on your computer. Google sign-in is optional; once you sign in, your breaks and settings sync to your other devices. In Competitive mode only your chosen name, company domain, XP, level, streak and avatar are shared to the leaderboard. Full policy: https://<API server host>/privacy
+Your webcam is analysed on your computer, by a pose model that ships inside the extension. Camera frames are never sent anywhere, and breaks work offline. Opening an exercise's demo downloads its short demo video from our server when it has one; the request carries no account details. Your progress stays on your computer. Google sign-in is optional; once you sign in, your breaks and settings sync to your other devices. In Competitive mode only your chosen name, company domain, XP, level, streak and avatar are shared to the leaderboard. Full policy: https://<API server host>/privacy
 ```
 
 **Category:** Productivity. "Health & Fitness" is not an extension category.
@@ -64,7 +64,7 @@ Screenshots must show the real UI of the version being submitted. Don't show any
 | `identity` | permissions | Optional "Continue with Google" sign-in (`openid email profile`), which verifies the work email used to join the company leaderboard in Competitive mode. Also optional Google Calendar access: free/busy times only (read-only `calendar.freebusy` scope), so reminders avoid meetings. No event titles or details are read. |
 | Camera (browser prompt, no manifest permission) | n/a | The break window and Practice page ask for the webcam to count reps and score form. Frames are analysed in the page by the bundled pose model and never leave the device. |
 | WebAssembly (CSP `script-src 'wasm-unsafe-eval'`) | n/a | Runs Google's MediaPipe pose model, which ships inside the extension (`lib/vendor/mediapipe/`: the runtime, its WebAssembly file and `pose_landmarker_lite.task`). No code or model is downloaded; everything the extension runs is in the package. |
-| Remote connections (CSP `connect-src`) | n/a | `https://<API server host>`: the optional sign-in, leaderboard and sync API the store zip is built for (`API_URL`); the build adds it to `connect-src`. A build without `API_URL` has no such entry. `googleapis.com`: Calendar free/busy and Google sign-in. No `host_permissions` are requested. |
+| Remote connections (CSP `connect-src`) | n/a | `https://<API server host>`: the optional sign-in, leaderboard and sync API the store zip is built for (`API_URL`); the build adds it to `connect-src`. A build without `API_URL` has no such entry. The same host serves the exercise demo videos (`/demos/<move>.mp4`), loaded by a `<video>` element when the user opens a demo, so not through `connect-src`. `googleapis.com`: Calendar free/busy and Google sign-in. No `host_permissions` are requested. |
 
 ## Privacy and data use
 

@@ -12,7 +12,8 @@ import { initLang, t, exerciseText, areaName, levelName, issueText, nameText } f
 import { Avatar } from "./avatar.js";
 import { createMemePlayer, repMarks } from "./lib/memes.js";
 import { demoMotion } from "./lib/demo-model.js";
-import { createDemoPlayer } from "./lib/demo-player.js";
+import { createDemoPanel } from "./lib/demo-panel.js";
+import { API_URL } from "./config.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
 const CAMERA_SLOW_MS = 6_000;
@@ -23,7 +24,7 @@ const $ = (id) => document.getElementById(id);
  * Every id below as an HTMLElement, with the ones whose element-specific
  * properties this page uses typed as what break.html makes them.
  * @typedef {Record<string, HTMLElement> & {
- *   voice: HTMLInputElement, memes: HTMLInputElement,
+ *   voice: HTMLInputElement, memes: HTMLInputElement, demoView: HTMLCanvasElement, demoVideo: HTMLVideoElement,
  *   done: HTMLButtonElement, snooze: HTMLButtonElement, skip: HTMLButtonElement, warnSnooze: HTMLButtonElement,
  * }} Els
  */
@@ -31,7 +32,7 @@ const els = /** @type {Els} */ (Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
-    "lastScore", "cue", "howto", "hint", "demo", "demoPanel", "demoView", "swap", "summary", "confetti", "total", "lines", "levelUp",
+    "lastScore", "cue", "howto", "hint", "demo", "demoPanel", "demoView", "demoVideo", "demoHint", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "memes", "lookBtn", "lookName",
     "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
@@ -45,7 +46,7 @@ const state = {
   progress: [],
   i: 0,
   client: null,
-  demo: null, // the 3D demo player, made on first use
+  demo: null, // the demo panel (figure, then video), made on first use
   demoOpen: false, // stays open from move to move until the user hides it
   finished: false,
   positioning: false,
@@ -461,7 +462,8 @@ async function leave(action) {
   closeWindow();
 }
 
-// The 3D demo: a figure doing the move, made on the device (lib/demo-model.js), so it works offline
+// The demo: a figure doing the move, made on the device (lib/demo-model.js), so it works offline, and
+// the move's demo video from the API server in its place once that plays (lib/demo-panel.js).
 // and sends nothing anywhere. It also helps when the coach can't run: follow the figure, then Done.
 function showDemo(move) {
   const has = !!move && demoMotion(move.key) != null;
@@ -471,9 +473,11 @@ function showDemo(move) {
   els.demo.textContent = t(state.lang, open ? "hideDemo" : "watchDemo");
   els.demo.setAttribute("aria-expanded", String(open));
   if (!open) return state.demo?.hide();
-  els.demoView.setAttribute("aria-label", t(state.lang, "demoLabel", { move: move.label }));
-  state.demo ??= createDemoPlayer(/** @type {HTMLCanvasElement} */ (els.demoView));
-  state.demo.show(move.key);
+  state.demo ??= createDemoPanel({ canvas: els.demoView, video: els.demoVideo, hint: els.demoHint }, API_URL);
+  state.demo.show(move.key, {
+    label: t(state.lang, "demoLabel", { move: move.label }),
+    clipLabel: t(state.lang, "demoClipLabel", { move: move.label }),
+  });
 }
 
 function toggleDemo() {

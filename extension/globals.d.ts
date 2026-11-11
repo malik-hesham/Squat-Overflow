@@ -12,6 +12,6 @@ declare global {
   };
   var Demo3D: {
     has: (key: string) => boolean;
-    createPlayer: typeof import("./lib/demo-player.js").createDemoPlayer;
+    createPanel: (els: Parameters<typeof import("./lib/demo-panel.js").createDemoPanel>[0]) => ReturnType<typeof import("./lib/demo-panel.js").createDemoPanel>;
   };
 }

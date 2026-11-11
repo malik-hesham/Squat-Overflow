@@ -6,10 +6,11 @@ import { Avatar } from "./avatar.js";
 import { CONNECTIONS, exerciseCatalog } from "./lib/pose/index.js";
 import { CLOSE_MODEL_FAILED, openPoseSocket } from "./lib/pose/local-socket.js";
 import { demoMotion } from "./lib/demo-model.js";
-import { createDemoPlayer } from "./lib/demo-player.js";
+import { createDemoPanel } from "./lib/demo-panel.js";
+import { API_URL } from "./config.js";
 
 globalThis.Avatar = Avatar;
-globalThis.Demo3D = { has: (key) => demoMotion(key) != null, createPlayer: createDemoPlayer };
+globalThis.Demo3D = { has: (key) => demoMotion(key) != null, createPanel: (els) => createDemoPanel(els, API_URL) };
 globalThis.PoseLocal = {
   exerciseCatalog,
   CONNECTIONS,

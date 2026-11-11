@@ -122,9 +122,12 @@ describe('DemoModel', () => {
     expect(box.props.accessibilityLabel).toBe('3D demo: Chin tuck');
   });
 
-  it('the break screen shows it instead of a YouTube player', () => {
-    const screen = require('fs').readFileSync(`${__dirname}/../../../app/break.tsx`, 'utf8');
-    expect(screen).toMatch(/<DemoModel\b/);
-    expect(screen).not.toMatch(/youtube|DemoVideo|WebView/i);
+  it("the break screen shows it (or the move's demo video, through ExerciseDemo) instead of a YouTube player", () => {
+    const read = (path: string) => require('fs').readFileSync(`${__dirname}/${path}`, 'utf8');
+    const screen = read('../../../app/break.tsx');
+    const demo = read('../ExerciseDemo.tsx');
+    expect(screen).toMatch(/<ExerciseDemo\b/);
+    expect(demo).toMatch(/<DemoModel\b/);
+    for (const src of [screen, demo]) expect(src).not.toMatch(/youtube|WebView/i);
   });
 });

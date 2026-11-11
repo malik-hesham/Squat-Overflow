@@ -15,6 +15,20 @@ That's all a break needs. Pose detection, rep counting and form scoring run in t
 
 The figure that shows each exercise is drawn on the device from `extension/lib/demo-model.js`. How the person looks is one small file, `extension/lib/demo-look.js`: the colours (skin, hair, top, bottoms, shoes), what each body part wears (long sleeves, trousers) and how thick each part is. Edit a value and reload; the extension, the desktop app and the phone all draw from it. `node extension/tests/check.mjs` checks the file.
 
+### Add an exercise demo video
+
+A move can show a short video of a person doing it instead of the figure. The API server serves it at `/demos/<move>.mp4`; the break window, the Practice page, the desktop app and the phone ask for it when the user opens the demo, and play it in place of the figure once it loads. Offline, with no video for the move, or in a build with no server, the figure stays.
+
+Record one rep (or one rep each side) on a phone, held level, with the whole body in the middle of the frame and a plain wall behind. Then run (needs `ffmpeg`):
+
+```bash
+node extension/scripts/make-demo-video.mjs seated_march ~/Movies/march.mov --from 1.2 --to 5.4
+```
+
+It writes `server/demos/seated_march.mp4`: 480×480, 24 fps, H.264, no sound, at most 8 s and 500 KB, and able to start playing before it has all loaded. Commit it and deploy the server ([docs/aws-free-plan.md](docs/aws-free-plan.md#updating)); the image serves every file in `server/demos/`. `--remove <move>` takes a video out. `node extension/tests/check.mjs` checks every file in that folder.
+
+The server publishes these videos, so use footage you made or have written permission to use. Clips copied from another website can't go in without the owner's permission.
+
 ### Sign-in, leaderboard and sync (optional)
 
 These come from the API server in `server/` (Node 24.9+, NestJS + Postgres, see [server/README.md](server/README.md)). `API_URL` in `extension/config.js` points at it, `http://127.0.0.1:8765` by default:

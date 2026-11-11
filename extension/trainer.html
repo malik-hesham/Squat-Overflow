@@ -82,7 +82,8 @@
           <button id="demoBtn" class="link" type="button" aria-controls="demoPanel" aria-expanded="false">▶ Watch demo</button>
           <figure class="demo-panel" id="demoPanel" hidden>
             <canvas id="demoView" role="img" tabindex="0"></canvas>
-            <figcaption class="hint">Drag to turn the figure</figcaption>
+            <video id="demoVideo" muted loop playsinline preload="auto" hidden></video>
+            <figcaption class="hint" id="demoHint">Drag to turn the figure</figcaption>
           </figure>
         </div>
         <p class="hint" id="cameraHint"></p>

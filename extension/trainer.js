@@ -60,6 +60,8 @@ const els = {
   demoBtn: $("demoBtn"),
   demoPanel: $("demoPanel"),
   demoView: /** @type {HTMLCanvasElement} */ ($("demoView")),
+  demoVideo: /** @type {HTMLVideoElement} */ ($("demoVideo")),
+  demoHint: $("demoHint"),
   startBtn: /** @type {HTMLButtonElement} */ ($("startBtn")),
   resetBtn: /** @type {HTMLButtonElement} */ ($("resetBtn")),
   voice: /** @type {HTMLInputElement} */ ($("voice")),
@@ -123,7 +125,7 @@ const state = {
   latest: null,
   latestAt: 0,
   thresholds: null,
-  demoPlayer: null, // the 3D demo, made on first use
+  demoPlayer: null, // the demo panel (figure, then video), made on first use
   demoOpen: false,
   history: [],
   reps: [],
@@ -777,7 +779,8 @@ function renderExerciseMeta() {
 
 // ---------------------------------------------------------------------------
 // The 3D demo: a figure doing the exercise, made on the device (lib/demo-model.js), so it needs no
-// network. The same figure as the break window's.
+// network. The same figure as the break window's, and the same demo video from the API server in its
+// place once that plays (lib/demo-panel.js).
 // ---------------------------------------------------------------------------
 function renderDemo(ex) {
   const has = globalThis.Demo3D.has(ex.key);
@@ -787,9 +790,8 @@ function renderDemo(ex) {
   els.demoBtn.textContent = open ? "Hide demo" : "▶ Watch demo";
   els.demoBtn.setAttribute("aria-expanded", String(open));
   if (!open) return state.demoPlayer?.hide();
-  els.demoView.setAttribute("aria-label", `3D demo: ${ex.label}`);
-  state.demoPlayer ??= globalThis.Demo3D.createPlayer(els.demoView);
-  state.demoPlayer.show(ex.key);
+  state.demoPlayer ??= globalThis.Demo3D.createPanel({ canvas: els.demoView, video: els.demoVideo, hint: els.demoHint });
+  state.demoPlayer.show(ex.key, { label: `3D demo: ${ex.label}`, clipLabel: `Demo video: ${ex.label}` });
 }
 
 async function start() {

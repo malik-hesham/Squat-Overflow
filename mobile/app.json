@@ -80,7 +80,8 @@
       ],
       "./plugins/withSceneLifecycle",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

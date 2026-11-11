@@ -133,6 +133,7 @@ select, input[type="text"] {
   border-radius: 8px; background: var(--surface-2);
 }
 .demo-panel canvas:active { cursor: grabbing; }
+.demo-panel video { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 8px; background: var(--surface-2); }
 .demo-panel figcaption { text-align: center; }
 .row { display: flex; gap: 8px; }
 button {

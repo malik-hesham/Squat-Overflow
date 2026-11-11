@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { API_URL } from "../../config.js";
+
 const { chromium } = await import(process.env.PLAYWRIGHT ?? "playwright");
 const extension = fileURLToPath(new URL("../..", import.meta.url));
 const profile = mkdtempSync(join(tmpdir(), "so-e2e-"));
@@ -121,9 +123,12 @@ try {
     console.log(`ok break (privacy ${privacy ? "on" : "off"}): frames analysed on the device at ${rate}/s, exercise ${seen.last.exercise}`);
     await page.close().catch(() => {});
   }
-  const outside = requests.filter((u) => !/^(chrome-extension|data|blob):/.test(u));
+  // Opening a demo asks the API server for the move's video (offline it fails, and the figure stays).
+  // Nothing else leaves the extension: no camera frame, no pose data.
+  const video = new RegExp(`^${API_URL.replace(/[.]/g, "\\.")}/demos/[a-z0-9_]+\\.mp4$`);
+  const outside = requests.filter((u) => !/^(chrome-extension|data|blob):/.test(u) && !video.test(u));
   assert.deepEqual(outside, [], "requests left the extension");
-  console.log(`ok nothing left the extension (${requests.length} requests, all chrome-extension://)`);
+  console.log(`ok nothing left the extension but the demo video asks (${requests.length} requests), and offline the figure stayed`);
 } catch (err) {
   failed = true;
   console.log(`FAIL ${err.stack ?? err.message}`);

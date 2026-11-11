@@ -2550,3 +2550,170 @@ Promise.all(pending).then(
     }
   });
 }
+
+// ---- Demo videos: a short MP4 of a person doing the move, served by the API server (server/demos/,
+// GET /demos/<key>.mp4) and made from a clip by scripts/make-demo-video.mjs. The pages and the phone
+// show the drawn figure until the video plays, and keep it when there is no video.
+{
+  const { demoVideoUrl } = await import("../lib/demo-video.js");
+  const { mp4Info, demoVideoProblems, makeDemoVideo, removeDemoVideo } = await import("../scripts/make-demo-video.mjs");
+  const { execFileSync, spawnSync } = await import("node:child_process");
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+
+  /** An MP4's boxes (sample data is filler: only the structure is read). */
+  const fakeMp4 = ({ width = 480, height = 480, seconds = 4, codec = "avc1", audio = false, faststart = true, tkhd = 0, pad = 0 } = {}) => {
+    const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+    const u64 = (n) => { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(n)); return b; };
+    const box = (type, ...parts) => { const body = Buffer.concat(parts); return Buffer.concat([u32(8 + body.length), Buffer.from(type), body]); };
+    const full = (version) => Buffer.from([version, 0, 0, 0]);
+    const trak = (handler, format, w, h) => {
+      const header = tkhd === 1
+        ? [full(1), u64(0), u64(0), u32(1), u32(0), u64(seconds * 1000)]
+        : [full(0), u32(0), u32(0), u32(1), u32(0), u32(seconds * 1000)];
+      return box("trak",
+        box("tkhd", ...header, Buffer.alloc(8), Buffer.alloc(8), Buffer.alloc(36), u32(w * 65536), u32(h * 65536)),
+        box("mdia",
+          box("mdhd", full(0), u32(0), u32(0), u32(12800), u32(seconds * 12800), Buffer.alloc(4)),
+          box("hdlr", full(0), u32(0), Buffer.from(handler), Buffer.alloc(12), Buffer.from([0])),
+          box("minf", box("stbl", box("stsd", full(0), u32(1), box(format, Buffer.alloc(78)))))));
+    };
+    const moov = box("moov",
+      box("mvhd", full(0), u32(0), u32(0), u32(1000), u32(seconds * 1000), Buffer.alloc(80)),
+      trak("vide", codec, width, height),
+      ...(audio ? [trak("soun", "mp4a", 0, 0)] : []));
+    const ftyp = box("ftyp", Buffer.from("isom"), u32(512), Buffer.from("isomiso2avc1mp41"));
+    const mdat = box("mdat", Buffer.alloc(16 + pad));
+    return Buffer.concat(faststart ? [ftyp, moov, mdat] : [ftyp, mdat, moov]);
+  };
+
+  check("demo videos: mp4Info reads a video's size, length and codec, any audio, and whether it can start before it has all loaded", () => {
+    assert.deepEqual(mp4Info(fakeMp4()), { width: 480, height: 480, seconds: 4, codec: "avc1", audio: false, faststart: true });
+    assert.deepEqual(mp4Info(fakeMp4({ width: 640, height: 360, seconds: 9, codec: "hvc1", audio: true, faststart: false, tkhd: 1 })), {
+      width: 640, height: 360, seconds: 9, codec: "hvc1", audio: true, faststart: false,
+    });
+  });
+
+  check("demo videos: mp4Info turns down what isn't a whole MP4 with a video track", () => {
+    assert.throws(() => mp4Info(Buffer.from("GIF89a and then some more bytes")), /not an MP4/);
+    const whole = fakeMp4();
+    assert.throws(() => mp4Info(whole.subarray(0, whole.length - 40)), /cut short/);
+    const silentAudioOnly = fakeMp4({ audio: true }).toString("latin1").replace("vide", "text");
+    assert.throws(() => mp4Info(Buffer.from(silentAudioOnly, "latin1")), /no video track/);
+  });
+
+  check("demo videos: a move's video is <API server>/demos/<key>.mp4, and there is none without a server", () => {
+    assert.equal(demoVideoUrl("https://api.example.com", "seated_march"), "https://api.example.com/demos/seated_march.mp4");
+    assert.equal(demoVideoUrl("http://127.0.0.1:8765", "neck_tilt"), "http://127.0.0.1:8765/demos/neck_tilt.mp4");
+    assert.equal(demoVideoUrl("", "seated_march"), null, "a local-only build asks no server");
+    assert.equal(demoVideoUrl("https://api.example.com", "../health"), "https://api.example.com/demos/..%2Fhealth.mp4");
+  });
+
+  check("demo videos: demoVideoProblems finds a server/demos file the apps can't play well, or that no move owns", () => {
+    const root = mkdtempSync(join(tmpdir(), "so-demo-videos-"));
+    const put = (name, data) => {
+      mkdirSync(join(root, "server/demos"), { recursive: true });
+      writeFileSync(join(root, "server/demos", name), data);
+    };
+    const problems = () => demoVideoProblems(root).join("\n");
+    try {
+      assert.deepEqual(demoVideoProblems(root), [], "no folder yet: no videos, no problems");
+      put("neck_tilt.mp4", fakeMp4());
+      put(".gitkeep", ""); // keeps the empty folder in git; never served
+      assert.deepEqual(demoVideoProblems(root), []);
+
+      /** @type {Array<[Parameters<typeof fakeMp4>[0], RegExp]>} */
+      const cases = [
+        [{ width: 640, height: 360 }, /neck_tilt\.mp4 is 640×360, not 480×480/],
+        [{ seconds: 9 }, /neck_tilt\.mp4 is 9\.0 s, over 8 s/],
+        [{ codec: "hvc1" }, /neck_tilt\.mp4 is hvc1, not H\.264 \(avc1\)/],
+        [{ audio: true }, /neck_tilt\.mp4 has sound/],
+        [{ faststart: false }, /neck_tilt\.mp4 can't start playing until it has all loaded/],
+        [{ pad: 600 * 1024 }, /neck_tilt\.mp4 is 600 KB, over the 500 KB cap/],
+      ];
+      for (const [bad, want] of cases) {
+        put("neck_tilt.mp4", fakeMp4(bad));
+        assert.match(problems(), want);
+      }
+      put("neck_tilt.mp4", "not a video");
+      assert.match(problems(), /neck_tilt\.mp4: not an MP4/);
+      put("neck_tilt.mp4", fakeMp4());
+
+      put("moonwalk.mp4", fakeMp4());
+      assert.match(problems(), /moonwalk\.mp4: "moonwalk" is not a move in the catalog/);
+      rmSync(join(root, "server/demos/moonwalk.mp4"));
+      put("march.gif", "GIF89a");
+      assert.match(problems(), /march\.gif: a demo is <move>\.mp4/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  check("demo videos: the videos in server/demos pass", () => {
+    assert.deepEqual(demoVideoProblems(fileURLToPath(new URL("../..", import.meta.url))), []);
+  });
+
+  check("demo videos: --remove takes a move's video off the server, so the move shows the figure", () => {
+    const root = mkdtempSync(join(tmpdir(), "so-demo-videos-"));
+    try {
+      mkdirSync(join(root, "server/demos"), { recursive: true });
+      writeFileSync(join(root, "server/demos/neck_tilt.mp4"), fakeMp4());
+      removeDemoVideo({ root, key: "neck_tilt" });
+      assert.equal(existsSync(join(root, "server/demos/neck_tilt.mp4")), false);
+      assert.throws(() => removeDemoVideo({ root, key: "neck_tilt" }), /neck_tilt has no demo video/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  if (spawnSync("ffmpeg", ["-version"]).status !== 0) {
+    console.log("skip demo videos: make-demo-video needs ffmpeg, which this machine doesn't have");
+  } else {
+    const ffmpeg = (...args) => execFileSync("ffmpeg", ["-v", "error", "-y", ...args]);
+    const scratch = () => mkdtempSync(join(tmpdir(), "so-demo-videos-"));
+
+    check("demo videos: make-demo-video turns a clip into a short, silent 480×480 H.264 MP4 in server/demos that starts playing at once", () => {
+      const root = scratch();
+      try {
+        const clip = join(root, "clip.mp4");
+        ffmpeg("-f", "lavfi", "-i", "testsrc2=duration=4:size=1280x720:rate=30", "-f", "lavfi", "-i", "sine=duration=4",
+          "-pix_fmt", "yuv420p", "-shortest", clip);
+        assert.equal(mp4Info(readFileSync(clip)).audio, true, "the clip has sound");
+        makeDemoVideo({ root, key: "seated_march", clip, from: 0.5, to: 3.5 });
+        const bytes = readFileSync(join(root, "server/demos/seated_march.mp4"));
+        const info = mp4Info(bytes);
+        assert.deepEqual({ ...info, seconds: undefined }, { width: 480, height: 480, seconds: undefined, codec: "avc1", audio: false, faststart: true });
+        assert.ok(Math.abs(info.seconds - 3) < 0.2, `${info.seconds} s for 0.5–3.5 s`);
+        assert.deepEqual(demoVideoProblems(root), []);
+        console.log(`  (a 3 s 720p test clip came out at ${Math.round(bytes.length / 1024)} KB)`);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    check("demo videos: make-demo-video turns down an unknown move, a missing clip, a long clip and one too big, and writes nothing", () => {
+      const root = scratch();
+      try {
+        const long = join(root, "long.mp4");
+        ffmpeg("-f", "lavfi", "-i", "testsrc2=duration=10:size=640x360:rate=30", "-pix_fmt", "yuv420p", long);
+        const noise = join(root, "noise.mp4");
+        ffmpeg("-f", "lavfi", "-i", "color=c=gray:s=640x640:d=6:r=30,noise=alls=100:allf=t", "-pix_fmt", "yuv420p", noise);
+        assert.throws(() => makeDemoVideo({ root, key: "moonwalk", clip: long }), /"moonwalk" is not a move in the catalog/);
+        assert.throws(() => makeDemoVideo({ root, key: "chin_tuck", clip: join(root, "nope.mp4") }), /no clip at .*nope\.mp4/);
+        assert.throws(() => makeDemoVideo({ root, key: "chin_tuck", clip: long }), /over 8 s.*--from and --to/s);
+        assert.throws(() => makeDemoVideo({ root, key: "chin_tuck", clip: noise }), /over the 500 KB cap.*--from and --to/s);
+        assert.equal(existsSync(join(root, "server/demos/chin_tuck.mp4")), false);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+
+  check("i18n: a demo video has its own label in every language (it is not a 3D figure)", () => {
+    for (const lang of LANGS.filter((l) => l !== "auto")) assert.ok(translationKeys(lang).includes("demoClipLabel"), `${lang}: missing demoClipLabel`);
+    assert.equal(t("en", "demoClipLabel", { move: "Seated march" }), "Demo video: Seated march");
+    assert.match(t("ar", "demoClipLabel", { move: "x" }), /x/);
+  });
+}
