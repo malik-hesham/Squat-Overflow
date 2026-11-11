@@ -146,14 +146,20 @@ describe('ProceduralAnimation: head', () => {
   });
 
   it('drifts within DRIFT at rest, never the same twice', () => {
+    // The widest the head goes on each axis, checked once at the end: an expect() on each of the
+    // 36,000 frames made this test time out on a busy CI runner.
+    const widest = { yaw: 0, pitch: 0, roll: 0 };
     const yaws: number[] = [];
     run(new ProceduralAnimation(new SeededRandom(6)), 600_000, {}, (_t, out) => {
       const now = total(out);
-      expect(Math.abs(now.yaw)).toBeLessThanOrEqual(DRIFT.yaw + 1e-9);
-      expect(Math.abs(now.pitch)).toBeLessThanOrEqual(DRIFT.pitch + 1e-9);
-      expect(Math.abs(now.roll)).toBeLessThanOrEqual(DRIFT.roll + 1e-9);
+      widest.yaw = Math.max(widest.yaw, Math.abs(now.yaw));
+      widest.pitch = Math.max(widest.pitch, Math.abs(now.pitch));
+      widest.roll = Math.max(widest.roll, Math.abs(now.roll));
       yaws.push(now.yaw);
     });
+    expect(widest.yaw).toBeLessThanOrEqual(DRIFT.yaw + 1e-9);
+    expect(widest.pitch).toBeLessThanOrEqual(DRIFT.pitch + 1e-9);
+    expect(widest.roll).toBeLessThanOrEqual(DRIFT.roll + 1e-9);
     // Two minutes apart, the head is somewhere else.
     const at = (ms: number) => yaws[Math.round(ms / FRAME)] ?? 0;
     expect(Math.abs(at(130_000) - at(10_000))).toBeGreaterThan(0.01 * DEG);
