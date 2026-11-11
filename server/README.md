@@ -30,6 +30,7 @@ Routes:
 | `GET /me/profile` | Bearer token. XP, level, streak and today's breaks, derived from all synced breaks |
 | `GET /me/settings`, `PATCH /me/settings` | Bearer token. Shared settings, merged per field |
 | `PUT /me/progress` | Bearer token. Badges and challenges, last write wins |
+| `GET /demos/<move>.mp4` | None. An exercise's demo video from `server/demos/` (byte ranges, cached a day); 404 when the move has none. Made by `extension/scripts/make-demo-video.mjs` |
 
 The company is the domain of the signed-in Google email. Personal providers (gmail.com, outlook.com, …) can sign in but get an empty board. Sessions have the same JSON shape Supabase Auth used to return: an HS256 access token (1 h) and a random refresh token (60 days, stored hashed, rotated on every refresh). Without `DATABASE_URL`, `/health`, `/privacy` and the callback page work and the auth, leaderboard and sync routes answer 503.
 
@@ -41,6 +42,7 @@ Environment variables:
 | `FORMCOACH_HOST` | `127.0.0.1` (`0.0.0.0` in Docker) | |
 | `FORMCOACH_ALLOWED_ORIGINS` | unset | Comma-separated exact origins allowed by CORS; replaces the extension + loopback default |
 | `FORMCOACH_VERSION` | `dev` | Set from the Docker `VERSION` build arg |
+| `FORMCOACH_DEMOS_DIR` | `server/demos` | Folder of exercise demo videos for `GET /demos/<move>.mp4` |
 | `DATABASE_URL` | unset | Postgres for accounts and the leaderboard; migrations run at startup |
 | `AUTH_JWT_SECRET` | — | Required with `DATABASE_URL`; at least 32 characters. Signs session tokens |
 | `GOOGLE_CLIENT_ID` | — | Required with `DATABASE_URL`; the OAuth client in `extension/config.js` |

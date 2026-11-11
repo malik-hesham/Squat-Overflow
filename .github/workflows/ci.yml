@@ -83,6 +83,13 @@ jobs:
           for _ in $(seq 1 30); do curl -fsS localhost:8080/health -o health.json && break; sleep 1; done
           node -e "const b = require('./health.json'); if (!b.ok || b.version !== 'ci') throw new Error('version ' + b.version); console.log('api server', b.version)"
           curl -fsS localhost:8080/privacy | grep -q "privacy policy"
+      - name: The image serves every demo video in server/demos
+        run: |
+          for f in server/demos/*.mp4; do
+            [ -e "$f" ] || continue
+            curl -fsS -r 0-1 "localhost:8080/demos/$(basename "$f")" -o /dev/null
+            echo "served $(basename "$f")"
+          done
       - if: failure()
         run: docker logs api || true
 

@@ -16,6 +16,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY static ./static
+# Exercise demo videos (GET /demos/<move>.mp4), made by extension/scripts/make-demo-video.mjs.
+COPY demos ./demos
 
 USER node
 ARG VERSION=dev

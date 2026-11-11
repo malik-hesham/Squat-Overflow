@@ -29,6 +29,8 @@ These are estimates; check them in the [AWS Pricing Calculator](https://calculat
 
 **Capacity:** the server sees no camera frames (pose analysis runs on each device), only small JSON requests from signed-in clients: a sync about once a minute per open client, plus sign-in and the leaderboard. One instance handles far more users than it did as a pose server. The service is still called `pose` in `deploy/docker-compose.yml` and the AWS resources are still tagged `squat-overflow-pose`, so an update replaces what's running instead of creating a second copy. Dropping the pose model changes nothing in the cost.
 
+**Demo videos:** the same container serves the exercise demo videos (`GET /demos/<move>.mp4`, from `server/demos/` baked into the image), so they add no AWS resource. Each play sends at most 500 KB (a few hundred KB is typical), and players cache a video for a day. AWS includes 100 GB of data transfer out a month at no charge; past that it's about $0.09/GB, roughly 4 to 5 cents per 1,000 plays. The videos live in git, so moving off the instance takes them along.
+
 ## 1. Choose a hostname
 
 Caddy needs a DNS name for the certificate, and the store build of the extension points at that name. **Use a domain you control** (e.g. `api.yourcompany.com`). When the server moves later, you change one DNS record and installed extensions keep working with no store update. A name tied to the instance's IP can't move.
@@ -130,7 +132,7 @@ VERSION=v0.5.0 docker compose up -d --build
 docker image prune -f                              # optional; keeps tagged versions for rollback
 ```
 
-The new image builds while the old container keeps serving. Breaks open at the moment the container is swapped are cut off.
+New or changed demo videos in `server/demos/` go live with the same update: the image copies the folder. The new image builds while the old container keeps serving. Breaks open at the moment the container is swapped are cut off.
 
 To change a `.env` value (e.g. adding the store extension ID to `FORMCOACH_ALLOWED_ORIGINS`), edit `.env` and run `VERSION=<current> docker compose up -d`.
 

@@ -1,5 +1,12 @@
+import { join } from 'node:path';
+
 /** Release tag baked into the Docker image (Dockerfile ARG VERSION); "dev" when run from source. */
 export const VERSION = process.env.FORMCOACH_VERSION ?? 'dev';
+
+/** The folder of exercise demo videos: server/demos (copied into the image), or FORMCOACH_DEMOS_DIR. */
+export function demosDir(): string {
+  return process.env.FORMCOACH_DEMOS_DIR ?? join(__dirname, '..', 'demos');
+}
 
 /**
  * Comma-separated list of exact origins, e.g. "chrome-extension://abcdef...". When set, it
