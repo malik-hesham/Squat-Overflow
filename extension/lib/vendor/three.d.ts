@@ -19,7 +19,6 @@ export {
   MeshStandardMaterial,
   NeutralToneMapping,
   OrthographicCamera,
-  PerspectiveCamera,
   PMREMGenerator,
   SRGBColorSpace,
   Scene,
@@ -33,5 +32,3 @@ export {
 } from "three";
 export { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 export { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-export { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-export { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";

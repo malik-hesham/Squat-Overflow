@@ -1,10 +1,9 @@
 // ---------------------------------------------------------------------------
 // The 3D exercise demo on a canvas
 // ---------------------------------------------------------------------------
-// The break window and the Practice page (and the desktop app, which runs those pages as they are)
-// show it next to the camera. With WebGL it is the Blender human (lib/demo-human.js, the model ships
-// in the extension); without, lib/demo-model.js's mannequin painted flat. Nothing is fetched from
-// the network. The canvas says which in data-renderer ("human" or "2d").
+// Paints lib/demo-model.js's scene: the break window and the Practice page (and the desktop app,
+// which runs those pages as they are) show it next to the camera. Nothing is fetched: the figure
+// is made on the device.
 
 import { demoScene, demoTurn, demoView } from "./demo-model.js";
 
@@ -43,26 +42,7 @@ const KEY_PX = 25; // an arrow key turns the figure as far as a 25 px drag
  * @param {HTMLCanvasElement} canvas
  */
 export function createDemoPlayer(canvas) {
-  /** @type {{ draw(key: string, t: number, view: import("./demo-model.js").View): void } | null} */
-  let human = null;
-  /** @type {CanvasRenderingContext2D | null} */
-  let ctx = null;
-  /** @type {Promise<void> | null} */
-  let ready = null;
-  // The human (three.js and the model) loads with the first demo shown, not with the page.
-  const load = () =>
-    (ready ??= import("./demo-human.js")
-      .then((m) => m.createHumanRenderer(canvas))
-      .then((renderer) => {
-        human = renderer;
-      })
-      .catch((err) => {
-        console.warn("3D demo: showing the drawn figure, the human can't load here:", err);
-        ctx = canvas.getContext("2d");
-      })
-      .then(() => {
-        canvas.dataset.renderer = human ? "human" : "2d";
-      }));
+  const ctx = canvas.getContext("2d");
   const still = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   let key = null;
   let start = 0;
@@ -80,13 +60,9 @@ export function createDemoPlayer(canvas) {
       canvas.width = w;
       canvas.height = h;
     }
+    ctx.clearRect(0, 0, w, h);
     const t = (now - start) / 1000;
-    const view = demoView(key, t, { width: w, height: h, turn, still });
-    if (human) human.draw(key, t, view);
-    else if (ctx) {
-      ctx.clearRect(0, 0, w, h);
-      paintDemo(ctx, demoScene(key, t, view) ?? []);
-    }
+    paintDemo(ctx, demoScene(key, t, demoView(key, t, { width: w, height: h, turn, still })) ?? []);
     frame = requestAnimationFrame(draw);
   }
 
@@ -108,7 +84,6 @@ export function createDemoPlayer(canvas) {
   return {
     /** Shows a move from its rest pose (the same move keeps playing). @param {string} next */
     show(next) {
-      load();
       if (next !== key) start = performance.now();
       key = next;
       if (!frame) frame = requestAnimationFrame(draw);

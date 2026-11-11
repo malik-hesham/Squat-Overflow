@@ -4,8 +4,7 @@
 // the three version in package.json (keep @types/three on the same version):
 //   cd extension && npm run vendor:three
 //
-// Who uses what: the sensitive-mode soft toys (lib/avatar-three.js) and the exercise demo's Blender
-// human (lib/demo-human.js: GLTFLoader, MeshoptDecoder for its compressed geometry, PerspectiveCamera).
+// Who uses it: the sensitive-mode soft toys (avatar.js, lib/avatar-kit.js, lib/avatar-characters.js).
 import { build } from "esbuild";
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -27,7 +26,6 @@ const CORE = [
   "MeshStandardMaterial",
   "NeutralToneMapping",
   "OrthographicCamera",
-  "PerspectiveCamera",
   "PMREMGenerator",
   "SRGBColorSpace",
   "Scene",
@@ -43,8 +41,6 @@ const CORE = [
 const ADDONS = {
   RoomEnvironment: "three/examples/jsm/environments/RoomEnvironment.js",
   RoundedBoxGeometry: "three/examples/jsm/geometries/RoundedBoxGeometry.js",
-  GLTFLoader: "three/examples/jsm/loaders/GLTFLoader.js",
-  MeshoptDecoder: "three/examples/jsm/libs/meshopt_decoder.module.js",
 };
 
 const root = new URL("..", import.meta.url);
@@ -63,7 +59,7 @@ const out = await build({
   write: false,
   legalComments: "inline",
   banner: {
-    js: `/* three.js r${revision} (${version}), MIT License, Copyright 2010-2026 Three.js Authors. https://threejs.org - tree-shaken bundle for Squat-Overflow (the soft toys and the demo's human); rebuild with npm run vendor:three. */`,
+    js: `/* three.js r${revision} (${version}), MIT License, Copyright 2010-2026 Three.js Authors. https://threejs.org - tree-shaken bundle for Squat-Overflow (the soft toys); rebuild with npm run vendor:three. */`,
   },
 });
 writeFileSync(new URL("lib/vendor/three.js", root), out.outputFiles[0].text);

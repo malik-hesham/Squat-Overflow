@@ -196,23 +196,18 @@ const FACE = [
   [10, [-0.025, -0.045, 0.085]],
 ];
 
-/** Where a skeleton keeps the middle of the chest, after the 33 joints. */
-const CHEST = 33;
-
 /**
- * The 33 joints for these angles, with the middle of the hips at the origin, then the middle of
- * the chest (CHEST: where the shoulders hang from, before they shrug or pull back).
+ * The 33 joints for these angles, with the middle of the hips at the origin.
  * @param {Params} p
  * @returns {P3[]}
  */
 function skeleton(p) {
   /** @type {P3[]} */
-  const j = Array.from({ length: CHEST + 1 }, () => [0, 0, 0]);
+  const j = Array.from({ length: 33 }, () => [0, 0, 0]);
   const torso = torsoOf(p);
   /** @param {P3} v */
   const inTorso = (v) => apply(torso, v);
   const chest = inTorso([0, TORSO, 0]);
-  j[CHEST] = chest;
 
   // Head: on a short neck above the shoulders.
   const neck = add(add(chest, inTorso([0, 0.04, 0])), inTorso([0, 0, p.headFwd]));
@@ -252,16 +247,6 @@ function skeleton(p) {
     j[31 + o] = add(add(ankle, sole, FOOT_DROP), foot, TOE);
   }
   return j;
-}
-
-/**
- * The mannequin standing upright at rest, hips at the origin: what a model's own rest pose stands
- * for when another body copies the demo (lib/demo-rig.js). The 33 joints, then the middle of the
- * chest.
- * @returns {P3[]}
- */
-export function demoUpright() {
-  return skeleton(STAND);
 }
 
 // ---- Moves ---------------------------------------------------------------------
@@ -515,22 +500,6 @@ export function demoMotion(key) {
  * @returns {P3[] | null}
  */
 export function demoPose(key, t) {
-  return posed(key, t)?.slice(0, CHEST) ?? null;
-}
-
-/**
- * Where the middle of the mannequin's chest is in a move's demo at `t` seconds (it loops): where
- * its shoulders hang from, before they shrug or pull back. In demoPose's coordinates.
- * @param {string} key
- * @param {number} t
- * @returns {P3 | null}
- */
-export function demoChest(key, t) {
-  return posed(key, t)?.[CHEST] ?? null;
-}
-
-/** demoPose's joints, then the middle of the chest. @param {string} key @param {number} t @returns {P3[] | null} */
-function posed(key, t) {
   const b = built(key);
   if (!b) return null;
   const loop = ((t % b.seconds) + b.seconds) % b.seconds;
@@ -598,30 +567,20 @@ function framing(key) {
 }
 
 /**
- * Where the pinhole camera orbiting the figure is: its eye and what it looks at (meters), and its
- * focal length (px), for a WebGL renderer to set up the same camera.
- * @param {string} key @param {View} view
- * @returns {{ eye: P3, target: P3, focal: number }}
- */
-export function demoView3d(key, view) {
-  const { centre, radius } = framing(key);
-  const yaw = (view.yaw ?? CAMERA_YAW[built(key).camera]) * DEG;
-  const pitch = (view.pitch ?? 0) * DEG;
-  const eye = add(centre, [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)], DISTANCE);
-  return { eye, target: centre, focal: (FILL * Math.min(view.width, view.height) * DISTANCE) / radius };
-}
-
-/**
  * A pinhole camera orbiting the figure. Returns picture x, y (px, y down), the depth (m) and the
  * size of a meter there (px).
  * @param {string} key @param {View} view
  * @returns {(p: P3) => [number, number, number, number]}
  */
-export function demoCamera(key, view) {
-  const { eye, target: centre, focal } = demoView3d(key, view);
+function camera(key, view) {
+  const { centre, radius } = framing(key);
+  const yaw = (view.yaw ?? CAMERA_YAW[built(key).camera]) * DEG;
+  const pitch = (view.pitch ?? 0) * DEG;
+  const eye = add(centre, [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)], DISTANCE);
   const f = unit(sub(centre, eye));
   const r = unit([-f[2], 0, f[0]]); // f x up
   const u = /** @type {P3} */ ([r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]]);
+  const focal = (FILL * Math.min(view.width, view.height) * DISTANCE) / radius;
   return (p) => {
     const d = sub(p, eye);
     const depth = dot(d, f);
@@ -641,7 +600,7 @@ export function demoCamera(key, view) {
 export function demoLandmarks(key, t, view) {
   const pose = demoPose(key, t);
   if (!pose) return null;
-  const see = demoCamera(key, view);
+  const see = camera(key, view);
   return pose.map((p) => {
     const [x, y] = see(p);
     return /** @type {[number, number, number]} */ ([x / view.width, y / view.height, 1]);
@@ -746,7 +705,7 @@ function watched(key) {
 /** @type {Map<string, P3[][] | null>} */
 const CHAIRS = new Map();
 /** A plain chair under the seated pose, as rails (pairs of points), or null when the move has no seat. @param {string} key */
-export function demoChair(key) {
+function chair(key) {
   if (CHAIRS.has(key)) return CHAIRS.get(key);
   const b = built(key);
   /** @type {P3[][] | null} */
@@ -777,7 +736,7 @@ export function demoChair(key) {
 export function demoScene(key, t, view) {
   const pose = demoPose(key, t);
   if (!pose) return null;
-  const see = demoCamera(key, view);
+  const see = camera(key, view);
   /** @param {number} i @returns {P3} */
   const at = (i) => (i === -1 ? midpoint(pose[23], pose[24]) : i === -2 ? midpoint(pose[11], pose[12]) : i === -3 ? midpoint(pose[7], pose[8]) : pose[i]);
   const seen = pose.map(see);
@@ -820,7 +779,7 @@ export function demoScene(key, t, view) {
   const tilt = Math.sin(((view.pitch ?? 0) * Math.PI) / 180);
   shapes.push({ kind: "ellipse", x: sx, y: sy, rx: spread * ss, ry: Math.max(2, spread * ss * tilt), fill: DEMO_COLORS.shadow, depth: 1e9, part: "shadow" });
 
-  for (const [a, b] of demoChair(key) ?? []) capsule(a, b, 0.022, DEMO_COLORS.chair, "chair");
+  for (const [a, b] of chair(key) ?? []) capsule(a, b, 0.022, DEMO_COLORS.chair, "chair");
   for (const [a, b, r] of LIMBS) capsule(at(a), at(b), r, DEMO_COLORS.body, "body");
   for (const [i, r] of BALLS) ball(pose[i], r, hot.has(i) ? DEMO_COLORS.accent : DEMO_COLORS.joint, "joint");
   // The head, with a nose, eyes and ears so you can see where it faces.
