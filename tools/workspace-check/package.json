@@ -1,0 +1,21 @@
+{
+  "name": "@squat-overflow/workspace-check",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Checks the digital human workspace's package boundaries (docs/digital-human/architecture.md, section 2).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "yaml": "catalog:"
+  }
+}

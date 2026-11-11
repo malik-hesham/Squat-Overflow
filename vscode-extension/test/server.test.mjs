@@ -163,6 +163,12 @@ test("POST /__api/close calls windowClosed", async () => {
   assert.ok(closed.includes(9));
 });
 
+test("the exercise demo's Blender human is served (models/coach-01.glb), as bytes", async () => {
+  const human = await raw(`/${info.token}/models/coach-01.glb`);
+  assert.equal(human.status, 200);
+  assert.equal(human.headers["content-type"], "application/octet-stream");
+});
+
 test("the on-device pose model is served: WASM as application/wasm, the model as bytes", async () => {
   const base = `/${info.token}/lib/vendor/mediapipe`;
   const wasm = await raw(`${base}/vision_wasm_internal.wasm`);

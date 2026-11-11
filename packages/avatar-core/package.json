@@ -1,0 +1,24 @@
+{
+  "name": "@squat-overflow/avatar-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The digital human's behaviour: state machine, controller, events, animation blending. Platform-free.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/fakes.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@squat-overflow/avatar-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,7 +1,6 @@
-// Types for the tree-shaken three.js r186 bundle next to this file. TypeScript reads
-// this instead of type-checking the minified three.js. Keep the export list in sync
-// with the `export {...}` at the end of three.js, and the @types/three version in
-// extension/package.json with the bundle's three.js version.
+// Types for the tree-shaken three.js r186 bundle next to this file, written by
+// scripts/vendor-three.mjs (edit the list there). TypeScript reads this instead of type-checking the
+// minified three.js. Keep @types/three in extension/package.json on the bundle's three.js version.
 export {
   BufferAttribute,
   BufferGeometry,
@@ -20,6 +19,7 @@ export {
   MeshStandardMaterial,
   NeutralToneMapping,
   OrthographicCamera,
+  PerspectiveCamera,
   PMREMGenerator,
   SRGBColorSpace,
   Scene,
@@ -33,3 +33,5 @@ export {
 } from "three";
 export { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 export { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+export { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+export { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";

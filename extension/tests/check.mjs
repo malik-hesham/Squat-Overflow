@@ -19,9 +19,11 @@ import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, 
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
 import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS } from "../lib/pose/index.js";
-import { DEMO_COLORS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
+import { DEMO_COLORS, demoCamera, demoChest, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
 import { paintDemo } from "../lib/demo-player.js";
+import { humanPose, rigChest, rigFromGlb, rigLandmarks, rigWorld } from "../lib/demo-rig.js";
 import { readFileSync, readdirSync } from "node:fs";
+import { createHash as sha256Of } from "node:crypto";
 
 /** @typedef {import("../lib/vendor/three.js").Mesh} Mesh  what the avatar scene traversals below look at */
 
@@ -2065,3 +2067,310 @@ Promise.all(pending).then(
     }
   });
 }
+
+// ---- The Blender human as the demo (lib/demo-rig.js) ----------------------------
+// The digital human built in Blender (packages/avatar-assets, coach-01) does each move: its skeleton
+// is posed from the mannequin's joints, so the coach's own rep counter can check it the same way.
+const HUMAN_GLB = new URL("../models/coach-01.glb", import.meta.url);
+
+check("Blender human: the extension ships avatar-assets' optimized coach-01, byte for byte", () => {
+  const manifest = readFileSync(new URL("../../packages/avatar-assets/src/models/coach-01.ts", import.meta.url), "utf8");
+  const built = /"optimized":\s*\{[^}]*"sha256":\s*"([0-9a-f]{64})"/.exec(manifest)?.[1];
+  assert.ok(built, "no optimized sha256 in coach-01's manifest");
+  assert.equal(sha256Of("sha256").update(readFileSync(HUMAN_GLB)).digest("hex"), built, "models/coach-01.glb isn't the built model: run npm run vendor:human");
+});
+
+const HUMAN = rigFromGlb(readFileSync(HUMAN_GLB));
+/** @param {number[]} a @param {number[]} b */
+const within = (a, b, tol, what) => assert.ok(gap(a, b) <= tol, `${what}: ${a.map((v) => v.toFixed(3))} is ${(gap(a, b) * 1000).toFixed(1)} mm from ${b}`);
+
+check("Blender human: the skeleton reads from the model, parents first, in its rest pose", () => {
+  assert.equal(HUMAN.bones.length, 53);
+  assert.equal(HUMAN.bones[0].parent, -1);
+  HUMAN.bones.forEach((b, i) => assert.ok(b.parent < i, `${b.name} comes before its parent`));
+  const rest = rigWorld(HUMAN);
+  const at = (name) => rest.p[HUMAN.byName.get(name)];
+  // Where Blender put them (metres; x to the person's left, y up, z forward, like the mannequin).
+  within(at("pelvis"), [0, 0.971, 0.007], 0.001, "pelvis");
+  within(at("upperarm_l"), [0.192, 1.444, 0.022], 0.001, "left shoulder");
+  within(at("hand_r"), [-0.501, 1.115, 0.213], 0.001, "right wrist");
+  within(at("foot_r"), [-0.201, 0.074, 0.018], 0.001, "right ankle");
+});
+
+check("Blender human: unposed, the coach's 33 landmarks sit on the model (measured from its mesh)", () => {
+  const rest = rigWorld(HUMAN);
+  const l = rigLandmarks(HUMAN, rest);
+  assert.equal(l.length, 33);
+  l.forEach((p, i) => assert.ok(p.every(Number.isFinite), `landmark ${i}`));
+  const bone = (name) => rest.p[HUMAN.byName.get(name)];
+  within(l[0], [0, 1.646, 0.179], 0.001, "nose tip");
+  within(l[7], [0.09, 1.683, 0.04], 0.001, "left ear");
+  within(l[8], [-0.09, 1.683, 0.04], 0.001, "right ear");
+  within(l[2], [0.03, 1.6885, 0.1371], 0.001, "left eye (the manifest's eye centre)");
+  within(l[11], bone("upperarm_l"), 1e-9, "left shoulder");
+  within(l[14], bone("lowerarm_r"), 1e-9, "right elbow");
+  within(l[24], bone("thigh_r"), 1e-9, "right hip");
+  within(l[27], bone("foot_l"), 1e-9, "left ankle");
+  within(l[29], [0.199, 0.006, -0.058], 0.001, "left heel (back of the shoe)");
+  within(l[32], [-0.189, 0.011, 0.225], 0.001, "right toe (front of the shoe)");
+  // Mirror image left to right, like a person.
+  for (const [a, b] of MIRROR) within(l[a], [-l[b][0], l[b][1], l[b][2]], 0.002, `landmarks ${a} and ${b}`);
+});
+
+/** The human doing a move at `t` s: its bones in the world and the coach's landmarks on it. */
+function humanAt(key, t) {
+  const posed = humanPose(HUMAN, key, t);
+  const world = rigWorld(HUMAN, posed.local, posed.root);
+  return { world, l: rigLandmarks(HUMAN, world), posed };
+}
+/** Degrees between two directions. @param {number[]} a @param {number[]} b */
+function degreesApart(a, b) {
+  const cos = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (Math.hypot(...a) * Math.hypot(...b));
+  return (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI;
+}
+const less = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+// Upper arms, forearms, hands, thighs, shins and feet, as landmark pairs.
+const SEGMENTS = [[11, 13], [13, 15], [15, 19], [12, 14], [14, 16], [16, 20], [23, 25], [25, 27], [27, 31], [24, 26], [26, 28], [28, 32]];
+
+const HANDS = [[15, 19], [16, 20]];
+/** Moves where the coach measures the hand (the index knuckle), so the human copies its hands. */
+const HAND_MOVES = DEMO_KEYS.filter((k) => EXERCISES[k].joints.includes("index"));
+
+check("Blender human: posed for a move, every limb points where the mannequin's does, all through the loop", () => {
+  assert.deepEqual(HAND_MOVES.sort(), ["extensor_stretch", "flexor_stretch", "prayer_stretch", "wrist_flex"]);
+  for (const key of DEMO_KEYS) {
+    const segments = HAND_MOVES.includes(key) ? SEGMENTS : SEGMENTS.filter((s) => !HANDS.some((h) => h[0] === s[0] && h[1] === s[1]));
+    for (const [t, joints] of demoLoop(key)) {
+      const { l } = humanAt(key, t);
+      for (const [a, b] of segments) {
+        const off = degreesApart(less(l[b], l[a]), less(joints[b], joints[a]));
+        assert.ok(off < 1, `${key} at ${t.toFixed(2)} s: ${a}-${b} is ${off.toFixed(1)} deg off`);
+      }
+    }
+  }
+});
+
+check("Blender human: where the coach doesn't measure the hands, they stay relaxed, in line with the forearm", () => {
+  // The mannequin's reaching hands point straight up whatever the forearm does: up to a 124 deg bend
+  // at the wrist in temple massage, which a wrist can't do.
+  for (const key of DEMO_KEYS.filter((k) => !HAND_MOVES.includes(k))) {
+    for (const [t] of demoLoop(key)) {
+      const { l } = humanAt(key, t);
+      for (const o of [0, 1]) {
+        const bend = degreesApart(less(l[15 + o], l[13 + o]), less(l[19 + o], l[15 + o]));
+        assert.ok(bend < 45, `${key} at ${t.toFixed(2)} s: wrist ${15 + o} bent ${bend.toFixed(0)} deg`);
+      }
+    }
+  }
+});
+
+const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+/**
+ * The hips, shoulders and torso as directions: the coach measures these. The torso runs from the
+ * hips to the middle of the chest, where the shoulders hang from (the middle of the shoulders, unless
+ * they shrug or pull back).
+ */
+const BODY_LINES = {
+  hips: (l) => less(l[23], l[24]),
+  shoulders: (l) => less(l[11], l[12]),
+  torso: (l, chest) => less(chest, mid(l[23], l[24])),
+};
+/** The head's axes (rows: ear to ear, up, where the face points) from its landmarks. */
+function headAxes(l) {
+  const x = less(l[7], l[8]).map((v, _, a) => v / Math.hypot(...a));
+  const f = less(l[0], mid(l[7], l[8]));
+  const along = f[0] * x[0] + f[1] * x[1] + f[2] * x[2];
+  const z = f.map((v, i) => v - along * x[i]).map((v, _, a) => v / Math.hypot(...a));
+  const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+  return [x, y, z];
+}
+/** Degrees of the rotation from axes `a0` to `a` (rows). */
+function turnOf(a0, a) {
+  // R = a^T a0 (columns to columns); its angle from the trace.
+  let trace = 0;
+  for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) trace += a[k][i] * a0[k][i];
+  return (Math.acos(Math.min(1, Math.max(-1, (trace - 1) / 2))) * 180) / Math.PI;
+}
+/** Axes `a` turned by the turn from `from` to `to` (all rows). */
+function turned(a, from, to) {
+  return a.map((row) => [0, 1, 2].map((c) => [0, 1, 2].reduce((sum, k) => sum + to[k][c] * [0, 1, 2].reduce((s2, m) => s2 + from[k][m] * row[m], 0), 0)));
+}
+
+check("Blender human: its hips, shoulders and torso point where the mannequin's do, all through the loop", () => {
+  const slack = { hips: 1, shoulders: 2, torso: 2 };
+  for (const key of DEMO_KEYS) {
+    for (const [t, joints] of demoLoop(key)) {
+      const { l, world } = humanAt(key, t);
+      for (const [name, line] of Object.entries(BODY_LINES)) {
+        const off = degreesApart(line(l, rigChest(HUMAN, world)), line(joints, demoChest(key, t)));
+        assert.ok(off < slack[name], `${key} at ${t.toFixed(2)} s: the ${name} are ${off.toFixed(1)} deg off`);
+      }
+    }
+  }
+});
+
+check("Blender human: its head turns as far as the mannequin's turns from upright, all through the loop", () => {
+  // Its own upright head (the model at rest) and the mannequin's (standing, before a squat).
+  const humanUpright = headAxes(rigLandmarks(HUMAN, rigWorld(HUMAN)));
+  const mannequinUpright = headAxes(demoPose("squat", 0));
+  for (const key of DEMO_KEYS) {
+    for (const [t, joints] of demoLoop(key)) {
+      const expected = turned(humanUpright, mannequinUpright, headAxes(joints));
+      const off = turnOf(expected, headAxes(humanAt(key, t).l));
+      assert.ok(off < 2, `${key} at ${t.toFixed(2)} s: the head is ${off.toFixed(1)} deg off`);
+    }
+  }
+});
+
+const TRUNK_BONES = ["pelvis", "spine_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r", "neck_01", "head"];
+/** Each limb bone with the mannequin's segments from the shoulder or hip down to it. */
+const LIMB_CHAINS = Object.fromEntries(
+  ["upperarm", "lowerarm", "hand", "thigh", "calf", "foot"].flatMap((bone, n) => {
+    const leg = n >= 3;
+    const left = SEGMENTS.slice(leg ? 6 : 0, (leg ? 6 : 0) + (n % 3) + 1);
+    const right = SEGMENTS.slice(leg ? 9 : 3, (leg ? 9 : 3) + (n % 3) + 1);
+    return [[`${bone}_l`, left], [`${bone}_r`, right]];
+  }),
+);
+
+check("Blender human: it is where the mannequin is, on the floor, and no bone jumps between frames", () => {
+  for (const key of DEMO_KEYS) {
+    const frames = demoLoop(key);
+    let before = humanAt(key, -1 / FPS).world;
+    /** @type {number[][]} */
+    let last = demoPose(key, -1 / FPS);
+    for (const [t, joints] of frames) {
+      const { world, l, posed } = humanAt(key, t);
+      const floor = Math.min(...l.map((p) => p[1]));
+      assert.ok(Math.abs(floor) < 0.005, `${key} at ${t.toFixed(2)} s: lowest point ${floor.toFixed(3)} m off the floor`);
+      const [hx, , hz] = mid(l[23], l[24]);
+      const [mx, , mz] = mid(joints[23], joints[24]);
+      assert.ok(Math.hypot(hx - mx, hz - mz) < 0.01, `${key} at ${t.toFixed(2)} s: hips ${Math.hypot(hx - mx, hz - mz).toFixed(3)} m from the mannequin's`);
+      // A limb bone turns no faster than the mannequin's limb moves from the shoulder or hip down to
+      // it, plus 3 deg a frame: a twist that flips would show as a spin. The spine, clavicles, neck
+      // and head turn less than 12 deg a frame. Every other bone (fingers, toes) keeps its rest pose
+      // on its parent, so it can't spin on its own.
+      posed.local.forEach((q, i) => {
+        if (LIMB_CHAINS[HUMAN.bones[i].name] || TRUNK_BONES.includes(HUMAN.bones[i].name)) return;
+        assert.ok(q.every((v, k) => Math.abs(v - HUMAN.bones[i].r[k]) < 1e-9), `${key} at ${t.toFixed(2)} s: ${HUMAN.bones[i].name} left its rest pose`);
+      });
+      world.q.forEach((q, i) => {
+        if (!LIMB_CHAINS[HUMAN.bones[i].name] && !TRUNK_BONES.includes(HUMAN.bones[i].name)) return;
+        const p = before.q[i];
+        const turn = (2 * Math.acos(Math.min(1, Math.abs(q[0] * p[0] + q[1] * p[1] + q[2] * p[2] + q[3] * p[3]))) * 180) / Math.PI;
+        const name = HUMAN.bones[i].name;
+        // A relaxed hand moves with its forearm.
+        const chain = LIMB_CHAINS[/^hand_/.test(name) && !HAND_MOVES.includes(key) ? name.replace("hand", "lowerarm") : name];
+        const moved = chain?.reduce((sum, [a, b]) => sum + degreesApart(less(joints[b], joints[a]), less(last[b], last[a])), 0);
+        const allowed = chain ? moved + 3 : 12;
+        assert.ok(turn < allowed, `${key} at ${t.toFixed(2)} s: ${HUMAN.bones[i].name} turns ${turn.toFixed(0)} deg in one frame (allowed ${allowed.toFixed(0)})`);
+      });
+      before = world;
+      last = joints;
+    }
+  }
+});
+
+/** The human as the coach's camera sees it: MediaPipe's image landmarks. */
+function humanLandmarks(key, t, view) {
+  const see = demoCamera(key, view);
+  return humanAt(key, t).l.map((p) => {
+    const [x, y] = see(p);
+    return [x / view.width, y / view.height, 1];
+  });
+}
+
+/**
+ * The coach watching three loops of a demo: its readings, its rep events, and the first thing it
+ * said. `calibrate`: the coach learns the thresholds from the demo's first reps first, as it does for
+ * a user, and counts the three loops after that.
+ */
+function coach(key, landmarks, { calibrate = false } = {}) {
+  const W = 640;
+  const H = 480;
+  const { seconds } = demoMotion(key);
+  const session = new Session(key);
+  if (calibrate) session.startCalibration();
+  let from = calibrate ? null : 0;
+  const readings = [];
+  const events = [];
+  for (let i = 0; from == null || i < from + Math.round(seconds * 3 * FPS); i++) {
+    const t = i / FPS;
+    const out = session.process(landmarks(key, t, { width: W, height: H }), W, H, t);
+    if (out.calibration?.status === "failed") return { said: "calibration failed: the range is too small", readings, events };
+    // Counting starts with the next loop, from the rest pose.
+    if (out.calibration?.status === "done") from = Math.ceil((i + 1) / (seconds * FPS)) * Math.round(seconds * FPS);
+    if (from == null || i < from) continue;
+    if (out.feedback.length) return { said: `the coach says ${JSON.stringify(out.feedback)} at ${t.toFixed(2)} s`, readings, events };
+    if (out.angle != null) readings.push(out.angle);
+    if (out.rep_event) events.push(out.rep_event);
+    if (i > 60 * FPS) return { said: "never finished calibrating", readings, events };
+  }
+  return { readings, events };
+}
+/** Moves the coach measures from the ear (where the shoulders and head are, not a limb's angle). */
+const EAR_MOVES = ["chin_tuck", "shoulder_roll", "shoulder_shrug"];
+
+check("Blender human: from its camera, every demo counts its reps on the coach's own rep counter, cleanly", () => {
+  const failed = [];
+  for (const key of DEMO_KEYS) {
+    const { reps } = demoMotion(key);
+    // The human's neck is longer than the mannequin's (shoulder to ear) and the line between them
+    // steeper, so the moves measured from the ear read differently, as they would for a real person
+    // built like that. The coach calibrates to such a person (and refuses a range too small to
+    // count): so does this check. How far the human moves is checked in metres below.
+    const { said, events } = coach(key, humanLandmarks, { calibrate: EAR_MOVES.includes(key) });
+    if (said) failed.push(`${key}: ${said}`);
+    else if (events.length !== reps * 3 || events.some((r) => r.partial || r.issues.length)) failed.push(`${key}: ${events.length} reps (${events.filter((r) => r.partial).length} partial), expected ${reps * 3}`);
+  }
+  assert.deepEqual(failed, []);
+});
+
+check("Blender human: it shrugs, rolls its shoulders back and tucks its chin at least as far as the mannequin", () => {
+  /** How far a body's shoulders rise and pull back, and its ears glide, from the middle of its chest over a loop. */
+  const reach = (frames) => {
+    const rise = frames.map(({ l, chest }) => (l[11][1] + l[12][1]) / 2 - chest[1]);
+    const back = frames.map(({ l, chest }) => chest[2] - (l[11][2] + l[12][2]) / 2);
+    const glide = frames.map(({ l, chest }) => (l[7][2] + l[8][2]) / 2 - chest[2]);
+    const range = (v) => Math.max(...v) - Math.min(...v);
+    return { rise: range(rise), back: range(back), glide: range(glide) };
+  };
+  /** @type {[string, ("rise" | "back" | "glide")[]][]} */
+  const moves = [["shoulder_shrug", ["rise"]], ["shoulder_roll", ["rise", "back"]], ["chin_tuck", ["glide"]]];
+  for (const [key, ways] of moves) {
+    const human = reach(demoLoop(key).map(([t]) => {
+      const { l, world } = humanAt(key, t);
+      return { l, chest: rigChest(HUMAN, world) };
+    }));
+    const mannequin = reach(demoLoop(key).map(([t, joints]) => ({ l: joints, chest: demoChest(key, t) })));
+    // The roll's pull back may give a little: the clavicle is a rigid bone, and the lift comes first.
+    for (const way of ways) {
+      const least = way === "back" ? 0.9 : 1;
+      assert.ok(human[way] >= least * mannequin[way] - 1e-4, `${key}: the human's ${way} is ${(human[way] * 100).toFixed(1)} cm, the mannequin's ${(mannequin[way] * 100).toFixed(1)} cm`);
+    }
+  }
+});
+
+check("Blender human: where the coach measures the hands, a wrist bends forward or back, not sideways", () => {
+  // A wrist bends about the line across its knuckles (pinky to index, as seen along the hand: the
+  // index knuckle sits further forward): in a prayer stretch the palms press together, they don't
+  // face the camera.
+  const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  /** `v` without its part along `along`. */
+  const across = (v, along) => {
+    const k = (v[0] * along[0] + v[1] * along[1] + v[2] * along[2]) / (along[0] ** 2 + along[1] ** 2 + along[2] ** 2);
+    return v.map((x, i) => x - k * along[i]);
+  };
+  for (const key of HAND_MOVES) {
+    for (const [t] of demoLoop(key)) {
+      const { l } = humanAt(key, t);
+      for (const o of [0, 1]) {
+        const fore = less(l[15 + o], l[13 + o]);
+        const hand = less(l[19 + o], l[15 + o]);
+        if (degreesApart(fore, hand) < 30) continue;
+        const off = degreesApart(cross3(fore, hand), across(less(l[19 + o], l[17 + o]), hand));
+        assert.ok(Math.min(off, 180 - off) < 25, `${key} at ${t.toFixed(2)} s: wrist ${15 + o} bends ${Math.min(off, 180 - off).toFixed(0)} deg sideways`);
+      }
+    }
+  }
+});

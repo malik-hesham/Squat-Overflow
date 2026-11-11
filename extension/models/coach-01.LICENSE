@@ -1,0 +1,55 @@
+coach-01.glb is the optimized profile of packages/avatar-assets' coach-01, built with Blender and
+MakeHuman's MPFB from MakeHuman assets, all under CC0 1.0 (no rights reserved):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+# Where the digital human comes from
+
+Everything in `models/coach-01/` is built from these files. All the art is **CC0** (public domain
+dedication): no fee, no attribution required. We credit the authors anyway, in the manifest's
+`licenses`.
+
+## Art (ends up in the model)
+
+| Source                                    | File                              | Size        | SHA-256                                                            | Licence |
+| ----------------------------------------- | --------------------------------- | ----------- | ------------------------------------------------------------------ | ------- |
+| MakeHuman system assets                   | `makehuman_system_assets_cc0.zip` | 280,737,770 | `b542127a8e25547c7c29c19f2d1d2adb9a664c80396ecd694095dbc8028a0107` | CC0     |
+| ARKit face units (52)                     | `faceunits01.zip`                 | 257,821     | `d113107bd7eb59f3af4df6fc0ec29bfcc593f496d0b336aec14f086a80ce7146` | CC0     |
+| Meta visemes (15)                         | `visemes02.zip`                   | 130,733     | `a69ab6fb95ddd5f56f70acc7e859f5f9c6ae613c527d577ea1571eff2183d29e` | CC0     |
+| MakeHuman base mesh, rig and body targets | inside MPFB 2.0.18 (below)        |             |                                                                    | CC0     |
+
+- System assets: <https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html>
+  (download from `files.makehumancommunity.org`; the `files2` mirror was too slow to use).
+- Face units and visemes, by Mika Suominen:
+  <https://static.makehumancommunity.org/assets/assetpacks/faceunits01.html>,
+  <https://static.makehumancommunity.org/assets/assetpacks/visemes02.html>. Every target in both packs is
+  marked CC0 in the pack's own metadata (`packs/*.json`); checked 2026-11-10.
+- MakeHuman's licence page: "All core assets are shared under Creative Commons, CC0"
+  (<https://static.makehumancommunity.org/about/license.html>).
+
+The model uses: skin `young_caucasian_male`, eyes `high-poly` (HIGH) / `low-poly` (OPTIMIZED) with the
+`brown` material, `eyebrow001`, `eyelashes01`, `teeth_base`, `tongue01`, hair `short02`, clothes
+`male_casualsuit06` and `shoes01`, rig `game_engine`. All set in `sources/human.json`.
+
+## Tools (used to build; nothing of them ships)
+
+| Tool    | Version | Where                                                             | SHA-256 of the download                                            | Licence  |
+| ------- | ------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ | -------- |
+| Blender | 5.3.0   | Homebrew cask `blender`                                           | (Homebrew checks it)                                               | GPL      |
+| MPFB    | 2.0.18  | <https://extensions.blender.org/add-ons/mpfb/> (45,956,992 bytes) | `c075b3e9b94b8e5556a5f03f4653602d02ea306de08126e8f55ed6dee28a2dad` | GPL-3.0+ |
+
+Post-processing uses glTF-Transform, meshoptimizer and sharp from npm (versions in
+`pnpm-workspace.yaml`).
+
+## Rebuilding
+
+From `packages/avatar-assets`:
+
+```bash
+B=/Applications/Blender.app/Contents/MacOS/Blender
+$B -c extension install-file -r user_default -e add-on-mpfb-v2.0.18.zip    # once
+$B --background --python scripts/blender/install_packs.py -- makehuman_system_assets_cc0.zip visemes02.zip faceunits01.zip   # once
+$B --background --python scripts/blender/build_human.py -- --config sources/human.json --profile high --out build/high.glb
+$B --background --python scripts/blender/build_human.py -- --config sources/human.json --profile optimized --out build/optimized.glb
+node scripts/build-profiles.mts    # writes models/coach-01/*.glb and src/models/coach-01.ts
+pnpm test                          # checks the files against the manifest
+```
