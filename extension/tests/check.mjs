@@ -19,7 +19,7 @@ import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, 
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
 import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS } from "../lib/pose/index.js";
-import { DEMO_COLORS, DEMO_PARTS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
+import { DEMO_PARTS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
 import { paintDemo } from "../lib/demo-player.js";
 import { DEMO_LOOK } from "../lib/demo-look.js";
 import { readFileSync, readdirSync } from "node:fs";
@@ -1035,6 +1035,53 @@ check("3D demo: each loop ends where it starts, and no joint jumps between frame
   }
 });
 
+/**
+ * The biggest one-frame change in a series of 3D points' acceleration, as a share of their peak
+ * acceleration (null when they barely accelerate). A smooth move changes its acceleration a bit each
+ * frame; a stop or start at full acceleration, or a kink in the path, changes it all at once.
+ * @param {number[][]} path points, evenly spaced in time
+ * @param {number} still peak below which the points barely move (m per frame squared)
+ */
+function jolt(path, still) {
+  const acc = path.slice(1, -1).map((p, i) => p.map((v, a) => path[i + 2][a] - 2 * v + path[i][a]));
+  const peak = Math.max(...acc.map((v) => Math.hypot(...v)));
+  if (peak < still) return null;
+  return Math.max(...acc.slice(1).map((v, i) => Math.hypot(...v.map((x, a) => x - acc[i][a])))) / peak;
+}
+
+check("3D demo: every move eases in and out like a person, with no jolt: no joint's acceleration jumps", () => {
+  const F = 120; // finer than a screen: at 30 fps a fast smooth move and a jolt look alike
+  for (const key of DEMO_KEYS) {
+    const { seconds } = demoMotion(key);
+    const poses = Array.from({ length: Math.round(seconds * F) + 3 }, (_, i) => demoPose(key, (i - 1) / F));
+    for (let j = 0; j < 33; j++) {
+      const share = jolt(poses.map((p) => p[j]), 1.25e-5);
+      assert.ok(share === null || share <= 0.4, `${key}: joint ${j}'s acceleration jumps by ${Math.round(share * 100)}% of its peak in one frame`);
+    }
+  }
+});
+
+check("3D demo: a seated person stays seated: the hips never rise or sink", () => {
+  for (const key of DEMO_KEYS.filter((k) => demoMotion(k).stance === "seated")) {
+    const heights = demoLoop(key).map(([, p]) => (p[23][1] + p[24][1]) / 2);
+    const spread = Math.max(...heights) - Math.min(...heights);
+    assert.ok(spread < 1e-6, `${key}: the hips go ${(spread * 100).toFixed(1)} cm up and down on the seat`);
+  }
+});
+
+check("3D demo: an arm reaching past its length straightens smoothly, with no snap at full stretch", () => {
+  /** @type {[number, number, number]} */
+  const shoulder = [0.19, 1.4, 0];
+  const [a, b] = [0.29, 0.26];
+  // The hand's target slides away from 0.4 m (in reach) to 0.7 m (well out of reach).
+  const wrists = Array.from({ length: 151 }, (_, i) => reach(shoulder, [0.19 + 0.4 + i * 0.002, 1.4, 0.1], [0, -1, 0], a, b)[1]);
+  const dist = wrists.map((w) => Math.hypot(w[0] - shoulder[0], w[1] - shoulder[1], w[2] - shoulder[2]));
+  assert.ok(dist.every((d, i) => d < a + b && (!i || d >= dist[i - 1] - 1e-12)), "the hand moves out, never past the arm's length");
+  assert.ok(dist.at(-1) > (a + b) * 0.99, `at full stretch the arm is nearly straight (${dist.at(-1).toFixed(3)} m)`);
+  const share = jolt(wrists, 0);
+  assert.ok(share <= 0.4, `the hand stops dead at full stretch: its acceleration jumps ${Math.round(share * 100)}% in one step`);
+});
+
 check("3D demo: a move done one side at a time works both sides in each loop", () => {
   for (const key of DEMO_KEYS.filter((k) => demoMotion(k).reps === 2)) {
     const half = demoMotion(key).seconds / 2;
@@ -1172,9 +1219,14 @@ check("3D demo: the scene fits its canvas, is painted far to near, and turns wit
         const shapes = demoScene(key, t, { ...size, yaw, pitch: 12 });
         assert.ok(shapes.length > 30, `${key}: ${shapes.length} shapes`);
         shapes.forEach((sh, i) => {
-          assert.ok(["capsule", "circle", "ellipse"].includes(sh.kind), sh.kind);
-          assert.ok(Object.values(sh).every((v) => typeof v === "string" || Number.isFinite(v)), `${key}: ${JSON.stringify(sh)}`);
-          const ok = sh.kind === "capsule" ? inside(sh.x1, sh.y1, sh.r) && inside(sh.x2, sh.y2, sh.r) : sh.kind === "circle" ? inside(sh.x, sh.y, sh.r) : inside(sh.x, sh.y, Math.max(sh.rx, sh.ry));
+          assert.ok(["capsule", "circle", "ellipse", "poly"].includes(sh.kind), sh.kind);
+          if (sh.kind === "poly") assert.ok(sh.points.length >= 6 && sh.points.length % 2 === 0 && sh.points.every(Number.isFinite), `${key}: ${sh.part} outline`);
+          else assert.ok(Object.values(sh).every((v) => typeof v === "string" || Number.isFinite(v)), `${key}: ${JSON.stringify(sh)}`);
+          const ok =
+            sh.kind === "capsule" ? inside(sh.x1, sh.y1, sh.r) && inside(sh.x2, sh.y2, sh.r)
+            : sh.kind === "circle" ? inside(sh.x, sh.y, sh.r)
+            : sh.kind === "ellipse" ? inside(sh.x, sh.y, Math.max(sh.rx, sh.ry))
+            : sh.points.every((v, j) => inside(j % 2 ? 0 : v, j % 2 ? v : 0, 0));
           assert.ok(ok, `${key} at yaw ${yaw}: ${sh.part} ${sh.kind} leaves the canvas`);
           if (i) assert.ok(shapes[i - 1].depth >= sh.depth, `${key}: shape ${i} is painted out of depth order`);
         });
@@ -1188,16 +1240,15 @@ check("3D demo: the scene fits its canvas, is painted far to near, and turns wit
   assert.equal(demoScene("moonwalk", 0, view), null);
 });
 
-check("3D demo: the joints the coach watches stand out, and a seated move has a chair", () => {
+check("3D demo: just the person and a shadow: no joint marks and no chair", () => {
   const view = { width: 320, height: 240, yaw: 30, pitch: 12 };
-  const accent = (key) => demoScene(key, 0, view).filter((sh) => sh.fill === DEMO_COLORS.accent).length;
-  assert.ok(accent("t_raise") >= 6, "t_raise watches shoulders, elbows and wrists"); // both sides
-  assert.ok(accent("seated_knee_ext") >= 6, "knee moves watch hips, knees and ankles");
-  const parts = (key) => new Set(demoScene(key, 0, view).map((sh) => sh.part));
   for (const key of DEMO_KEYS) {
-    const seated = demoMotion(key).stance === "seated" || key === "sit_to_stand";
-    assert.equal(parts(key).has("chair"), seated, `${key}: ${seated ? "no chair to sit on" : "a chair it doesn't use"}`);
-    assert.ok(parts(key).has("shadow") && parts(key).has("head"), key);
+    for (const t of [0, 1.3]) {
+      const parts = new Set(demoScene(key, t, view).map((sh) => sh.part));
+      assert.ok(!parts.has("joint"), `${key}: the joints the coach measures are marked`);
+      assert.ok(!parts.has("chair"), `${key}: a chair is drawn`);
+      assert.ok(parts.has("shadow") && parts.has("head"), key);
+    }
   }
 });
 
@@ -1216,13 +1267,199 @@ const sameHue = (a, b) => {
   const d = Math.abs(hueOf(a) - hueOf(b));
   return Math.min(d, 360 - d) < 4;
 };
+/** @param {string} hex */
+const luma = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
+};
 /** A look with one hue per colour, so a test can tell what each part wears through the shading. */
 const TEST_LOOK = {
-  colors: { skin: "#d08040", hair: "#c040c0", top: "#e04040", bottoms: "#4040e0", shoes: "#40c040", eyes: "#40c0c0" },
-  wear: { head: "skin", neck: "skin", torso: "top", shoulders: "top", hips: "bottoms", upperArm: "top", forearm: "skin", hand: "skin", thigh: "bottoms", shin: "skin", foot: "shoes" },
-  size: { head: 0.105, neck: 0.045, torso: 0.12, shoulders: 0.06, hips: 0.085, upperArm: 0.045, forearm: 0.038, hand: 0.028, thigh: 0.065, shin: 0.05, foot: 0.034 },
+  colors: { skin: "#d08040", hair: "#c040c0", beard: "#8040c0", top: "#e04040", bottoms: "#4040e0", stripe: "#e0e040", shoes: "#40c040", eyes: "#40c0c0" },
+  wear: { head: "skin", neck: "skin", shoulders: "skin", torso: "top", upperArm: "skin", forearm: "skin", hand: "skin", hips: "bottoms", thigh: "bottoms", knee: "skin", shin: "skin", foot: "shoes" },
+  size: { head: 0.13, neck: 0.05, shoulders: 0.06, torso: 0.115, upperArm: 0.064, forearm: 0.052, hand: 0.04, hips: 0.1, thigh: 0.088, knee: 0.052, shin: 0.058, foot: 0.05 },
 };
 const LOOK_VIEW = { width: 320, height: 240, yaw: 30, pitch: 12 };
+const FRONT = { width: 640, height: 480, yaw: 0, pitch: 0 };
+/** @param {number[]} pts flat x, y list */
+const boxOf = (pts) => {
+  const xs = pts.filter((_, i) => i % 2 === 0);
+  const ys = pts.filter((_, i) => i % 2 === 1);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+};
+/**
+ * How wide an outline is across a bone, at `f` of the way from joint a to joint b (picture px).
+ * @param {number[]} pts flat x, y list @param {number[]} a @param {number[]} b @param {number} f
+ */
+function across(pts, a, b, f) {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const [dx, dy] = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+  const [px, py] = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  const hits = [];
+  for (let i = 0; i < pts.length; i += 2) {
+    const [ax, ay, bx, by] = [pts[i], pts[i + 1], pts[(i + 2) % pts.length], pts[(i + 3) % pts.length]];
+    const [sa, sb] = [(ax - px) * dx + (ay - py) * dy, (bx - px) * dx + (by - py) * dy];
+    if (sa <= 0 !== sb <= 0) {
+      const k = sa / (sa - sb);
+      hits.push((ax + (bx - ax) * k - px) * -dy + (ay + (by - ay) * k - py) * dx);
+    }
+  }
+  return hits.length ? Math.max(...hits) - Math.min(...hits) : 0;
+}
+/** Where a move's joints are in the picture, px. @param {string} key @param {number} t @param {typeof FRONT} view */
+const jointsAt = (key, t, view) => demoLandmarks(key, t, view).map(([x, y]) => [x * view.width, y * view.height]);
+/** The outline of `part` nearest the middle of joints a and b. */
+function outlineOf(shapes, part, a, b) {
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const centre = (sh) => {
+    const box = boxOf(sh.points);
+    return Math.hypot((box.x0 + box.x1) / 2 - mid[0], (box.y0 + box.y1) / 2 - mid[1]);
+  };
+  const mine = shapes.filter((sh) => sh.part === part && sh.kind === "poly");
+  assert.ok(mine.length, `no ${part} drawn`);
+  return mine.sort((p, q) => centre(p) - centre(q))[0];
+}
+
+check("3D demo look: the default look is the reference character: a tank top, bare arms, a beard and a stripe down the shorts", () => {
+  for (const part of ["shoulders", "upperArm", "forearm"]) assert.equal(DEMO_LOOK.wear[part], "skin", `${part} should be bare`);
+  assert.equal(DEMO_LOOK.wear.torso, "top");
+  assert.equal(DEMO_LOOK.wear.thigh, "bottoms");
+  assert.equal(DEMO_LOOK.wear.knee, "skin", "shorts, not trousers");
+  assert.ok(DEMO_LOOK.colors.beard, "a beard");
+  assert.ok(DEMO_LOOK.colors.stripe, "a stripe down the shorts");
+});
+
+check("3D demo look: the person is drawn as filled outlines, each limb tapering from its root to its end", () => {
+  const key = "standing_side_bend"; // standing, arms hanging, at rest
+  const shapes = demoScene(key, 0, FRONT, TEST_LOOK);
+  for (const part of Object.keys(TEST_LOOK.wear)) {
+    const mine = shapes.filter((sh) => sh.part === part);
+    assert.ok(mine.some((sh) => sh.kind === "poly"), `${part} isn't drawn as an outline`);
+  }
+  const j = jointsAt(key, 0, FRONT);
+  for (const [part, a, b] of /** @type {[string, number, number][]} */ ([["upperArm", 11, 13], ["forearm", 13, 15], ["shin", 25, 27]])) {
+    const pts = outlineOf(shapes, part, j[a], j[b]).points;
+    const [root, end] = [across(pts, j[a], j[b], 0.25), across(pts, j[a], j[b], 0.75)];
+    assert.ok(root > end * 1.12, `${part}: ${root.toFixed(1)} px wide near its root, ${end.toFixed(1)} px near its end`);
+  }
+});
+
+check("3D demo look: a broad chest over a narrower waist", () => {
+  const key = "standing_side_bend";
+  const shapes = demoScene(key, 0, FRONT, TEST_LOOK);
+  const j = jointsAt(key, 0, FRONT);
+  const hips = [(j[23][0] + j[24][0]) / 2, (j[23][1] + j[24][1]) / 2];
+  const top = [(j[11][0] + j[12][0]) / 2, (j[11][1] + j[12][1]) / 2];
+  const torso = shapes.find((sh) => sh.part === "torso" && sh.kind === "poly");
+  assert.ok(torso?.kind === "poly", "no torso outline");
+  const [chest, waist] = [across(torso.points, hips, top, 0.72), across(torso.points, hips, top, 0.3)];
+  assert.ok(chest > waist * 1.1, `chest ${chest.toFixed(1)} px, waist ${waist.toFixed(1)} px`);
+});
+
+check("3D demo look: a beard round the jaw from the front, out of sight from behind; none without a beard colour", () => {
+  /** @param {number} yaw @param {import("../lib/demo-look.js").DemoLook} [look] */
+  const order = (yaw, look = TEST_LOOK) => {
+    const shapes = demoScene("chin_tuck", 0, { ...LOOK_VIEW, yaw }, look);
+    const at = (part) => shapes.flatMap((sh, i) => (sh.part === part ? [i] : []));
+    return { head: shapes.findIndex((sh) => sh.part === "head" && sh.kind === "poly"), beard: at("beard"), face: at("face"), eyes: at("eyes") };
+  };
+  const front = order(0);
+  assert.ok(front.beard.length, "no beard drawn");
+  assert.ok(Math.min(...front.beard) > front.head, "from the front the beard is on the face");
+  assert.ok(Math.min(...front.eyes) > Math.max(...front.face), "the eyes are on the face");
+  const back = order(180);
+  assert.ok(Math.max(...back.beard) < back.head, "from behind the head hides the beard");
+  const { beard, ...shaven } = TEST_LOOK.colors;
+  assert.ok(beard);
+  assert.deepEqual(order(0, { ...TEST_LOOK, colors: shaven }).beard, [], "a clean-shaven look has a beard");
+});
+
+check("3D demo look: a stripe down the outer seam of the shorts, on the sides facing the camera; none without a stripe colour", () => {
+  /** @param {number} yaw @param {import("../lib/demo-look.js").DemoLook} [look] */
+  const scene = (yaw, look = TEST_LOOK) => demoScene("standing_side_bend", 0, { ...FRONT, yaw }, look);
+  const stripes = (shapes) => shapes.filter((sh) => sh.part === "stripe");
+  assert.equal(stripes(scene(0)).length, 2, "from the front both legs show their stripe");
+  assert.equal(stripes(scene(180)).length, 2, "from behind too");
+  for (const yaw of [90, -90]) {
+    const shapes = scene(yaw);
+    assert.equal(stripes(shapes).length, 1, `from the side (yaw ${yaw}) only the near leg's stripe shows`);
+    const thighs = shapes.flatMap((sh, i) => (sh.part === "thigh" ? [i] : []));
+    assert.ok(shapes.indexOf(stripes(shapes)[0]) > Math.max(...thighs), "the stripe is on the near leg");
+  }
+  for (const sh of stripes(scene(0))) assert.ok(sameHue(sh.fill, TEST_LOOK.colors.stripe), sh.fill);
+  const { stripe, ...plain } = TEST_LOOK.colors;
+  assert.ok(stripe);
+  assert.equal(stripes(scene(0, { ...TEST_LOOK, colors: plain })).length, 0, "plain shorts have a stripe");
+});
+
+check("3D demo look: clothes cover the skin under them from any side: the top over the shoulders and neck, the shorts over the knees", () => {
+  const centre = (sh) => {
+    const b = boxOf(sh.points);
+    return [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
+  };
+  for (const key of ["chin_tuck", "standing_side_bend", "squat", "back_extension"]) {
+    for (const yaw of [0, 60, 90, 180, 270]) {
+      for (const t of [0, 1.8]) {
+        const shapes = demoScene(key, t, { ...LOOK_VIEW, yaw }, TEST_LOOK);
+        const fills = (part) => shapes.flatMap((sh, i) => (sh.part === part && sh.kind === "poly" ? [i] : []));
+        const [torso] = fills("torso");
+        for (const part of ["shoulders", "neck"]) assert.ok(fills(part).every((i) => i < torso), `${key} at yaw ${yaw}: the ${part} are painted over the top`);
+        // Each knee lies just under a leg of the shorts (seen side on, both legs overlap in the picture).
+        for (const k of fills("knee")) {
+          const under = fills("thigh").some((i) => i > k && shapes[k].depth - shapes[i].depth < 2e-3);
+          assert.ok(under, `${key} at yaw ${yaw}, ${t} s: a knee is painted over its shorts`);
+        }
+      }
+    }
+  }
+});
+
+/** The shape painted last over a point of the picture (what you see there). */
+function topAt(shapes, x, y) {
+  /** @param {number[]} p */
+  const inPoly = (p) => {
+    let inside = false;
+    for (let i = 0, k = p.length - 2; i < p.length; k = i, i += 2) {
+      if (p[i + 1] > y !== p[k + 1] > y && x < ((p[k] - p[i]) * (y - p[i + 1])) / (p[k + 1] - p[i + 1]) + p[i]) inside = !inside;
+    }
+    return inside;
+  };
+  const covers = (sh) => {
+    if (sh.kind === "poly") return inPoly(sh.points);
+    if (sh.kind === "circle") return Math.hypot(x - sh.x, y - sh.y) <= sh.r;
+    if (sh.kind === "ellipse") return ((x - sh.x) / sh.rx) ** 2 + ((y - sh.y) / sh.ry) ** 2 <= 1;
+    const [dx, dy] = [sh.x2 - sh.x1, sh.y2 - sh.y1];
+    const f = Math.max(0, Math.min(1, ((x - sh.x1) * dx + (y - sh.y1) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(x - sh.x1 - dx * f, y - sh.y1 - dy * f) <= sh.r;
+  };
+  return shapes.findLast(covers);
+}
+
+check("3D demo look: an arm or a leg is one smooth piece: no dark edge across the elbow, wrist or knee", () => {
+  // Seen at an angle (a limb flat across the view hides a seam: all of it is as far away), with the
+  // limb nearest the camera, so nothing else is in front of it.
+  // A leg is looked at from just under the shorts to just above the shoe (the hem and the shoe have
+  // edges of their own, like clothes).
+  for (const [key, t, yaw, chain, until] of /** @type {[string, number, number, number[], number][]} */ ([
+    ["t_raise", 1.8, 40, [11, 13, 15, 19], 95],
+    ["curl", 1.8, 50, [11, 13, 15, 19], 95],
+    ["nerve_glide", 1.8, -40, [12, 14, 16, 20], 95],
+    ["seated_knee_ext", 0.9, 60, [23, 25, 27], 80],
+    ["squat", 1.8, 60, [23, 25, 27], 80],
+  ])) {
+    const view = { ...FRONT, yaw };
+    const shapes = demoScene(key, t, view, TEST_LOOK);
+    const j = jointsAt(key, t, view);
+    for (let s = 0; s < chain.length - 1; s++) {
+      const [a, b] = [j[chain[s]], j[chain[s + 1]]];
+      for (let step = 5; step <= (s === chain.length - 2 ? until : 95); step++) {
+        if (chain[s] === 23 && step < 90) continue; // the shorts
+        const f = step / 100; // an edge is ~1 cm wide: look every 1% of the bone
+        const top = topAt(shapes, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f);
+        assert.ok(top && top.part !== "outline", `${key} from yaw ${yaw}: a dark edge crosses the limb between joints ${chain[s]} and ${chain[s + 1]} (${Math.round(f * 100)}%)`);
+      }
+    }
+  }
+});
 
 check("3D demo look: each body part is painted in the colour it wears", () => {
   for (const key of ["t_raise", "squat", "seated_knee_ext"]) {
@@ -1232,7 +1469,7 @@ check("3D demo look: each body part is painted in the colour it wears", () => {
       assert.ok(mine.length, `${key}: no ${part} drawn`);
       for (const sh of mine) assert.ok(sameHue(sh.fill, TEST_LOOK.colors[colour]), `${key}: ${part} is ${sh.fill}, not ${colour}`);
     }
-    for (const part of ["hair", "eyes"]) {
+    for (const part of ["hair", "eyes", "beard"]) {
       const mine = shapes.filter((sh) => sh.part === part);
       assert.ok(mine.length, `${key}: no ${part} drawn`);
       for (const sh of mine) assert.ok(sameHue(sh.fill, TEST_LOOK.colors[part]), `${key}: ${part} is ${sh.fill}`);
@@ -1247,21 +1484,20 @@ check("3D demo look: changing what a part wears changes that part only (long sle
   assert.ok(["forearm", "shin"].every((part) => after.some((s) => s.part === part)), "no forearms or shins drawn");
   for (const sh of after.filter((s) => s.part === "forearm")) assert.ok(sameHue(sh.fill, TEST_LOOK.colors.top), `long sleeves: forearm ${sh.fill}`);
   for (const sh of after.filter((s) => s.part === "shin")) assert.ok(sameHue(sh.fill, TEST_LOOK.colors.bottoms), `trousers: shin ${sh.fill}`);
-  const others = (shapes) => shapes.filter((s) => !["forearm", "shin", "highlight", "outline"].includes(s.part));
+  const others = (shapes) => shapes.filter((s) => !["forearm", "shin", "shade", "outline"].includes(s.part));
   assert.deepEqual(others(after), others(before));
 });
 
-check("3D demo look: a part's size sets how thick it is drawn, not where the joints are", () => {
+check("3D demo look: a part's size sets how thick it is drawn, and nothing else", () => {
   const big = { ...TEST_LOOK, size: { ...TEST_LOOK.size, torso: TEST_LOOK.size.torso * 2 } };
-  /** @param {import("../lib/demo-look.js").DemoLook} look */
-  const torso = (look) => {
-    const sh = demoScene("squat", 1, LOOK_VIEW, look).find((s) => s.part === "torso");
-    assert.ok(sh?.kind === "capsule", "no torso drawn");
-    return sh;
+  const [a, b] = [TEST_LOOK, big].map((look) => demoScene("standing_side_bend", 0, FRONT, look));
+  const width = (shapes) => {
+    const box = boxOf(shapes.find((s) => s.part === "torso" && s.kind === "poly").points);
+    return box.x1 - box.x0;
   };
-  const [a, b] = [torso(TEST_LOOK), torso(big)];
-  assert.ok(Math.abs(b.r / a.r - 2) < 1e-9, `torso ${a.r} -> ${b.r}`);
-  assert.deepEqual([b.x1, b.y1, b.x2, b.y2], [a.x1, a.y1, a.x2, a.y2]);
+  assert.ok(width(b) > width(a) * 1.3, `torso ${width(a).toFixed(1)} -> ${width(b).toFixed(1)} px`);
+  const others = (shapes) => shapes.filter((s) => !["torso", "outline", "shade"].includes(s.part));
+  assert.deepEqual(others(b), others(a));
 });
 
 check("3D demo look: the hair is behind the head seen from the front, and covers it from behind", () => {
@@ -1275,31 +1511,26 @@ check("3D demo look: the hair is behind the head seen from the front, and covers
   assert.ok(back.hair > back.head, `from behind: ${JSON.stringify(back)}`);
 });
 
-check("3D demo look: only the joints the coach watches are marked; the rest is the person's skin and clothes", () => {
-  for (const key of DEMO_KEYS) {
-    const marks = demoScene(key, 0, LOOK_VIEW, TEST_LOOK).filter((sh) => sh.part === "joint");
-    assert.ok(marks.length, `${key}: no watched joint marked`);
-    for (const sh of marks) assert.equal(sh.fill, DEMO_COLORS.accent, `${key}: an unwatched joint is drawn`);
-  }
-});
-
-check("3D demo look: each body part has a darker edge just behind it, so a white top reads on a white page", () => {
-  /** @param {string} hex */
-  const luma = (hex) => {
-    const n = parseInt(hex.slice(1), 16);
-    return 0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
-  };
+check("3D demo look: each body part has a darker edge just behind it, so it reads on a light page as on a dark one", () => {
   for (const key of ["squat", "t_raise"]) {
     const shapes = demoScene(key, 0.7, LOOK_VIEW, TEST_LOOK);
-    const parts = shapes.filter((sh) => sh.kind === "capsule" && Object.hasOwn(TEST_LOOK.wear, sh.part));
-    assert.ok(parts.length >= 18, `${key}: ${parts.length} limbs`);
+    const parts = shapes.filter((sh) => sh.kind === "poly" && Object.hasOwn(TEST_LOOK.wear, sh.part));
+    assert.ok(parts.length >= 18, `${key}: ${parts.length} parts`);
     for (const sh of parts) {
-      if (sh.kind !== "capsule") continue;
-      const edge = shapes.find((e) => e.part === "outline" && e.kind === "capsule" && e.x1 === sh.x1 && e.y1 === sh.y1 && e.x2 === sh.x2 && e.y2 === sh.y2);
-      assert.ok(edge?.kind === "capsule", `${key}: ${sh.part} has no edge`);
-      assert.ok(edge.r > sh.r && edge.r < sh.r * 1.6, `${key}: ${sh.part} edge ${edge.r} around ${sh.r}`);
+      if (sh.kind !== "poly") continue;
+      const box = boxOf(sh.points);
+      const i = shapes.indexOf(sh);
+      const edge = shapes.slice(0, i).reverse().find((e) => {
+        if (e.part !== "outline" || e.kind !== "poly") return false;
+        const b = boxOf(e.points);
+        return b.x0 < box.x0 && b.y0 < box.y0 && b.x1 > box.x1 && b.y1 > box.y1;
+      });
+      assert.ok(edge?.kind === "poly", `${key}: ${sh.part} has no edge`);
+      const eb = boxOf(edge.points);
+      assert.ok(eb.x1 - eb.x0 < (box.x1 - box.x0) * 1.6 + 2, `${key}: ${sh.part}'s edge is too wide`);
       assert.ok(luma(edge.fill) < luma(sh.fill) * 0.8 && sameHue(edge.fill, sh.fill), `${key}: ${sh.part} edge ${edge.fill} on ${sh.fill}`);
-      assert.ok(shapes.indexOf(edge) < shapes.indexOf(sh) && edge.depth - sh.depth < 1e-3, `${key}: ${sh.part}'s edge isn't just behind it`);
+      // Just behind it, or behind the part of the limb it joins (no seam at the elbow, see below).
+      assert.ok(edge.depth >= sh.depth && edge.depth - sh.depth < 0.5, `${key}: ${sh.part}'s edge isn't just behind it`);
     }
   }
 });
@@ -1315,7 +1546,8 @@ check("3D demo look: the look file is complete: #rrggbb colours, every part dres
   // ...and those are the parts the scene draws.
   const drawn = new Set();
   for (const key of DEMO_KEYS) for (const sh of demoScene(key, 0, LOOK_VIEW)) drawn.add(sh.part);
-  assert.deepEqual([...drawn].filter((p) => !["highlight", "outline", "chair", "shadow", "joint", "hair", "eyes"].includes(p)).sort(), body);
+  const extras = ["shade", "outline", "shadow", "hair", "brows", "eyes", "beard", "face", "stripe"];
+  assert.deepEqual([...drawn].filter((p) => !extras.includes(p)).sort(), body);
 });
 
 check("3D demo: the canvas painter paints each shape once, in the scene's order", () => {
@@ -1329,15 +1561,19 @@ check("3D demo: the canvas painter paints each shape once, in the scene's order"
   const shapes = [
     { kind: "ellipse", x: 50, y: 90, rx: 30, ry: 6, fill: "rgba(0,0,0,0.2)", depth: 9, part: "shadow" },
     { kind: "capsule", x1: 10, y1: 10, x2: 40, y2: 50, r: 4, fill: "#aa8866", depth: 5, part: "body" },
-    { kind: "circle", x: 40, y: 50, r: 3, fill: "#3ddc97", depth: 4, part: "joint" },
+    { kind: "circle", x: 40, y: 50, r: 3, fill: "#3ddc97", depth: 4, part: "eyes" },
+    { kind: "poly", points: [5, 5, 25, 5, 15, 30], fill: "#b8ae76", depth: 3, part: "torso" },
   ];
   paintDemo(/** @type {CanvasRenderingContext2D} */ (/** @type {unknown} */ (ctx)), shapes);
   const draws = calls.filter(([n]) => ["fill", "stroke"].includes(n)).map(([n]) => n);
-  assert.deepEqual(draws, ["fill", "stroke", "fill"]);
+  assert.deepEqual(draws, ["fill", "stroke", "fill", "fill"]);
   assert.ok(calls.some(([n, ...a]) => n === "ellipse" && a[0] === 50 && a[2] === 30));
   assert.ok(calls.some(([n, v]) => n === "=lineWidth" && v === 8), "a capsule is a round-capped line as wide as it is thick");
   assert.ok(calls.some(([n, v]) => n === "=lineCap" && v === "round"));
   assert.ok(calls.some(([n, ...a]) => n === "arc" && a[0] === 40 && a[2] === 3));
+  const traced = calls.filter(([n]) => n === "moveTo" || n === "lineTo").slice(-3).map(([, x, y]) => [x, y]);
+  assert.deepEqual(traced, [[5, 5], [25, 5], [15, 30]], "an outline is traced through its points");
+  assert.ok(calls.some(([n]) => n === "closePath"));
 });
 
 check("3D demo: no YouTube left, the catalog has no clips and no page links to youtube.com", () => {

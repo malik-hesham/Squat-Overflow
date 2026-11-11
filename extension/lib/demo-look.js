@@ -5,11 +5,17 @@
 // the extension's pages, the desktop app (which runs those pages) and the phone (react-native-svg),
 // so a change here shows up in all three. Nothing to install or build: edit a value and reload.
 //
-// - colors: "#rrggbb".
-// - wear: what each body part is dressed in, one of the names in `colors`. Long sleeves: forearm:
-//   "top". Trousers: shin: "bottoms". No hair: give `hair` the skin colour.
-// - size: how thick each part is drawn, as a radius in metres on a life-size figure. It never moves
-//   a joint, so the moves, and the coach's check that each demo counts its reps, stay the same.
+// The figure is drawn flat, like a vector illustration: a bearded man in a tank top, shorts with a
+// stripe down the side and trainers.
+//
+// - colors: "#rrggbb". `beard` and `stripe` are optional: leave `beard` out for a clean-shaven face,
+//   `stripe` out for plain shorts.
+// - wear: what each body part is dressed in, one of the names in `colors`. A tee: shoulders and
+//   upperArm: "top". Long sleeves: forearm: "top" too. Trousers: knee and shin: "bottoms". No hair:
+//   give `hair` the skin colour.
+// - size: how thick each part is drawn, in metres on a life-size figure (about a part's widest
+//   radius). It never moves a joint, so the moves, and the coach's check that each demo counts its
+//   reps, stay the same.
 //
 // tests/check.mjs checks this file: a colour that isn't "#rrggbb", a part dressed in a colour that
 // isn't in `colors`, or a misspelt or missing part fails it.
@@ -19,37 +25,41 @@
 /** @type {DemoLook} */
 export const DEMO_LOOK = {
   colors: {
-    skin: "#e0b08a",
-    hair: "#33261d",
-    eyes: "#2b2018",
-    top: "#f2f1ec", // a white tee
-    bottoms: "#4d6a92", // denim shorts
-    shoes: "#24262a", // black trainers
+    skin: "#b9612f",
+    hair: "#561c17",
+    beard: "#561c17",
+    eyes: "#2a1410",
+    top: "#b8ae76", // a khaki tank top
+    bottoms: "#34363a", // charcoal shorts
+    stripe: "#5aa39a", // teal, down the side of the shorts
+    shoes: "#5aa077", // mint trainers
   },
   wear: {
     head: "skin",
     neck: "skin",
-    shoulders: "top",
+    shoulders: "skin",
     torso: "top",
-    upperArm: "top",
+    upperArm: "skin",
     forearm: "skin",
     hand: "skin",
     hips: "bottoms",
     thigh: "bottoms",
+    knee: "skin",
     shin: "skin",
     foot: "shoes",
   },
   size: {
-    head: 0.105,
-    neck: 0.045,
+    head: 0.13,
+    neck: 0.05,
     shoulders: 0.06,
-    torso: 0.12,
-    upperArm: 0.045,
-    forearm: 0.038,
-    hand: 0.028,
-    hips: 0.085,
-    thigh: 0.065,
-    shin: 0.05,
-    foot: 0.034,
+    torso: 0.115,
+    upperArm: 0.064,
+    forearm: 0.052,
+    hand: 0.04,
+    hips: 0.1,
+    thigh: 0.088,
+    knee: 0.052,
+    shin: 0.058,
+    foot: 0.05,
   },
 };

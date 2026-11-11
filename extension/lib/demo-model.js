@@ -15,7 +15,6 @@
 // No DOM here: extension pages and the phone app draw the shapes this module
 // returns (lib/demo-player.js on a canvas, mobile's DemoModel with SVG).
 import { EXERCISES } from "./pose/exercises.js";
-import { JOINTS } from "./pose/geometry.js";
 import { DEMO_LOOK } from "./demo-look.js";
 
 /** @typedef {import("./demo-look.js").DemoLook} DemoLook */
@@ -120,6 +119,18 @@ function legDir(pitch) {
 }
 
 /**
+ * How far the wrist gets from the shoulder when asked to reach `d`: all the way up to 90% of the
+ * arm's length `full`, then ever closer to straight, easing in (no snap as the arm locks out).
+ * @param {number} d @param {number} full
+ */
+function stretch(d, full) {
+  const knee = 0.9 * full;
+  if (d <= knee) return d;
+  const s = (d - knee) / (full - knee);
+  return knee + ((full - knee) * s) / Math.cbrt(1 + s ** 3) - 1e-9;
+}
+
+/**
  * Two-bone reach: where the elbow goes for the wrist to touch `target` (or get as close as it
  * can), bending towards `pole`. Bone lengths never change. Exported for the tests.
  * @param {P3} root @param {P3} target @param {P3} pole @param {number} a @param {number} b
@@ -127,7 +138,7 @@ function legDir(pitch) {
  */
 export function reach(root, target, pole, a, b) {
   const to = sub(target, root);
-  const d = Math.min(Math.max(len(to), 1e-6), a + b - 1e-9);
+  const d = stretch(Math.max(len(to), 1e-6), a + b);
   const u = unit(to);
   const along = (a * a - b * b + d * d) / (2 * d);
   const h = Math.sqrt(Math.max(0, a * a - along * along));
@@ -260,7 +271,7 @@ function skeleton(p) {
  * @property {"seated" | "standing"} [stance] defaults to the exercise's stance
  * @property {Pose} [rest]
  * @property {Pose} target
- * @property {Pose} [via] a pose halfway, on the way there and back (lift the foot, then straighten the knee)
+ * @property {Pose} [via] a pose the move heads for first, on the way there and back (lift the foot, then straighten the knee); the path curves past it, with no corner
  * @property {1 | 2} [reps] 2: one side, then the other, in each loop
  * @property {"both" | "L" | "R"} [plant] feet that stay put when standing (mirrored for the second side)
  * @property {(w: number) => P3[]} [custom] a move the angles above can't describe
@@ -349,7 +360,9 @@ const MOVES = {
   nerve_glide: { rest: arms([30, 0], [170, 0]), target: arms([85, 0], [80, 0], [70, 0]) },
   // Knees
   seated_knee_ext: { reps: 2, via: { L_thigh: 105, L_foot: 100 }, target: { L_thigh: 105, L_shin: 80, L_foot: 155 } },
-  heel_slide: { reps: 2, target: { L_thigh: 82, L_shin: -38 } },
+  // The shin swings back before the thigh dips, so the foot never sinks into the floor (which
+  // would lift the person off the seat), and the heel rises at the end, toes down.
+  heel_slide: { reps: 2, via: { L_shin: -20 }, target: { L_thigh: 82, L_shin: -38, L_foot: 78 } },
   sit_to_stand: {
     rest: reachBoth([-0.1, -0.15, 0.12], [1, -0.5, 0.2], [90, 180]),
     target: { L_thigh: 85, L_shin: -5, R_thigh: 85, R_shin: -5, lean: 30, ...reachBoth([-0.1, -0.15, 0.12], [1, -0.5, 0.2], [90, 180]) },
@@ -394,13 +407,14 @@ function pushUp(w) {
 }
 
 // ---- Timing ------------------------------------------------------------------------
-const smooth = (x) => x * x * (3 - 2 * x);
+/** Minimum jerk, the way people move: starts and stops with no speed and no push. */
+const smooth = (x) => x * x * x * (x * (6 * x - 15) + 10);
 /** How far into the move (0 rest, 1 target) at `u` through one rep: hold, go, hold, come back, hold. */
 function envelope(u) {
-  if (u < 0.1) return 0;
-  if (u < 0.42) return smooth((u - 0.1) / 0.32);
-  if (u < 0.58) return 1;
-  if (u < 0.9) return 1 - smooth((u - 0.58) / 0.32);
+  if (u < 0.04) return 0;
+  if (u < 0.44) return smooth((u - 0.04) / 0.4);
+  if (u < 0.56) return 1;
+  if (u < 0.96) return 1 - smooth((u - 0.56) / 0.4);
   return 0;
 }
 
@@ -409,6 +423,18 @@ function mix(a, b, w) {
   if (typeof a === "number" && typeof b === "number") return /** @type {T} */ (a + (b - a) * w);
   if (Array.isArray(a) && Array.isArray(b)) return /** @type {T} */ (a.map((v, i) => v + (b[i] - v) * w));
   return w < 0.5 ? a : b;
+}
+
+/**
+ * A smooth way from `a` to `c` that heads for `b` first (a cubic Bezier through a, b, b, c): it
+ * never overshoots them, and has no corner where a straight line through b would.
+ * @template T @param {T} a @param {T} b @param {T} c @param {number} w @returns {T}
+ */
+function curve(a, b, c, w) {
+  const [ka, kb, kc] = [(1 - w) ** 3, 3 * w * (1 - w), w ** 3];
+  if (typeof a === "number" && typeof b === "number" && typeof c === "number") return /** @type {T} */ (a * ka + b * kb + c * kc);
+  if (Array.isArray(a) && Array.isArray(b) && Array.isArray(c)) return /** @type {T} */ (a.map((v, i) => v * ka + b[i] * kb + c[i] * kc));
+  return w < 0.5 ? a : c;
 }
 
 const MIRROR_KEYS = ["up", "fore", "hand", "to", "pole", "thigh", "shin", "foot"];
@@ -516,12 +542,12 @@ export function demoPose(key, t) {
   } else {
     const frames = b.sides[rep];
     const rest = frames[0];
-    // Through the keyframes in turn: rest, (via,) target.
-    const span = w * (frames.length - 1);
-    const at = Math.min(frames.length - 2, Math.floor(span));
+    // From rest to target; a via pose bends the way there into a curve that heads for it first.
+    const target = frames.at(-1);
+    const via = frames.length === 3 ? frames[1] : null;
     /** @type {Params} */
     const p = /** @type {Params} */ ({});
-    for (const k of Object.keys(rest)) p[k] = mix(frames[at][k], frames[at + 1][k], span - at);
+    for (const k of Object.keys(rest)) p[k] = via ? curve(rest[k], via[k], target[k], w) : mix(rest[k], target[k], w);
     j = skeleton(p);
     if (b.stance === "standing") {
       // Planted feet stay where they were at rest: move the body, not the feet.
@@ -612,10 +638,8 @@ export function demoLandmarks(key, t, view) {
 }
 
 // ---- What to draw -----------------------------------------------------------------
-/** The scene around the person (how the person looks is lib/demo-look.js): the joints the coach measures, the chair and the shadow. */
+/** The scene around the person (how the person looks is lib/demo-look.js): the shadow on the floor. */
 export const DEMO_COLORS = {
-  accent: "#3ddc97",
-  chair: "#7d8695",
   shadow: "rgba(0, 0, 0, 0.22)",
 };
 const SWING = 30; // deg either side of the coach's camera
@@ -639,60 +663,23 @@ export function demoView(key, t, { width, height, turn = 0, still = false }) {
 }
 
 /**
- * One thing to paint. Capsules are round-capped lines `2r` wide; `depth` is meters from the
- * camera, and shapes come sorted far to near (paint them in order).
- * @typedef {{ kind: "capsule", x1: number, y1: number, x2: number, y2: number, r: number, fill: string, depth: number, part: string }
+ * One thing to paint. Polys are filled outlines through `points` (x, y, x, y, ...); capsules are
+ * round-capped lines `2r` wide; `depth` is meters from the camera, and shapes come sorted far to
+ * near (paint them in order).
+ * @typedef {{ kind: "poly", points: number[], fill: string, depth: number, part: string }
+ *   | { kind: "capsule", x1: number, y1: number, x2: number, y2: number, r: number, fill: string, depth: number, part: string }
  *   | { kind: "circle", x: number, y: number, r: number, fill: string, depth: number, part: string }
  *   | { kind: "ellipse", x: number, y: number, rx: number, ry: number, fill: string, depth: number, part: string }} Shape
  */
 
-// Body parts as capsules between joints, by the name lib/demo-look.js dresses and sizes them by.
-// -1 / -2: the middle of the hips / shoulders, -3: the head.
-/** @type {[number, number, string][]} */
-const LIMBS = [
-  [-1, -2, "torso"],
-  [23, 24, "hips"],
-  [11, 12, "shoulders"],
-  [-2, -3, "neck"],
-  [11, 13, "upperArm"],
-  [13, 15, "forearm"],
-  [15, 19, "hand"],
-  [12, 14, "upperArm"],
-  [14, 16, "forearm"],
-  [16, 20, "hand"],
-  [23, 25, "thigh"],
-  [25, 27, "shin"],
-  [27, 29, "foot"],
-  [29, 31, "foot"],
-  [24, 26, "thigh"],
-  [26, 28, "shin"],
-  [28, 30, "foot"],
-  [30, 32, "foot"],
-];
-/** The parts lib/demo-look.js has to dress and size: the limbs, and the head. */
-export const DEMO_PARTS = [...new Set([...LIMBS.map(([, , part]) => part), "head"])];
-// Marks on the joints the coach measures (radius in meters): a little wider than the limb there.
-/** @type {[number, number][]} */
-const MARKS = [
-  [11, 0.052],
-  [12, 0.052],
-  [13, 0.043],
-  [14, 0.043],
-  [15, 0.034],
-  [16, 0.034],
-  [19, 0.026],
-  [20, 0.026],
-  [23, 0.07],
-  [24, 0.07],
-  [25, 0.056],
-  [26, 0.056],
-  [27, 0.044],
-  [28, 0.044],
-  [29, 0.03],
-  [30, 0.03],
-  [31, 0.03],
-  [32, 0.03],
-];
+// The person is drawn flat, like a vector illustration: each body part is the outline round a few
+// balls placed along its bones (a limb that tapers and bulges, a chest broader than the waist), as
+// the camera sees them. A ball's radius is in units of the part's size in lib/demo-look.js.
+/** The parts lib/demo-look.js has to dress and size. */
+export const DEMO_PARTS = ["head", "neck", "shoulders", "torso", "upperArm", "forearm", "hand", "hips", "thigh", "knee", "shin", "foot"];
+const EDGE = 0.011; // m, the darker edge round each part
+const ROUND = 14; // points round each ball's outline
+const X = /** @type {P3} */ ([1, 0, 0]); // the axis the legs swing about
 
 /** @param {string} hex @param {number} k 0..1 darker, 1.. lighter towards white @returns {string} */
 function shade(hex, k) {
@@ -701,35 +688,37 @@ function shade(hex, k) {
   return `#${ch.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** Joint indices of what a move measures, both sides. @param {string} key @returns {Set<number>} */
-function watched(key) {
-  const out = new Set();
-  for (const joint of EXERCISES[key].joints) for (const side of /** @type {const} */ (["left", "right"])) out.add(JOINTS[side][joint]);
-  return out;
-}
+/** @param {P3} a @param {P3} b @returns {P3} */
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+/** @param {P3} a @param {P3} b @param {number} f @returns {P3} */
+const lerp = (a, b, f) => add(a, sub(b, a), f);
 
-/** @type {Map<string, P3[][] | null>} */
-const CHAIRS = new Map();
-/** A plain chair under the seated pose, as rails (pairs of points), or null when the move has no seat. @param {string} key */
-function chair(key) {
-  if (CHAIRS.has(key)) return CHAIRS.get(key);
-  const b = built(key);
-  /** @type {P3[][] | null} */
-  let rails = null;
-  if (b.stance === "seated" || key === "sit_to_stand") {
-    const seated = demoPose(key, b.stance === "seated" ? 0 : REP_SECONDS / 2);
-    const y = (seated[23][1] + seated[24][1]) / 2 - 0.09;
-    const z = (seated[23][2] + seated[24][2]) / 2 - 0.06;
-    const w = 0.22;
-    const d = 0.21;
-    rails = [];
-    for (const x of [-w, -w / 2, 0, w / 2, w]) rails.push([[x, y, z - d], [x, y, z + d]]); // seat slats
-    for (const [x, zz] of [[-w, z - d], [w, z - d], [-w, z + d], [w, z + d]]) rails.push([[x, 0.02, zz], [x, y, zz]]); // legs
-    for (const x of [-w, w]) rails.push([[x, y, z - d], [x, y + 0.42, z - d - 0.04]]); // back posts
-    for (const h of [0.26, 0.4]) rails.push([[-w, y + h, z - d - 0.03], [w, y + h, z - d - 0.03]]); // back rails
+/**
+ * The outline round some circles (x, y, r), as a flat x, y list: the convex hull of points round
+ * each circle.
+ * @param {[number, number, number][]} circles
+ * @returns {number[]}
+ */
+function hull(circles) {
+  /** @type {[number, number][]} */
+  const pts = [];
+  for (const [x, y, r] of circles) {
+    for (let i = 0; i < ROUND; i++) pts.push([x + r * Math.cos((2 * Math.PI * i) / ROUND), y + r * Math.sin((2 * Math.PI * i) / ROUND)]);
   }
-  CHAIRS.set(key, rails);
-  return rails;
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  /** @param {[number, number]} o @param {[number, number]} a @param {[number, number]} b */
+  const turn = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  /** One side of the hull, going through the points in order. @param {[number, number][]} list */
+  const side = (list) => {
+    /** @type {[number, number][]} */
+    const out = [];
+    for (const p of list) {
+      while (out.length >= 2 && turn(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
+      out.push(p);
+    }
+    return out.slice(0, -1);
+  };
+  return [...side(pts), ...side(pts.slice().reverse())].flat();
 }
 
 /**
@@ -745,41 +734,78 @@ export function demoScene(key, t, view, look = DEMO_LOOK) {
   const pose = demoPose(key, t);
   if (!pose) return null;
   const see = camera(key, view);
-  /** @param {number} i @returns {P3} */
-  const at = (i) => (i === -1 ? midpoint(pose[23], pose[24]) : i === -2 ? midpoint(pose[11], pose[12]) : i === -3 ? midpoint(pose[7], pose[8]) : pose[i]);
-  const seen = pose.map(see);
-  const depths = seen.map((p) => p[2]);
+  const depths = pose.map((p) => see(p)[2]);
   const near = Math.min(...depths);
   const far = Math.max(...depths);
-  // Nearer parts a little lighter: depth you can read even without the swing.
-  const light = (depth) => 0.84 + 0.2 * ((far - depth) / Math.max(far - near, 1e-6));
-  const hot = watched(key);
+  // Parts further away a little darker: depth you can read even without the swing.
+  const light = (depth) => 0.86 + 0.14 * ((far - depth) / Math.max(far - near, 1e-6));
+  const size = look.size;
+  /** @param {string} part */
+  const worn = (part) => look.colors[look.wear[part]];
   /** @type {Shape[]} */
   const shapes = [];
 
-  // A darker edge just behind each part of the person: it reads on a light page as on a dark one,
-  // and a near limb stands out from what's behind it.
-  const EDGE = 0.012; // m
-  /** @param {P3} a @param {P3} b @param {number} r @param {string} color @param {string} part @param {boolean} [edge] */
-  const capsule = (a, b, r, color, part, edge = true) => {
-    const [x1, y1, d1, s1] = see(a);
-    const [x2, y2, d2, s2] = see(b);
-    const depth = (d1 + d2) / 2;
-    const rp = (r * (s1 + s2)) / 2;
-    if (edge) shapes.push({ kind: "capsule", x1, y1, x2, y2, r: rp + (EDGE * (s1 + s2)) / 2, fill: shade(color, 0.6), depth: depth + 1e-4, part: "outline" });
-    shapes.push({ kind: "capsule", x1, y1, x2, y2, r: rp, fill: shade(color, light(depth)), depth, part });
-    // A soft highlight on the side facing the light (top left).
-    const o = rp * 0.32;
-    shapes.push({ kind: "capsule", x1: x1 - o, y1: y1 - o, x2: x2 - o, y2: y2 - o, r: rp * 0.38, fill: shade(color, 1.28), depth: depth - 1e-4, part: "highlight" });
+  /** @typedef {{ x: number, y: number, r: number, d: number, s: number }} Seen a ball as the camera sees it */
+  /** @param {[P3, number][]} balls [centre, radius in m] @returns {Seen[]} */
+  const seeBalls = (balls) =>
+    balls.map(([p, r]) => {
+      const [x, y, d, s] = see(p);
+      return { x, y, r: r * s, d, s };
+    });
+  /** @param {Seen[]} circles */
+  const meanDepth = (circles) => circles.reduce((sum, c) => sum + c.d, 0) / circles.length;
+  /**
+   * Paints the outline round some balls at `depth`, with a darker edge behind it (at `edgeDepth`) and
+   * a darker tone on the side away from the light (bottom right), lit as if at `lit`.
+   * @param {Seen[]} circles @param {string} color @param {string} name @param {number} depth
+   * @param {{ edge?: boolean, tone?: boolean, edgeDepth?: number, lit?: number }} [opts]
+   */
+  const paint = (circles, color, name, depth, { edge = true, tone = true, edgeDepth = depth + 1e-7, lit = depth } = {}) => {
+    if (edge) shapes.push({ kind: "poly", points: hull(circles.map((c) => [c.x, c.y, c.r + EDGE * c.s])), fill: shade(color, 0.6), depth: edgeDepth, part: "outline" });
+    shapes.push({ kind: "poly", points: hull(circles.map((c) => [c.x, c.y, c.r])), fill: shade(color, light(lit)), depth, part: name });
+    if (tone) shapes.push({ kind: "poly", points: hull(circles.map((c) => [c.x + c.r * 0.3, c.y + c.r * 0.22, c.r * 0.64])), fill: shade(color, light(lit) * 0.88), depth: depth - 1e-7, part: "shade" });
   };
-  /** @param {P3} p @param {number} r @param {string} color @param {string} part @param {boolean} [shine] @param {boolean} [edge] */
-  const ball = (p, r, color, part, shine = true, edge = false) => {
-    const [x, y, depth, s] = see(p);
-    if (edge) shapes.push({ kind: "circle", x, y, r: (r + EDGE) * s, fill: shade(color, 0.6), depth: depth + 1e-4, part: "outline" });
-    // The eyes and the watched joints keep their exact colour.
-    const fill = part === "eyes" || part === "joint" ? color : shade(color, light(depth));
-    shapes.push({ kind: "circle", x, y, r: r * s, fill, depth, part });
-    if (shine) shapes.push({ kind: "circle", x: x - r * s * 0.3, y: y - r * s * 0.32, r: r * s * 0.42, fill: shade(color, 1.3), depth: depth - 1e-4, part: "highlight" });
+  /**
+   * Paints the outline round some balls ([centre, radius in m]). Its depth is the balls' average,
+   * `layer` mm nearer (clothes over skin), unless `depth` sets it (a face in front of the head).
+   * Returns the depth.
+   * @param {[P3, number][]} balls @param {string} color @param {string} name
+   * @param {{ layer?: number, depth?: number, edge?: boolean, tone?: boolean }} [opts]
+   */
+  const blob = (balls, color, name, { layer = 0, depth: at, edge = true, tone = true } = {}) => {
+    const circles = seeBalls(balls);
+    const depth = at ?? meanDepth(circles) - layer / 1000;
+    paint(circles, color, name, depth, { edge, tone });
+    return depth;
+  };
+  /** @typedef {{ layer?: number, under?: number }} Fit `under`: the depth of what covers it (skin under clothes), to sit just behind that from any side */
+  /**
+   * Where a part dressed and sized by the look sits: balls are [centre, radius in units of its size].
+   * @param {string} name @param {[P3, number][]} balls @param {Fit} [fit]
+   */
+  const place = (name, balls, { layer = 0, under } = {}) => {
+    const circles = seeBalls(balls.map(([p, k]) => [p, k * size[name]]));
+    return { name, circles, depth: under === undefined ? meanDepth(circles) - layer / 1000 : under + 1e-3 };
+  };
+  /** A part dressed and sized by the look. Returns its depth. @param {string} name @param {[P3, number][]} balls @param {Fit} [fit] */
+  const part = (name, balls, fit) => {
+    const p = place(name, balls, fit);
+    paint(p.circles, worn(name), name, p.depth);
+    return p.depth;
+  };
+  /**
+   * An arm or a leg in one piece, all in one tone: each part's edge goes just behind the parts it
+   * joins, so no seam shows at the elbow, wrist or knee (and it still edges the limb against the
+   * rest of the body).
+   * @param {[string, [P3, number][], Fit?][]} parts from the root out
+   */
+  const limb = (parts) => {
+    const placed = parts.map(([name, balls, fit]) => place(name, balls, fit));
+    const lit = placed.reduce((sum, p) => sum + p.depth, 0) / placed.length;
+    placed.forEach((p, i) => {
+      const back = Math.max(...placed.slice(Math.max(0, i - 1), i + 2).map((q) => q.depth));
+      paint(p.circles, worn(p.name), p.name, p.depth, { edgeDepth: back + 1e-7, lit });
+    });
   };
 
   // Shadow on the floor under what's near it (feet, legs; a whole body in a push-up), under everything.
@@ -792,22 +818,85 @@ export function demoScene(key, t, view, look = DEMO_LOOK) {
   const tilt = Math.sin(((view.pitch ?? 0) * Math.PI) / 180);
   shapes.push({ kind: "ellipse", x: sx, y: sy, rx: spread * ss, ry: Math.max(2, spread * ss * tilt), fill: DEMO_COLORS.shadow, depth: 1e9, part: "shadow" });
 
-  for (const [a, b] of chair(key) ?? []) capsule(a, b, 0.022, DEMO_COLORS.chair, "chair", false);
-  /** @param {string} part */
-  const worn = (part) => look.colors[look.wear[part]];
-  for (const [a, b, part] of LIMBS) capsule(at(a), at(b), look.size[part], worn(part), part);
-  for (const [i, r] of MARKS) if (hot.has(i)) ball(pose[i], r, DEMO_COLORS.accent, "joint");
-  // The head, with hair, a nose and eyes so you can see where it faces. The hair is a second head a
-  // little behind and above it: a hairline from the front, over the head from behind. The ears show
-  // only when the coach measures them (they'd sit on the hair from the side).
-  const head = at(-3);
-  const facing = unit(sub(pose[0], head));
-  const up = unit(sub(head, at(-2)));
-  ball(add(add(head, facing, -0.16 * look.size.head), up, 0.3 * look.size.head), look.size.head * 1.05, look.colors.hair, "hair", false, true);
-  ball(head, look.size.head, worn("head"), "head", true, true);
-  for (const i of [7, 8]) if (hot.has(i)) ball(pose[i], 0.026, DEMO_COLORS.accent, "joint", false);
-  ball(pose[0], 0.022, hot.has(0) ? DEMO_COLORS.accent : worn("head"), hot.has(0) ? "joint" : "head", false);
-  for (const i of [2, 5]) ball(pose[i], 0.011, look.colors.eyes, "eyes", false);
+  // The body, in the torso's own directions: neck and shoulders under the top, then the shorts.
+  const hips = midpoint(pose[23], pose[24]);
+  const top = midpoint(pose[11], pose[12]);
+  const head = midpoint(pose[7], pose[8]);
+  const up = unit(sub(top, hips));
+  const left = unit(sub(pose[11], pose[12]));
+  const fwd = unit(cross(left, up));
+  const tall = len(sub(top, hips));
+  /** A point on the torso: across (m, + left), up (share of the hips-to-shoulders height), forward (m). */
+  const onTorso = (x, y, z = 0) => add(add(add(hips, left, x), up, y * tall), fwd, z);
+  // A tank top (narrow straps, a broad chest, a narrower waist) over the neck, shoulders and shorts.
+  const shirt = part("torso", [0.98, 0.72, 0.3, 0.05].flatMap((y, i) => [1, -1].map((s) => /** @type {[P3, number]} */ ([onTorso(s * [0.085, 0.1, 0.045, 0.06][i], y), [0.42, 1.08, 0.92, 0.92][i]]))));
+  part("neck", [[top, 1.1], [lerp(top, head, 0.55), 1]], { under: shirt });
+  part("shoulders", [[pose[11], 0.85], [onTorso(0, 1.1), 1.05], [pose[12], 0.85]], { under: shirt });
+  part("hips", [[onTorso(0.1, 0), 1], [onTorso(-0.1, 0), 1], [onTorso(0, 0.1), 1]], { under: shirt });
+
+  for (const [o, s] of /** @type {const} */ ([[0, 1], [1, -1]])) {
+    const [shoulder, elbow, wrist] = [pose[11 + o], pose[13 + o], pose[15 + o]];
+    limb([
+      ["upperArm", [[lerp(shoulder, elbow, 0.06), 1.3], [lerp(shoulder, elbow, 0.45), 1.02], [elbow, 0.74]], { layer: 2 }],
+      ["forearm", [[elbow, 0.9], [lerp(elbow, wrist, 0.28), 1.06], [wrist, 0.68]], { layer: 2 }],
+      ["hand", [[wrist, 0.9], [pose[19 + o], 0.85], [pose[17 + o], 0.85], [lerp(wrist, pose[21 + o], 1.3), 0.6]], { layer: 2 }],
+    ]);
+
+    const [hip, knee, ankle, heel, toe] = [pose[23 + o], pose[25 + o], pose[27 + o], pose[29 + o], pose[31 + o]];
+    const hem = lerp(hip, knee, 0.8);
+    const leg = part("thigh", [[hip, 1.08], [hem, 1]]);
+    if (look.colors.stripe) {
+      // Down the outer seam, on the side facing the camera.
+      const out = /** @type {P3} */ ([s, 0, 0]);
+      const mid = lerp(hip, knee, 0.4);
+      const facing = (see(mid)[2] - see(add(mid, out, 0.01))[2]) / 0.01;
+      const off = size.thigh * 0.84;
+      if (facing > -0.25) blob([[add(hip, out, off), 0.012], [add(hem, out, off), 0.012]], look.colors.stripe, "stripe", { depth: leg - 2e-6, edge: false, tone: false });
+    }
+    const calf = unit(cross(X, unit(sub(ankle, knee)))); // the back of the leg
+    limb([
+      ["knee", [[lerp(hip, knee, 0.62), 1.1], [knee, 0.95]], { under: leg }],
+      ["shin", [[knee, 0.95], [add(lerp(knee, ankle, 0.3), calf, 0.016), 1.12], [ankle, 0.6]]],
+    ]);
+    const lift = unit(cross(unit(sub(toe, heel)), X)); // up from the sole
+    part("foot", [[add(heel, lift, size.foot * 0.95), 0.95], [add(toe, lift, size.foot * 0.8), 0.8], [ankle, 0.95], [add(lerp(heel, toe, 0.6), lift, size.foot), 1]], { layer: 1 });
+  }
+
+  // The head: an egg (crown and jaw), ears, hair with a quiff, a beard, then the face.
+  const R = size.head;
+  const face = unit(sub(pose[0], head));
+  const hup = unit(sub(midpoint(pose[2], pose[5]), midpoint(pose[9], pose[10])));
+  const hleft = unit(cross(hup, face));
+  /** A point on the head: across (+ left), up and forward, in head sizes. */
+  const onHead = (x, y, z) => add(add(add(head, hleft, x * R), hup, y * R), face, z * R);
+  // What sits on the face goes in layers just in front of the head (so it all hides when the head
+  // faces away), the `n`th a hair nearer so the layers keep their order seen side on.
+  const faceDepth = (z, n) => see(onHead(0, 0, z))[2] - n * 1e-6;
+  const skin = worn("head");
+  blob([[onHead(0, 0.08, -0.02), R], [onHead(0, -0.38, 0.12), R * 0.82]], skin, "head");
+  for (const x of [0.92, -0.92]) {
+    const [ex, ey, ed, es] = see(onHead(x, 0, -0.05));
+    shapes.push({ kind: "circle", x: ex, y: ey, r: (R * 0.24 + EDGE) * es, fill: shade(skin, 0.6), depth: ed + 2e-7, part: "outline" });
+    shapes.push({ kind: "circle", x: ex, y: ey, r: R * 0.24 * es, fill: shade(skin, light(ed)), depth: ed + 1e-7, part: "head" });
+  }
+  blob([[onHead(0, 0.45, -0.12), 0.84 * R], [onHead(0, 0.42, -0.36), 0.7 * R], [onHead(0.1, 0.72, 0.36), 0.55 * R], [onHead(-0.12, 0.66, 0.26), 0.55 * R]], look.colors.hair, "hair", { depth: faceDepth(-0.12, 2.5) });
+  if (look.colors.beard) {
+    // Round the jaw and over the chin; the cheeks then cover its top, leaving a band.
+    const jaw = [[0.82, -0.05, 0.05, 0.2], [-0.82, -0.05, 0.05, 0.2], [0.62, -0.55, 0.35, 0.36], [-0.62, -0.55, 0.35, 0.36], [0, -0.98, 0.55, 0.4]];
+    blob(jaw.map(([x, y, z, r]) => [onHead(x, y, z), r * R]), look.colors.beard, "beard", { depth: faceDepth(0.5, 1) });
+    blob([[onHead(0, 0.22, 0.42), 0.62 * R], [onHead(0.38, -0.12, 0.62), 0.3 * R], [onHead(-0.38, -0.12, 0.62), 0.3 * R]], skin, "face", { depth: faceDepth(0.6, 2), edge: false });
+    blob([[onHead(0.2, -0.36, 0.9), 0.13 * R], [onHead(-0.2, -0.36, 0.9), 0.13 * R]], look.colors.beard, "beard", { depth: faceDepth(0.9, 3), edge: false, tone: false });
+  }
+  // Nose, eyes and brows.
+  const [nx, ny, , ns] = see(pose[0]);
+  shapes.push({ kind: "circle", x: nx, y: ny, r: 0.02 * ns, fill: shade(skin, 0.82), depth: faceDepth(1, 4), part: "head" });
+  for (const [i, x] of /** @type {const} */ ([[2, 0.36], [5, -0.36]])) {
+    const [ex, ey, , es] = see(pose[i]);
+    shapes.push({ kind: "circle", x: ex, y: ey, r: 0.011 * es, fill: look.colors.eyes, depth: faceDepth(0.95, 5), part: "eyes" });
+    const [x1, y1, , s1] = see(onHead(x + 0.16, 0.45, 0.82));
+    const [x2, y2] = see(onHead(x - 0.16, 0.4, 0.85));
+    shapes.push({ kind: "capsule", x1, y1, x2, y2, r: 0.006 * s1, fill: look.colors.hair, depth: faceDepth(0.9, 5), part: "brows" });
+  }
 
   // Fixes the order so equal depths always paint the same way.
   return shapes.map((sh, i) => ({ sh, i })).sort((a, b) => b.sh.depth - a.sh.depth || a.i - b.i).map(({ sh }) => sh);

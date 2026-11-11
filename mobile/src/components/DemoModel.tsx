@@ -3,7 +3,7 @@
 // works offline and sends nothing anywhere. Drag to turn it, as in the extension.
 import * as React from 'react';
 import { AccessibilityInfo, PanResponder, View } from 'react-native';
-import Svg, { Circle, Ellipse, Line } from 'react-native-svg';
+import Svg, { Circle, Ellipse, Line, Polygon } from 'react-native-svg';
 
 import { demoScene, demoTurn, demoView } from '@/src/core/shared';
 
@@ -63,7 +63,9 @@ export function DemoModel({ moveKey, label }: { moveKey: string; label: string }
       {view ? (
         <Svg width={box.width} height={box.height}>
           {shapes.map((sh, i) =>
-            sh.kind === 'capsule' ? (
+            sh.kind === 'poly' ? (
+              <Polygon key={i} points={sh.points.join(' ')} fill={sh.fill} />
+            ) : sh.kind === 'capsule' ? (
               <Line key={i} x1={sh.x1} y1={sh.y1} x2={sh.x2} y2={sh.y2} stroke={sh.fill} strokeWidth={sh.r * 2} strokeLinecap="round" />
             ) : sh.kind === 'circle' ? (
               <Circle key={i} cx={sh.x} cy={sh.y} r={sh.r} fill={sh.fill} />

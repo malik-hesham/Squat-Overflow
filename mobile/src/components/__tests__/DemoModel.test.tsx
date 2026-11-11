@@ -14,6 +14,7 @@ jest.mock('react-native-svg', () => ({
   Line: 'Line',
   Circle: 'Circle',
   Ellipse: 'Ellipse',
+  Polygon: 'Polygon',
 }));
 
 // Node's fs, as in src/pose/analysis/__tests__/helpers.ts (the app's types have no Node).
@@ -25,7 +26,9 @@ const SIZE = { width: 320, height: 240 };
 /** What the shared scene says to paint, in the props SVG takes. */
 function expected(key: string, t: number, turn = 0) {
   return demoScene(key, t, demoView(key, t, { ...SIZE, turn })!)!.map((sh) =>
-    sh.kind === 'capsule'
+    sh.kind === 'poly'
+      ? ['Polygon', { points: sh.points.join(' '), fill: sh.fill }]
+      : sh.kind === 'capsule'
       ? ['Line', { x1: sh.x1, y1: sh.y1, x2: sh.x2, y2: sh.y2, stroke: sh.fill, strokeWidth: sh.r * 2, strokeLinecap: 'round' }]
       : sh.kind === 'circle'
         ? ['Circle', { cx: sh.x, cy: sh.y, r: sh.r, fill: sh.fill }]
@@ -35,10 +38,10 @@ function expected(key: string, t: number, turn = 0) {
 
 function drawn(tree: ReactTestRenderer) {
   return tree.root
-    .findAll((n) => typeof n.type === 'string' && ['Line', 'Circle', 'Ellipse'].includes(n.type))
+    .findAll((n) => typeof n.type === 'string' && ['Line', 'Circle', 'Ellipse', 'Polygon'].includes(n.type))
     .map((n) => {
-      const { x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, cx, cy, r, rx, ry, fill } = n.props;
-      const all = { x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, cx, cy, r, rx, ry, fill };
+      const { points, x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, cx, cy, r, rx, ry, fill } = n.props;
+      const all = { points, x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, cx, cy, r, rx, ry, fill };
       return [n.type, Object.fromEntries(Object.entries(all).filter(([, v]) => v !== undefined))];
     });
 }
@@ -66,6 +69,8 @@ describe('DemoModel', () => {
     });
     layout(tree!);
     expect(drawn(tree!)).toEqual(expected('neck_tilt', 0));
+    // The person is filled outlines (the extension's flat, illustrated look), not sticks.
+    expect(drawn(tree!).filter(([type]) => String(type) === 'Polygon').length).toBeGreaterThan(20);
   });
 
   it('moves with time, and starts over from the rest pose for the next move', () => {

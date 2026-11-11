@@ -16,7 +16,14 @@ import { demoScene, demoTurn, demoView } from "./demo-model.js";
  */
 export function paintDemo(ctx, shapes) {
   for (const sh of shapes) {
-    if (sh.kind === "capsule") {
+    if (sh.kind === "poly") {
+      ctx.fillStyle = sh.fill;
+      ctx.beginPath();
+      ctx.moveTo(sh.points[0], sh.points[1]);
+      for (let i = 2; i < sh.points.length; i += 2) ctx.lineTo(sh.points[i], sh.points[i + 1]);
+      ctx.closePath();
+      ctx.fill();
+    } else if (sh.kind === "capsule") {
       ctx.strokeStyle = sh.fill;
       ctx.lineWidth = sh.r * 2;
       ctx.lineCap = "round";
