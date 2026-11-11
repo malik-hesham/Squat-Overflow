@@ -7,7 +7,8 @@
 //   node extension/scripts/make-demo-video.mjs seated_march ~/Movies/march.mov --from 1.2 --to 5.4
 //   node extension/scripts/make-demo-video.mjs --remove seated_march
 //
-// Use footage you made, or have written permission to use: the server publishes it. Film with the
+// Use footage you made, have written permission to use, or found under an open license that allows it
+// (scrape-demo-videos.mjs finds those): the server publishes it. Film with the
 // phone level, the person in the middle of the frame (the video keeps the middle square), the whole
 // body in view and a plain wall behind, and trim to one rep (or one rep each side) so it loops cleanly.
 import { execFileSync } from "node:child_process";

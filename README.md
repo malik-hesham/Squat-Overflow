@@ -29,7 +29,23 @@ node extension/scripts/make-demo-video.mjs seated_march ~/Movies/march.mov --fro
 
 It writes `server/demos/seated_march.mp4`: 480×480, 24 fps, H.264, no sound, at most 8 s and 500 KB, and able to start playing before it has all loaded. Commit it and deploy the server ([docs/aws-free-plan.md](docs/aws-free-plan.md#updating)); the image serves every file in `server/demos/`. `--remove <move>` takes a video out. `node extension/tests/check.mjs` checks every file in that folder.
 
-The server publishes these videos, so use footage you made or have written permission to use. Clips copied from another website can't go in without the owner's permission.
+The server publishes these videos, so use footage you made, footage you have written permission to use, or a clip under an open license that allows it (below). Clips copied from another website can't go in without the owner's permission.
+
+#### Find openly licensed clips
+
+`extension/scripts/scrape-demo-videos.mjs` looks for clips of each move to make a demo from. It searches Wikimedia Commons, and Pexels and Pixabay too when `PEXELS_API_KEY` / `PIXABAY_API_KEY` are set (free keys: [pexels.com/api](https://www.pexels.com/api/), [pixabay.com/api/docs](https://pixabay.com/api/docs/)). It goes through their APIs, not their web pages, and keeps a clip only when:
+
+- its license lets us trim it and serve it: CC0, public domain, CC BY, CC BY-SA, or the Pexels or Pixabay license. Never non-commercial or no-derivatives.
+- its title or tags match the move.
+- it is at most 60 s long and fills a 480 px square.
+
+```bash
+PEXELS_API_KEY=... node extension/scripts/scrape-demo-videos.mjs seated_march sit_to_stand
+```
+
+With no moves named it does all of them: two searches per move on each source, a second apart, and each search is reused for a day. It saves the best 5 clips per move (`--keep`) to `demo-sources/`, which git ignores, and fetches the top 2 (`--download`). `demo-sources/manifest.json` lists each clip's page, author and license. `demo-sources/index.html` plays them side by side, with the `make-demo-video` command for each.
+
+A clip marked "needs credit" (CC BY, CC BY-SA) must be credited wherever its video is shown, and CC BY-SA makes our video CC BY-SA too. The apps have no credits screen yet, so pick clips that don't need credit. The search terms are `QUERIES` at the top of the script; a new move needs its terms there (the checks fail until it has them).
 
 ### Sign-in, leaderboard and sync (optional)
 

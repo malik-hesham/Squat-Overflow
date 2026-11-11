@@ -2739,3 +2739,355 @@ Promise.all(pending).then(
     assert.match(t("ar", "demoClipLabel", { move: "x" }), /x/);
   });
 }
+
+// ---- Demo video sources: scripts/scrape-demo-videos.mjs looks for openly licensed clips of each move
+// (Wikimedia Commons, and Pexels and Pixabay with a free API key), keeps the ones that fit, and saves
+// them with who made them and under what license to a gitignored demo-sources/ folder, to pick from and
+// turn into server/demos/<move>.mp4 with make-demo-video. Nothing here goes on the network: fetch is a fake.
+{
+  const { licenseVerdict, QUERIES, relevance, parseWikimedia, parsePexels, parsePixabay, rankCandidates, scrapeDemoVideos, reviewPage } =
+    await import("../scripts/scrape-demo-videos.mjs");
+  const { mkdtempSync: scrapeTemp, rmSync: scrapeRm, existsSync: scrapeExists, readdirSync: scrapeLs, statSync } = await import("node:fs");
+  const { tmpdir: scrapeTmpdir } = await import("node:os");
+  const { join: scrapeJoin } = await import("node:path");
+
+  // What each API answers, cut down to the fields read (shapes from their docs and a live Commons query).
+  const commonsFile = (pageid, title, { index = 1, mime = "video/webm", width = 1280, height = 720, duration = 12.5, size = 3_000_000,
+    license = "CC BY-SA 4.0", nonFree = false, restrictions = "", artist = '<a href="//commons.wikimedia.org/wiki/User:Ana">Ana</a>' } = {}) => ({
+    pageid, ns: 6, title: `File:${title}.webm`, index,
+    imageinfo: [{
+      size, width, height, duration, mime,
+      url: `https://upload.wikimedia.org/wikipedia/commons/a/ae/${title.replaceAll(" ", "_")}.webm?utm_source=commons.wikimedia.org&utm_campaign=imageinfo`,
+      descriptionurl: `https://commons.wikimedia.org/wiki/File:${title.replaceAll(" ", "_")}.webm`,
+      extmetadata: {
+        Artist: { value: artist }, LicenseShortName: { value: license }, LicenseUrl: { value: "https://creativecommons.org/licenses/by-sa/4.0" },
+        Restrictions: { value: restrictions }, ...(nonFree ? { NonFree: { value: "true" } } : {}),
+      },
+    }],
+  });
+  const pexelsVideo = (id, slug, { duration = 15, files = null } = {}) => ({
+    id, width: 3840, height: 2160, duration, url: `https://www.pexels.com/video/${slug}-${id}/`,
+    user: { id: 9, name: "Kim", url: "https://www.pexels.com/@kim" },
+    video_files: files ?? [
+      { id: 1, quality: "hd", file_type: "video/mp4", width: 3840, height: 2160, link: `https://videos.pexels.com/${id}/uhd.mp4` },
+      { id: 2, quality: "sd", file_type: "video/mp4", width: 960, height: 540, link: `https://videos.pexels.com/${id}/sd540.mp4` },
+      { id: 3, quality: "sd", file_type: "video/mp4", width: 640, height: 360, link: `https://videos.pexels.com/${id}/sd360.mp4` },
+      { id: 4, quality: "hls", file_type: "video/mp4", width: null, height: null, link: `https://videos.pexels.com/${id}/index.m3u8` },
+    ],
+  });
+  const pixabayHit = (id, tags, { duration = 14 } = {}) => ({
+    id, pageURL: `https://pixabay.com/videos/id-${id}/`, tags, duration, user_id: 77, user: "Lee",
+    videos: {
+      large: { url: "", width: 0, height: 0, size: 0 },
+      medium: { url: `https://cdn.pixabay.com/video/${id}_medium.mp4`, width: 1920, height: 1080, size: 9_000_000 },
+      small: { url: `https://cdn.pixabay.com/video/${id}_small.mp4`, width: 1280, height: 720, size: 4_000_000 },
+      tiny: { url: `https://cdn.pixabay.com/video/${id}_tiny.mp4`, width: 640, height: 360, size: 900_000 },
+    },
+  });
+
+  check("demo sources: a clip is allowed only under a license that lets us trim it and ship it, and the ones that need credit say so", () => {
+    for (const name of ["CC0", "cc0", "Public domain", "pd", "Pexels License", "Pixabay Content License"])
+      assert.deepEqual(licenseVerdict(name), { ok: true, credit: false, shareAlike: false }, name);
+    assert.deepEqual(licenseVerdict("CC BY 4.0"), { ok: true, credit: true, shareAlike: false });
+    assert.deepEqual(licenseVerdict("cc-by-sa-4.0"), { ok: true, credit: true, shareAlike: true });
+    assert.deepEqual(licenseVerdict("CC BY-SA 3.0"), { ok: true, credit: true, shareAlike: true });
+    for (const [name, why] of /** @type {[string | undefined, RegExp][]} */ ([
+      ["CC BY-NC 4.0", /non-commercial/], ["cc-by-nc-sa-2.0", /non-commercial/], ["CC BY-ND 4.0", /no derivatives/],
+      ["GFDL", /not a license we take/], ["All rights reserved", /not a license we take/], ["", /no license/], [undefined, /no license/],
+    ])) {
+      const verdict = licenseVerdict(name);
+      assert.equal(verdict.ok, false, String(name));
+      assert.match(verdict.reason, why, String(name));
+    }
+  });
+
+  check("demo sources: every move in the catalog has search terms, and every set of terms belongs to a move", () => {
+    assert.deepEqual(Object.keys(QUERIES).sort(), exerciseCatalog().map((e) => e.key).sort());
+    for (const [key, terms] of Object.entries(QUERIES))
+      assert.ok(terms.length > 0 && terms.every((t) => typeof t === "string" && t.trim().length > 0), key);
+  });
+
+  check("demo sources: a clip counts for a search only when its title or tags carry most of the search's words", () => {
+    assert.equal(relevance("neck stretch", "Neck nanowire"), 0, "one word of two: a different video");
+    assert.equal(relevance("neck stretch", "Woman doing neck stretches at her desk"), 1);
+    assert.equal(relevance("seated marching exercise", "elderly man marching while seated on a chair"), 2 / 3);
+    assert.equal(relevance("squat", "man doing squats"), 1);
+    assert.equal(relevance("squat", "squash game"), 0);
+    assert.equal(relevance("shoulder shrugs", "SHOULDER-SHRUG, slow"), 1, "case, punctuation and plurals don't matter");
+    assert.equal(relevance("neck stretch", ""), 0);
+  });
+
+  check("demo sources: a Commons search becomes clips in search order, with the author and license from the file page and no tracking in the link", () => {
+    const clips = parseWikimedia({ query: { pages: [
+      commonsFile(2, "Seated march", { index: 2, license: "CC0", restrictions: "personality" }),
+      commonsFile(1, "Neck stretch", { index: 1 }),
+      { pageid: 3, ns: 6, title: "File:Neck.jpg", index: 3, imageinfo: [{ mime: "image/jpeg", width: 900, height: 900 }] },
+      commonsFile(4, "Locked", { index: 4, nonFree: true }),
+    ] } });
+    assert.deepEqual(clips.map((c) => c.title), ["Neck stretch", "Seated march", "Locked"], "search order; no stills");
+    assert.deepEqual(clips[0], {
+      source: "wikimedia", id: "1", title: "Neck stretch", text: "Neck stretch",
+      pageUrl: "https://commons.wikimedia.org/wiki/File:Neck_stretch.webm",
+      fileUrl: "https://upload.wikimedia.org/wikipedia/commons/a/ae/Neck_stretch.webm", ext: "webm",
+      width: 1280, height: 720, seconds: 12.5, bytes: 3_000_000,
+      author: "Ana", authorUrl: "https://commons.wikimedia.org/wiki/User:Ana",
+      license: "CC BY-SA 4.0", licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0", note: "",
+    });
+    assert.match(clips[1].note, /personality/, "Commons' restrictions travel with the clip");
+    assert.equal(clips[2].license, "non-free", "a file Commons marks non-free is never taken as free");
+    assert.deepEqual(parseWikimedia({}), [], "no hits");
+  });
+
+  check("demo sources: a Pexels video becomes a clip from its smallest MP4 that still fills a 480 px square", () => {
+    const [clip] = parsePexels({ videos: [pexelsVideo(42, "woman-doing-neck-stretches")] });
+    assert.deepEqual(clip, {
+      source: "pexels", id: "42", title: "woman doing neck stretches", text: "woman doing neck stretches",
+      pageUrl: "https://www.pexels.com/video/woman-doing-neck-stretches-42/", fileUrl: "https://videos.pexels.com/42/sd540.mp4", ext: "mp4",
+      width: 960, height: 540, seconds: 15, bytes: null, author: "Kim", authorUrl: "https://www.pexels.com/@kim",
+      license: "Pexels License", licenseUrl: "https://www.pexels.com/license/", note: "",
+    });
+    const [small] = parsePexels({ videos: [pexelsVideo(43, "x", { files: [{ id: 1, file_type: "video/mp4", width: 640, height: 360, link: "https://v/360.mp4" }] })] });
+    assert.deepEqual([small.width, small.height, small.fileUrl], [640, 360, "https://v/360.mp4"], "nothing big enough: the biggest there is");
+    assert.deepEqual(parsePexels({ videos: [pexelsVideo(44, "x", { files: [] })] }), [], "no MP4 at all: no clip");
+    assert.deepEqual(parsePexels({}), []);
+  });
+
+  check("demo sources: a Pixabay hit becomes a clip from its smallest rendition that still fills a 480 px square", () => {
+    const [clip] = parsePixabay({ hits: [pixabayHit(7, "squat, exercise, fitness")] });
+    assert.deepEqual(clip, {
+      source: "pixabay", id: "7", title: "squat, exercise, fitness", text: "squat, exercise, fitness",
+      pageUrl: "https://pixabay.com/videos/id-7/", fileUrl: "https://cdn.pixabay.com/video/7_small.mp4", ext: "mp4",
+      width: 1280, height: 720, seconds: 14, bytes: 4_000_000, author: "Lee", authorUrl: "https://pixabay.com/users/Lee-77/",
+      license: "Pixabay Content License", licenseUrl: "https://pixabay.com/service/license-summary/", note: "",
+    });
+    assert.deepEqual(parsePixabay({}), []);
+  });
+
+  check("demo sources: ranking keeps clips about the move under a license we can use, short enough for a rep and big enough for the square", () => {
+    const clip = (id, over = {}) => ({
+      source: "pexels", id, title: id, text: "woman doing neck stretches", pageUrl: "", fileUrl: "", ext: "mp4",
+      width: 960, height: 540, seconds: 15, bytes: 2_000_000, author: "", authorUrl: "", license: "Pexels License", licenseUrl: "", note: "", ...over,
+    });
+    const { kept, dropped } = rankCandidates("neck stretch", [
+      clip("long", { seconds: 75 }),
+      clip("short", { seconds: 6 }),
+      clip("by-sa", { license: "CC BY-SA 4.0", seconds: 9 }),
+      clip("nc", { license: "CC BY-NC 4.0" }),
+      clip("tiny", { width: 640, height: 360 }),
+      clip("off-topic", { text: "Neck nanowire" }),
+      clip("huge", { bytes: 80_000_000 }),
+      clip("plain", { text: "neck stretch", seconds: 20 }),
+    ]);
+    assert.deepEqual(kept.map((c) => c.id), ["short", "by-sa", "plain"], "most on topic, then shortest");
+    assert.deepEqual(kept.map((c) => [c.score, c.credit, c.shareAlike]), [[1, false, false], [1, true, true], [1, false, false]]);
+    assert.deepEqual(Object.fromEntries(dropped.map((d) => [d.id, d.reason])), {
+      long: "75 s long: a demo is one rep",
+      nc: "CC BY-NC 4.0: non-commercial only",
+      tiny: "640×360: too small for a 480 px square",
+      "off-topic": "not about the move",
+      huge: "76 MB: too big to fetch",
+    });
+  });
+
+  // ---- The whole run, against a fake web: the three APIs and the file hosts.
+  const checkAsync = async (name, fn) => {
+    try {
+      await fn();
+      console.log(`ok ${name}`);
+    } catch (err) {
+      console.log(`FAIL ${name}\n  ${err.message}`);
+      process.exitCode = 1;
+    }
+  };
+  const HOUR = 3_600_000;
+  const T0 = Date.UTC(2026, 10, 11, 12);
+  /** A fake fetch: `route` answers each request (JSON, a Response, or undefined for 404); every request is kept. */
+  const fakeWeb = (route) => {
+    const calls = [];
+    const fetch = async (url, init = {}) => {
+      const u = new URL(String(url));
+      const headers = new Headers(init.headers);
+      calls.push({ url: u, headers });
+      const answer = route(u, headers);
+      if (answer instanceof Response) return answer;
+      return answer === undefined ? new Response("not found", { status: 404 }) : Response.json(answer);
+    };
+    return { fetch, calls, api: () => calls.filter((c) => !/^(upload\.wikimedia\.org|videos\.pexels\.com|cdn\.pixabay\.com)$/.test(c.url.host)) };
+  };
+  /** `over` replaces an answer: a value, or a function of the request for one that is asked more than once (a body reads once). */
+  const neckWeb = (over = {}) => fakeWeb((u, headers) => {
+    const answer = (v) => (typeof v === "function" ? v(u) : v);
+    if (u.host === "commons.wikimedia.org")
+      return answer(over.commons) ?? { query: { pages: [commonsFile(1, "Neck stretch exercise", { duration: 10 }), commonsFile(2, "Neck nanowire", { index: 2 })] } };
+    if (u.host === "api.pexels.com") {
+      if (headers.get("authorization") !== "pk-secret") return new Response("no key", { status: 401 });
+      return answer(over.pexels) ?? { videos: [pexelsVideo(42, "woman-doing-neck-stretches", { duration: 6 }), pexelsVideo(43, "man-doing-a-neck-stretch", { duration: 20 })] };
+    }
+    if (u.host === "pixabay.com") return over.pixabay ?? { hits: [] };
+    return over.file?.(u) ?? new Response(`clip ${u.pathname}`);
+  });
+  /** Every file under `dir`, as text. */
+  const allText = (dir) => scrapeLs(dir, { recursive: true }).map(String)
+    .filter((f) => statSync(scrapeJoin(dir, f)).isFile()).map((f) => readFileSync(scrapeJoin(dir, f), "utf8")).join("\n");
+  const run = (out, web, opts = {}) => {
+    const sleeps = [];
+    const done = scrapeDemoVideos({
+      out, moves: ["neck_tilt"], env: { PEXELS_API_KEY: "pk-secret" }, fetch: web.fetch, now: () => T0,
+      sleep: async (ms) => { sleeps.push(ms); }, keep: 3, download: 2, ...opts,
+    });
+    return done.then((manifest) => ({ manifest, sleeps }));
+  };
+  const scratchOut = () => scrapeTemp(scrapeJoin(scrapeTmpdir(), "so-demo-sources-"));
+
+  await checkAsync("demo sources: a run saves each move's best clips, with where they came from and their license, and fetches only the top few", async () => {
+    const out = scratchOut();
+    try {
+      const web = neckWeb();
+      const { manifest, sleeps } = await run(out, web);
+      const neck = manifest.moves.neck_tilt;
+      assert.equal(neck.label, "Neck side tilt");
+      assert.deepEqual(neck.clips.map((c) => [c.source, c.id, c.file]), [
+        ["pexels", "42", "neck_tilt/pexels-42.mp4"],
+        ["wikimedia", "1", "neck_tilt/wikimedia-1.webm"],
+        ["pexels", "43", null],
+      ], "most on topic, then shortest; the top two fetched, the rest listed");
+      assert.deepEqual(neck.clips.map((c) => [c.query, c.license, c.credit, c.shareAlike]), [
+        ["neck stretch", "Pexels License", false, false],
+        ["neck stretch", "CC BY-SA 4.0", true, true],
+        ["neck stretch", "Pexels License", false, false],
+      ]);
+      assert.equal(readFileSync(scrapeJoin(out, "neck_tilt/pexels-42.mp4"), "utf8"), "clip /42/sd540.mp4", "the 540p file: the smallest that fills the square");
+      assert.equal(readFileSync(scrapeJoin(out, "neck_tilt/wikimedia-1.webm"), "utf8"), "clip /wikipedia/commons/a/ae/Neck_stretch_exercise.webm");
+      assert.equal(scrapeExists(scrapeJoin(out, "neck_tilt/pexels-43.mp4")), false);
+      assert.deepEqual(JSON.parse(readFileSync(scrapeJoin(out, "manifest.json"), "utf8")), manifest);
+
+      const searches = web.api();
+      assert.deepEqual(searches.map((c) => `${c.url.host} ${c.url.searchParams.get("gsrsearch") ?? c.url.searchParams.get("query")}`), [
+        "commons.wikimedia.org neck side stretch filetype:video", "commons.wikimedia.org neck stretch filetype:video",
+        "api.pexels.com neck side stretch", "api.pexels.com neck stretch",
+      ], "each of the move's terms on each source with a key; Commons asked for videos only");
+      assert.ok(web.calls.every((c) => /^demo-video-scraper\//.test(c.headers.get("user-agent") ?? "")), "a User-Agent on every request");
+      assert.equal(sleeps.length, web.calls.length, "a pause before every request");
+      assert.ok(sleeps.every((ms) => ms >= 1000), "at least a second apart");
+
+      assert.ok(manifest.skipped.some((s) => /pixabay.*PIXABAY_API_KEY/.test(s)), "a source with no key is skipped and says how to turn it on");
+      assert.ok(!web.calls.some((c) => c.url.host === "pixabay.com"));
+      assert.ok(!allText(out).includes("pk-secret"), "the API key is never written down");
+    } finally {
+      scrapeRm(out, { recursive: true, force: true });
+    }
+  });
+
+  await checkAsync("demo sources: a second run reuses searches for a day and never fetches a clip it already has; after a day it searches again", async () => {
+    const out = scratchOut();
+    try {
+      await run(out, neckWeb());
+      const again = neckWeb();
+      const { manifest } = await run(out, again, { now: () => T0 + 23 * HOUR });
+      assert.equal(again.calls.length, 0, "nothing goes on the network");
+      assert.deepEqual(manifest.moves.neck_tilt.clips.map((c) => c.file), ["neck_tilt/pexels-42.mp4", "neck_tilt/wikimedia-1.webm", null]);
+      const later = neckWeb();
+      await run(out, later, { now: () => T0 + 25 * HOUR });
+      assert.equal(later.api().length, 4, "a day on: the searches again");
+      assert.equal(later.calls.length, 4, "but no clip again");
+    } finally {
+      scrapeRm(out, { recursive: true, force: true });
+    }
+  });
+
+  await checkAsync("demo sources: a run for some moves keeps what earlier runs found for the others", async () => {
+    const out = scratchOut();
+    try {
+      await run(out, neckWeb());
+      const { manifest } = await run(out, neckWeb({ commons: { query: { pages: [] } }, pexels: { videos: [pexelsVideo(50, "seated-marching-exercise", { duration: 8 })] } }),
+        { moves: ["seated_march"] });
+      assert.deepEqual(Object.keys(manifest.moves).sort(), ["neck_tilt", "seated_march"]);
+      assert.deepEqual(manifest.moves.seated_march.clips.map((c) => c.file), ["seated_march/pexels-50.mp4"]);
+      assert.equal(manifest.moves.neck_tilt.clips.length, 3);
+    } finally {
+      scrapeRm(out, { recursive: true, force: true });
+    }
+  });
+
+  await checkAsync("demo sources: a source that fails is noted and the run goes on; one that says slow down isn't asked again this run", async () => {
+    const out = scratchOut();
+    try {
+      const web = neckWeb({ commons: () => new Response("down", { status: 500 }), pexels: () => new Response("slow down", { status: 429 }) });
+      const { manifest } = await run(out, web);
+      assert.deepEqual(manifest.moves.neck_tilt.clips, []);
+      assert.equal(web.calls.filter((c) => c.url.host === "commons.wikimedia.org").length, 2);
+      assert.equal(web.calls.filter((c) => c.url.host === "api.pexels.com").length, 1);
+      assert.ok(manifest.problems.some((p) => /wikimedia "neck side stretch": HTTP 500/.test(p)), manifest.problems.join("; "));
+      assert.ok(manifest.problems.some((p) => /pexels: rate limited/.test(p)), manifest.problems.join("; "));
+      assert.ok(!scrapeExists(scrapeJoin(out, ".cache/wikimedia")) || scrapeLs(scrapeJoin(out, ".cache/wikimedia")).length === 0, "a failed search isn't cached");
+    } finally {
+      scrapeRm(out, { recursive: true, force: true });
+    }
+  });
+
+  await checkAsync("demo sources: a source that says to wait a little is waited for once, then asked again", async () => {
+    const out = scratchOut();
+    try {
+      let asked = 0;
+      const web = neckWeb({
+        commons: () => (++asked === 1 ? new Response("wait", { status: 429, headers: { "retry-after": "30" } }) : undefined),
+      });
+      const { manifest, sleeps } = await run(out, web);
+      assert.ok(sleeps.includes(30_000), `waited ${sleeps.join(", ")} ms`);
+      assert.equal(asked, 3, "the first search twice, then the second");
+      assert.ok(manifest.moves.neck_tilt.clips.some((c) => c.source === "wikimedia"));
+      assert.deepEqual(manifest.problems, []);
+      assert.ok(sleeps.filter((ms) => ms >= 3000).length >= 3, "Commons is asked at most every 3 s");
+    } finally {
+      scrapeRm(out, { recursive: true, force: true });
+    }
+  });
+
+  await checkAsync("demo sources: a clip too big to fetch is passed over for the next one, and nothing half-fetched is left", async () => {
+    const out = scratchOut();
+    try {
+      const big = (u) => (u.pathname.startsWith("/42/") ? new Response("x", { headers: { "content-length": String(60 * 1024 * 1024) } }) : undefined);
+      const { manifest } = await run(out, neckWeb({ file: big }), { download: 1 });
+      assert.deepEqual(manifest.moves.neck_tilt.clips.map((c) => c.file), [null, "neck_tilt/wikimedia-1.webm", null]);
+      assert.ok(manifest.problems.some((p) => /pexels-42: 60 MB: too big to fetch/.test(p)), manifest.problems.join("; "));
+      assert.deepEqual(scrapeLs(scrapeJoin(out, "neck_tilt")), ["wikimedia-1.webm"]);
+    } finally {
+      scrapeRm(out, { recursive: true, force: true });
+    }
+  });
+
+  await checkAsync("demo sources: an unknown move is turned down before anything is fetched", async () => {
+    const web = neckWeb();
+    await assert.rejects(scrapeDemoVideos({ out: "unused", moves: ["moonwalk"], env: {}, fetch: web.fetch, sleep: async () => {} }), /"moonwalk" is not a move in the catalog/);
+    assert.equal(web.calls.length, 0);
+  });
+
+  check("demo sources: the review page plays each fetched clip, credits it, gives the command to make the demo, and escapes what sources wrote", () => {
+    const clip = {
+      source: "wikimedia", id: "1", title: "<script>alert(1)</script> neck", text: "", pageUrl: "https://commons.wikimedia.org/wiki/File:A.webm",
+      fileUrl: "https://upload.wikimedia.org/A.webm", ext: "webm", width: 1280, height: 720, seconds: 10, bytes: 3_000_000, author: "Ana & Bo",
+      authorUrl: "", license: "CC BY-SA 4.0", licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0", note: "", score: 1, credit: true, shareAlike: true,
+      query: "neck stretch", file: "neck_tilt/wikimedia-1.webm",
+    };
+    const page = reviewPage({ updated: new Date(T0).toISOString(), moves: { neck_tilt: { label: "Neck side tilt", searched: ["wikimedia"], clips: [clip, { ...clip, id: "2", file: null }], dropped: 0 } }, skipped: [], problems: [] });
+    assert.ok(!page.includes("<script>alert(1)"), "a title can't run script");
+    assert.match(page, /&lt;script&gt;alert\(1\)&lt;\/script&gt; neck/);
+    assert.match(page, /<video[^>]* src="neck_tilt\/wikimedia-1\.webm"/);
+    assert.match(page, /node extension\/scripts\/make-demo-video\.mjs neck_tilt demo-sources\/neck_tilt\/wikimedia-1\.webm --from 0 --to 6/);
+    assert.match(page, /Ana &amp; Bo/);
+    assert.match(page, /needs credit/i);
+    assert.match(page, /share-alike/i);
+    assert.match(page, /not fetched/i, "a listed clip that wasn't fetched says so, and isn't played from the source's server");
+    assert.equal((page.match(/<video/g) ?? []).length, 1);
+
+    const empty = { label: "", searched: ["wikimedia"], clips: [], dropped: 4 };
+    const some = reviewPage({ updated: "", skipped: [], problems: [], moves: {
+      neck_tilt: { ...empty, label: "Neck side tilt" }, chin_tuck: { ...empty, label: "Chin tuck" },
+      hip_hinge: { label: "Hip hinge", searched: ["wikimedia"], clips: [clip], dropped: 0 },
+    } });
+    assert.ok(some.indexOf("<h2>Hip hinge") > -1 && some.indexOf("<h2>Hip hinge") < some.indexOf("Nothing that fits yet"), "moves with clips first");
+    assert.match(some, /Nothing that fits yet[^<]*<\/h2>\s*<p>Neck side tilt <code>neck_tilt<\/code>, Chin tuck <code>chin_tuck<\/code><\/p>/, "the rest on one line, in catalog order");
+    assert.ok(!some.includes("<h2>Neck side tilt"));
+  });
+}
+
