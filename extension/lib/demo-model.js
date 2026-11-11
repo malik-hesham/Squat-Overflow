@@ -29,6 +29,7 @@ import { DEMO_LOOK } from "./demo-look.js";
  * @typedef {object} Params
  * @property {number} lean torso pitch, deg, + forward
  * @property {number} bend torso side bend, deg, + towards the person's left
+ * @property {number} twist torso turn about the spine, deg, + towards the person's left
  * @property {number} shrug shoulders up, m
  * @property {number} back shoulders back, m
  * @property {number} headFwd head glides forward, m
@@ -152,12 +153,13 @@ export function reach(root, target, pole, a, b) {
 }
 
 // ---- The mannequin ------------------------------------------------------------
-/** The torso's rotation: lean, then side bend, about the hips. @param {Params} p */
-const torsoOf = (p) => mul(rotZ(p.bend), rotX(p.lean));
+/** The torso's rotation: a twist about the spine, then lean, then side bend, about the hips. @param {Params} p */
+const torsoOf = (p) => mul(rotZ(p.bend), mul(rotX(p.lean), rotY(p.twist)));
 /** @type {Params} */
 const STAND = {
   lean: 0,
   bend: 0,
+  twist: 0,
   shrug: 0,
   back: 0,
   headFwd: 0,
@@ -331,6 +333,7 @@ const MOVES = {
   overhead_reach: { rest: HANGING, target: arms([170, 0], [172, 0]) },
   external_rotation: { rest: arms([5, 0], [90, 90]), target: arms([5, 0], [90, 10]) },
   cross_body_stretch: { reps: 2, target: { ...leftArm([90, 165], [90, 170]), R_up: [30, 90], R_fore: [95, 150], R_hand: [95, 150] } },
+  seated_jacks: { target: {}, custom: seatedJacks },
   // Lower back
   seated_side_bend: { reps: 2, target: { bend: 22 } },
   knee_to_chest: { reps: 2, target: { L_thigh: 135, L_shin: 10, L_foot: 105, ...arms([40, 90], [80, 100]) } },
@@ -342,6 +345,12 @@ const MOVES = {
   back_extension: {
     rest: reachBoth([0.12, -0.42, -0.12], [1, 0.2, -1], [0, -90]),
     target: { lean: -20, ...reachBoth([0.12, -0.42, -0.12], [1, 0.2, -1], [0, -90]) },
+  },
+  // Arms folded across the chest; they turn with it.
+  trunk_rotation: {
+    reps: 2,
+    rest: reachBoth([-0.1, -0.17, 0.13], [0.3, -1, 0.6], [90, 180]),
+    target: { twist: 40, ...reachBoth([-0.1, -0.17, 0.13], [0.3, -1, 0.6], [90, 180]) },
   },
   // Wrist & hand
   wrist_flex: { rest: leftArm([88, 90], [88, 90]), target: leftArm([88, 90], [88, 90], [30, 90]) },
@@ -369,6 +378,12 @@ const MOVES = {
   },
   mini_squat: { target: { L_thigh: 35, L_shin: -20, R_thigh: 35, R_shin: -20, lean: 15 } },
   hamstring_curl: { reps: 2, plant: "R", via: { L_thigh: 25, L_shin: -25 }, target: { L_shin: -95, L_foot: 10 } },
+  // The shin stays upright, so the foot lifts straight off the floor; the other arm swings forward.
+  seated_march: {
+    reps: 2,
+    rest: arms([8, 0], [80, 90]),
+    target: { L_thigh: 112, L_foot: 80, L_up: [25, -90], L_fore: [70, 90], L_hand: [70, 90], R_up: [40, 90], R_fore: [115, 90], R_hand: [115, 90] },
+  },
   // Eyes
   palming: { target: reachBoth([0.045, 0.2, 0.17], [1, -0.6, 0.3], [175, 0]) },
   temple_massage: { target: reachBoth([0.1, 0.22, 0.03], [1, -0.6, -0.2], [170, 0]) },
@@ -402,6 +417,34 @@ function pushUp(w) {
     j[17 + o] = add(wrist, [0, -0.03, 0.07]);
     j[19 + o] = add(wrist, [0, -0.03, 0.09]);
     j[21 + o] = add(wrist, [0.02 * -s, -0.03, 0.05]);
+  }
+  return j;
+}
+
+// ---- Seated jacks: the arms sweep up into an X while the heels slide out --------------------
+// The heels stay on the floor, so the person stays on the seat. The toes lift before the heels
+// slide and come down after they stop, so no foot slides on its toes; the knees follow the feet.
+const JACK_ARMS = arms([138, 0], [142, 0]);
+const JACK_HEEL = /** @type {P3} */ ([0.16, 0, 0.1]); // where the left heel slides to, m (mirrored for the right)
+const JACK_TOES = 30; // deg the toes lift
+const JACK_TURN = 20; // deg the toes turn out
+/** @param {number} w 0 = rest, 1 = the X @returns {P3[]} */
+function seatedJacks(w) {
+  /** @type {Params} */
+  const p = { ...SIT };
+  for (const [k, v] of Object.entries(JACK_ARMS)) p[k] = mix(SIT[k], v, w);
+  const j = skeleton(p);
+  const lift = smooth(Math.min(1, w / 0.3));
+  const out = smooth(Math.max(0, (w - 0.15) / 0.85));
+  for (const [o, s] of [[0, 1], [1, -1]]) {
+    const [hip, ankle0, heel0, toe0] = [j[23 + o], j[27 + o], j[29 + o], j[31 + o]];
+    const heel = add(heel0, [JACK_HEEL[0] * s, 0, JACK_HEEL[2]], out);
+    const foot = mul(rotY(JACK_TURN * s * out), rotX(-JACK_TOES * lift)); // pivots on the heel
+    const ankle = add(heel, apply(foot, sub(ankle0, heel0)));
+    j[25 + o] = reach(hip, ankle, [0.6 * s * out, 1, 1], THIGH, SHIN)[0];
+    j[27 + o] = ankle;
+    j[29 + o] = heel;
+    j[31 + o] = add(heel, apply(foot, sub(toe0, heel0)));
   }
   return j;
 }
@@ -440,7 +483,7 @@ function curve(a, b, c, w) {
 const MIRROR_KEYS = ["up", "fore", "hand", "to", "pole", "thigh", "shin", "foot"];
 /** The same angles for the other side. @param {Params} p @returns {Params} */
 function mirror(p) {
-  const out = { ...p, bend: -p.bend, yaw: -p.yaw, tilt: -p.tilt };
+  const out = { ...p, bend: -p.bend, twist: -p.twist, yaw: -p.yaw, tilt: -p.tilt };
   for (const k of MIRROR_KEYS) {
     out[`L_${k}`] = p[`R_${k}`];
     out[`R_${k}`] = p[`L_${k}`];

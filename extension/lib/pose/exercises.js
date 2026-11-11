@@ -319,6 +319,46 @@ export function earHeight(pose, _s) {
   return pySum(sides.map((s) => angleFromHorizontal(pose.pt(s, "shoulder"), pose.pt(s, "ear")))) / 2;
 }
 
+// Shoulder and hip width as a share of the torso (mid-hip to mid-shoulder): a typical adult's, and
+// the 3D demo figure's.
+const SHOULDER_SPAN = 0.76;
+const HIP_SPAN = 0.4;
+
+/**
+ * How far the shoulders are turned against the hips, 0..90 (0 = square), for a seated twist filmed
+ * side-on.
+ *
+ * In 3D it is the angle between the shoulder line and the hip line seen from above. In 2D the side
+ * camera sees a twist as the shoulders spreading apart in the picture: their spread against a
+ * typical shoulder width gives the turn, and the hips' own spread is taken off, so sitting a little
+ * angled to the camera still reads 0.
+ */
+export function trunkTwist(pose, _s) {
+  let turn;
+  if (pose.is3d) {
+    /** @param {Joint} j */
+    const facing = (j) => {
+      const l = pose.pt("left", j);
+      const r = pose.pt("right", j);
+      return Math.atan2(l[2] - r[2], l[0] - r[0]);
+    };
+    turn = degrees(facing("shoulder") - facing("hip"));
+  } else {
+    const p = (/** @type {Side} */ s, /** @type {Joint} */ j) => pose.pt2d(s, j);
+    const mid = (/** @type {Joint} */ j) => p("left", j).map((v, i) => (v + p("right", j)[i]) / 2);
+    const torso = Math.max(norm(sub(mid("shoulder"), mid("hip"))), 1.0);
+    /** @param {Joint} j @param {number} span */
+    const spread = (j, span) => {
+      const ratio = (p("left", j)[0] - p("right", j)[0]) / (span * torso);
+      return degrees(Math.asin(Math.min(1.0, Math.max(-1.0, ratio))));
+    };
+    turn = spread("shoulder", SHOULDER_SPAN) - spread("hip", HIP_SPAN);
+  }
+  // A line has no front: a turn of 170 degrees is the lines 10 degrees apart.
+  const a = Math.abs((((turn % 360) + 540) % 360) - 180);
+  return Math.min(a, 180.0 - a);
+}
+
 /** Average of left and right: both limbs move together. */
 export function bothSides(fn) {
   return (pose) => (fn(pose, "left") + fn(pose, "right")) / 2;
@@ -413,7 +453,7 @@ const HAND = ["elbow", "wrist", "index"];
 /** @type {readonly Joint[]} */
 const TORSO = ["shoulder", "hip"];
 
-// Five per area. Thresholds are wide on purpose: rest and target sit well
+// Five or six per area. Thresholds are wide on purpose: rest and target sit well
 // inside a comfortable range of motion, so a relaxed rep counts.
 export const OFFICE_EXERCISES = [
   // Neck tension: stiff neck and headaches from looking down or pushing the head towards the screen.
@@ -542,6 +582,13 @@ export const OFFICE_EXERCISES = [
     joints: ARMS,
     howTo: "Bring one arm across your chest, hug it in with the other hand, release, then switch arms.",
   }),
+  // Counts the arms; the legs go out with them but aren't measured.
+  gentle("seated_jacks", "Seated jacks", "Arm height", bothSides(armElevation), 50, 115, {
+    category: ROTATOR,
+    camera: "front",
+    joints: ARMS,
+    howTo: "Hands on your thighs, reach your arms up and out and slide your heels out into an X, then come back.",
+  }),
   // Lower back: stiffness at the base of the spine after long sitting.
   gentle("seated_side_bend", "Seated side bend", "Shoulder tilt", shoulderTilt, 7, 14, {
     category: LOWER_BACK,
@@ -575,6 +622,12 @@ export const OFFICE_EXERCISES = [
     joints: TORSO,
     stance: "standing",
     howTo: "Stand tall with your hands on your lower back, gently lean back, then return.",
+  }),
+  gentle("trunk_rotation", "Seated trunk rotation", "Trunk twist", trunkTwist, 10, 22, {
+    category: LOWER_BACK,
+    camera: "side",
+    joints: TORSO,
+    howTo: "Sit tall, arms crossed on your chest, turn your upper body to one side, back to centre, then the other side.",
   }),
   // Wrist & hand: typing and mouse strain, tingling or numbness in the fingers.
   gentle("wrist_flex", "Wrist flex & extend", "Wrist angle", wristAngle, 160, 135, {
@@ -640,6 +693,12 @@ export const OFFICE_EXERCISES = [
     joints: LEGS,
     stance: "standing",
     howTo: "Hold the desk, bring one heel towards your seat, lower it, then switch legs.",
+  }),
+  gentle("seated_march", "Seated march", "Hip angle", eitherSide(hipAngle, min2), 82, 72, {
+    category: KNEES,
+    camera: "side",
+    joints: ["shoulder", "hip", "knee"],
+    howTo: "Sit near the front of your chair, lift one knee as high as is comfortable, lower it, then the other, swinging your arms.",
   }),
   // Eyes: the camera can't see where you look, so each move counts the hand
   // or head movement that goes with it.

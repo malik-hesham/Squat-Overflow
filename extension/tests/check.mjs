@@ -18,7 +18,8 @@ import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
-import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS } from "../lib/pose/index.js";
+import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS, Pose } from "../lib/pose/index.js";
+import { trunkTwist } from "../lib/pose/exercises.js";
 import { DEMO_PARTS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
 import { paintDemo } from "../lib/demo-player.js";
 import { DEMO_LOOK } from "../lib/demo-look.js";
@@ -43,20 +44,20 @@ const fri = new Date(2026, 10, 6, 11).getTime();
 const mon = new Date(2026, 10, 9, 11).getTime();
 const WORKDAYS = [1, 2, 3, 4, 5];
 
-// Mirrors the server catalog (server/src/analysis/exercises.ts): five exercises per pain area.
+// Mirrors the pose catalog (lib/pose/exercises.js): five or six exercises per pain area.
 const AREA_KEYS = {
   "Neck tension": ["neck_tilt", "head_turn", "chin_to_chest", "shoulder_shrug", "chin_tuck"],
   "Rounded shoulders": ["cross_swing", "wy_raise", "shoulder_roll", "thoracic_extension", "clasp_opener"],
   "Upper back": ["seated_row", "t_raise", "desk_punch", "rhomboid_stretch", "desk_row"],
-  "Shoulder & rotator cuff": ["scaption", "front_raise", "overhead_reach", "external_rotation", "cross_body_stretch"],
-  "Lower back": ["seated_side_bend", "knee_to_chest", "hip_hinge", "standing_side_bend", "back_extension"],
+  "Shoulder & rotator cuff": ["scaption", "front_raise", "overhead_reach", "external_rotation", "cross_body_stretch", "seated_jacks"],
+  "Lower back": ["seated_side_bend", "knee_to_chest", "hip_hinge", "standing_side_bend", "back_extension", "trunk_rotation"],
   "Wrist & hand": ["wrist_flex", "extensor_stretch", "flexor_stretch", "prayer_stretch", "nerve_glide"],
-  Knees: ["seated_knee_ext", "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl"],
+  Knees: ["seated_knee_ext", "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl", "seated_march"],
   Eyes: ["palming", "temple_massage", "look_far", "near_far_focus", "eye_track_vertical"],
 };
 const SIDE_ON = new Set(["chin_tuck", "thoracic_extension", "clasp_opener", "seated_row", "desk_punch", "rhomboid_stretch", "desk_row",
   "front_raise", "knee_to_chest", "hip_hinge", "back_extension", "wrist_flex", "extensor_stretch", "flexor_stretch", "seated_knee_ext",
-  "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl", "near_far_focus", "eye_track_vertical"]);
+  "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl", "near_far_focus", "eye_track_vertical", "trunk_rotation", "seated_march"]);
 const STANDING = new Set(["clasp_opener", "desk_row", "hip_hinge", "standing_side_bend", "back_extension", "sit_to_stand", "mini_squat", "hamstring_curl"]);
 const CATALOG = Object.entries(AREA_KEYS).flatMap(([category, keys]) =>
   keys.map((key) => ({
@@ -213,9 +214,11 @@ check("featuredArea rotates weekly over every area except the opt-in Eyes", () =
   assert.deepEqual([...featured].sort(), AREAS.filter((a) => a !== "Eyes").sort());
 });
 
-check("every area has five catalog exercises", () => {
+check("every area has five or six catalog exercises, the same as the pose catalog's", () => {
   assert.deepEqual(Object.keys(AREA_KEYS), AREAS);
-  for (const a of AREAS) assert.equal(CATALOG.filter((e) => e.category === a).length, 5, a);
+  for (const a of AREAS) assert.ok([5, 6].includes(CATALOG.filter((e) => e.category === a).length), a);
+  const pick = ({ key, category, camera, stance }) => ({ key, category, camera, stance });
+  assert.deepEqual(exerciseCatalog().map(pick), CATALOG.map(pick));
 });
 
 check("currentAreas maps saved pre-update area names onto the pain areas", () => {
@@ -981,6 +984,41 @@ check("pose: the catalog lists the office moves in order, the first is the defau
   assert.ok(catalog.every((e) => Object.hasOwn(POSE_CATALOG, e.key)));
 });
 
+/**
+ * A seated torso filmed side-on from the person's left, 500 px from mid-hip to mid-shoulder, with
+ * a typical adult's shoulders (0.76 torso lengths) and hips (0.4). The hips are turned `sit` degrees
+ * from side-on, the shoulders `twist` more.
+ */
+function twistPose(twist, sit = 0, useWorld = false) {
+  const lms = Array.from({ length: 33 }, () => [0.5, 0.5, 0.9]);
+  const world = Array.from({ length: 33 }, () => [0, 0, 0]);
+  for (const [joint, half, up, deg] of /** @type {["shoulder" | "hip", number, number, number][]} */ ([["shoulder", 190, 500, twist + sit], ["hip", 100, 0, sit]])) {
+    for (const [side, s] of /** @type {["left" | "right", number][]} */ ([["left", 1], ["right", -1]])) {
+      const r = (deg * Math.PI) / 180;
+      const across = s * half * Math.cos(r); // towards the camera
+      const back = s * half * Math.sin(r); // the picture's x
+      lms[JOINTS[side][joint]] = [(500 + back) / 1000, (700 - up) / 1000, 0.95];
+      world[JOINTS[side][joint]] = [back / 1000, -up / 1000, -across / 1000];
+    }
+  }
+  return new Pose(lms, 1000, 1000, world, useWorld);
+}
+
+check("pose: trunk twist is the shoulders' turn against the hips, side-on in 2D and in 3D", () => {
+  for (const twist of [0, 10, 25, 40]) {
+    for (const sit of [0, 15, -20]) {
+      for (const useWorld of [false, true]) {
+        const got = trunkTwist(twistPose(twist, sit, useWorld), "left");
+        assert.ok(Math.abs(got - twist) < 1e-6, `twist ${twist}, sitting ${sit} off side-on, ${useWorld ? "3D" : "2D"}: read ${got}`);
+      }
+    }
+  }
+  // Either way round, and the left/right labels can't make a square torso read as turned.
+  assert.ok(Math.abs(trunkTwist(twistPose(-30), "left") - 30) < 1e-6);
+  assert.ok(Math.abs(trunkTwist(twistPose(-30, 0, true), "left") - 30) < 1e-6);
+  assert.ok(trunkTwist(twistPose(180, 0, true), "left") < 1e-6);
+});
+
 // ---- 3D exercise demo (lib/demo-model.js) ------------------------------------
 const DEMO_KEYS = Object.keys(EXERCISES);
 const FPS = 30;
@@ -1092,7 +1130,7 @@ check("3D demo: a move done one side at a time works both sides in each loop", (
     }
   }
   // The moves whose instructions say to switch sides.
-  for (const key of ["neck_tilt", "head_turn", "cross_body_stretch", "seated_side_bend", "knee_to_chest", "standing_side_bend", "seated_knee_ext", "heel_slide", "hamstring_curl"]) {
+  for (const key of ["neck_tilt", "head_turn", "cross_body_stretch", "seated_side_bend", "knee_to_chest", "standing_side_bend", "trunk_rotation", "seated_knee_ext", "heel_slide", "hamstring_curl", "seated_march"]) {
     assert.equal(demoMotion(key).reps, 2, `${key} should work both sides`);
   }
 });
@@ -1613,7 +1651,7 @@ check("i18n: all exercises, areas, levels, daily challenges and office rep tips 
     assert.notEqual(exerciseText("ar", key, "how_to", "EN"), "EN", key);
     assert.equal(exerciseText("en", key, "label", "EN"), "EN");
   }
-  assert.equal(CATALOG.length, 40);
+  assert.equal(CATALOG.length, 43);
   for (const a of AREAS) {
     assert.notEqual(areaName("ar", a), a);
     assert.equal(areaName("en", a), a);
@@ -2181,7 +2219,7 @@ Promise.all(pending).then(
     const ready = gateway().ready();
     assert.equal(ready.type, "ready");
     assert.deepEqual(ready.exercises, exerciseCatalog());
-    assert.equal(ready.exercises.length, 40);
+    assert.equal(ready.exercises.length, 43);
     assert.deepEqual(ready.connections, CONNECTIONS);
     assert.equal(ready.exercise, "neck_tilt");
   });

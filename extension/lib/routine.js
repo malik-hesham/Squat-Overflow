@@ -1,6 +1,6 @@
 import { isoWeekNumber } from "./xp.js";
 
-// Pain areas, matching the server's exercise categories (five exercises each).
+// Pain areas, matching the pose catalog's categories (five or six exercises each).
 export const AREAS = [
   "Neck tension",
   "Rounded shoulders",

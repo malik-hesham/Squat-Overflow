@@ -6,16 +6,16 @@
  */
 
 import { CATALOG, EXERCISES } from '../../../../../extension/lib/pose/exercises.js';
-import { type SessionFixture, fixtureNames, loadFixture, replay } from './helpers';
+import { ADDED_AFTER_PYTHON, type SessionFixture, fixtureNames, loadFixture, replay } from './helpers';
 
 const files = fixtureNames('session_');
 const fixtures = files.map((f) => loadFixture<SessionFixture>(f));
 
 describe('session fixtures', () => {
-  it('cover every exercise in the catalog (and the workout set)', () => {
+  it('cover every exercise in the catalog (and the workout set), except those added after the Python server', () => {
     const covered = new Set(fixtures.map((f) => f.exercise));
-    for (const key of Object.keys(CATALOG)) expect(covered).toContain(key);
-    for (const key of Object.keys(EXERCISES)) expect(covered).toContain(key);
+    const keys = [...new Set([...Object.keys(CATALOG), ...Object.keys(EXERCISES)])];
+    expect(keys.filter((k) => !covered.has(k)).sort()).toEqual([...ADDED_AFTER_PYTHON].sort());
   });
 });
 

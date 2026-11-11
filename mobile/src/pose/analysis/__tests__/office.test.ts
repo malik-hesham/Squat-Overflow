@@ -18,6 +18,7 @@ import {
   headTurn,
   officeRepScore,
   shoulderTilt,
+  trunkTwist,
 } from '../../../../../extension/lib/pose/exercises.js';
 import { Pose } from '../../../../../extension/lib/pose/geometry.js';
 import { RepCounter, type Rep, Session, type Summary, type RepEvent } from '../../../../../extension/lib/pose/session.js';
@@ -42,10 +43,10 @@ const repeat = <T>(n: number, f: () => T[]): T[] => Array.from({ length: n }, f)
 // --- catalog ------------------------------------------------------------------
 
 describe('catalog', () => {
-  it('has forty office exercises with unique keys', () => {
+  it('has forty-three office exercises with unique keys', () => {
     const keys = OFFICE_EXERCISES.map((e) => e.key);
-    expect(keys).toHaveLength(40);
-    expect(new Set(keys).size).toBe(40);
+    expect(keys).toHaveLength(43);
+    expect(new Set(keys).size).toBe(43);
     keys.forEach((k, i) => expect(EXERCISES[k]).toBe(OFFICE_EXERCISES[i]));
   });
 
@@ -73,10 +74,10 @@ describe('catalog', () => {
       'Neck tension': ['neck_tilt', 'head_turn', 'chin_to_chest', 'shoulder_shrug', 'chin_tuck'],
       'Rounded shoulders': ['cross_swing', 'wy_raise', 'shoulder_roll', 'thoracic_extension', 'clasp_opener'],
       'Upper back': ['seated_row', 't_raise', 'desk_punch', 'rhomboid_stretch', 'desk_row'],
-      'Shoulder & rotator cuff': ['scaption', 'front_raise', 'overhead_reach', 'external_rotation', 'cross_body_stretch'],
-      'Lower back': ['seated_side_bend', 'knee_to_chest', 'hip_hinge', 'standing_side_bend', 'back_extension'],
+      'Shoulder & rotator cuff': ['scaption', 'front_raise', 'overhead_reach', 'external_rotation', 'cross_body_stretch', 'seated_jacks'],
+      'Lower back': ['seated_side_bend', 'knee_to_chest', 'hip_hinge', 'standing_side_bend', 'back_extension', 'trunk_rotation'],
       'Wrist & hand': ['wrist_flex', 'extensor_stretch', 'flexor_stretch', 'prayer_stretch', 'nerve_glide'],
-      Knees: ['seated_knee_ext', 'heel_slide', 'sit_to_stand', 'mini_squat', 'hamstring_curl'],
+      Knees: ['seated_knee_ext', 'heel_slide', 'sit_to_stand', 'mini_squat', 'hamstring_curl', 'seated_march'],
       Eyes: ['palming', 'temple_massage', 'look_far', 'near_far_focus', 'eye_track_vertical'],
     };
     expect([...AREAS]).toEqual(Object.keys(areaMap));
@@ -198,6 +199,61 @@ describe.each(OFFICE_EXERCISES.map((e) => [e.key, e] as const))('%s is forgiving
     expect(reps).toHaveLength(1);
     expect(reps[0].partial).toBe(true);
     expect(reps[0].score).toBeLessThan(70);
+  });
+});
+
+// --- moves added after the Python server (no golden fixtures: see ADDED_AFTER_PYTHON) ---------
+
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
+/**
+ * Side view of a seated torso, 500 px from mid-hip to mid-shoulder, with a typical adult's 380 px
+ * shoulders and 200 px hips: the hips turned `sit` degrees from side-on, the shoulders `twist` more.
+ */
+function sideTwist(twist: number, sit = 0): number[][] {
+  const at = (half: number, deg: number, y: number, s: number) => [500 + s * half * Math.sin(rad(deg)), y];
+  const side = (s: number) => ({ shoulder: at(190, twist + sit, 200, s), hip: at(100, sit, 700, s) });
+  return syn.landmarks({ left: side(1), right: side(-1) });
+}
+
+/** Side view, seated upright; each thigh `deg` from straight up (90 = level, smaller = knee lifted). */
+function sideMarch(leftHip: number, rightHip = 90): number[][] {
+  const hip = [500, 600];
+  const leg = (deg: number) => {
+    const knee = [hip[0] + 220 * Math.sin(rad(deg)), hip[1] - 220 * Math.cos(rad(deg))];
+    return { shoulder: [500, 100], hip, knee, ankle: [knee[0], knee[1] + 210] };
+  };
+  return syn.landmarks({ left: leg(leftHip), right: leg(rightHip) });
+}
+
+describe('trunk rotation, seated march and seated jacks', () => {
+  it.each([0, 15, 30, 45])('trunk twist %p reads the same however the chair is turned', (deg) => {
+    for (const sit of [0, 12, -18]) expect(trunkTwist(pose(sideTwist(deg, sit)), 'left')).toBeCloseTo(deg, 6);
+  });
+
+  it('trunk rotation counts each side', () => {
+    const frames = [
+      ...syn.trajectory(0, 35, 45).map((a) => sideTwist(a)),
+      ...syn.trajectory(0, -35, 45).map((a) => sideTwist(a)),
+    ];
+    const [events, summary] = run('trunk_rotation', frames);
+    expect([summary.reps, summary.good_reps]).toEqual([2, 2]);
+    expect(events.every((e) => e.issues.length === 0)).toBe(true);
+  });
+
+  it('seated march counts each knee lift', () => {
+    const frames = [
+      ...syn.trajectory(90, 62, 45).map((a) => sideMarch(a)),
+      ...syn.trajectory(90, 62, 45).map((a) => sideMarch(90, a)),
+    ];
+    const [, summary] = run('seated_march', frames);
+    expect([summary.reps, summary.good_reps]).toEqual([2, 2]);
+  });
+
+  it('seated jacks count both arms going up into the X', () => {
+    const frames = repeat(2, () => syn.trajectory(15, 140, 45).map((a) => syn.upper({ leftElev: a, rightElev: a })));
+    const [, summary] = run('seated_jacks', frames);
+    expect([summary.reps, summary.good_reps]).toEqual([2, 2]);
   });
 });
 

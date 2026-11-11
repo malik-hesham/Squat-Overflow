@@ -15,6 +15,13 @@ const path = require('path') as { join(...parts: string[]): string };
 export const FIXTURES = path.join(__dirname, 'fixtures');
 export const FLOAT_TOLERANCE = 1e-6;
 
+/**
+ * Exercises added after the Python server was removed (5ebe1162), so the fixtures have no Python
+ * output for them. office.test.ts and the 3D demo test in catalog.parity.test.ts cover them instead.
+ * The parity tests check that these are the only exercises missing from the fixtures.
+ */
+export const ADDED_AFTER_PYTHON: readonly string[] = ['seated_jacks', 'trunk_rotation', 'seated_march'];
+
 export function loadFixture<T>(name: string): T {
   return JSON.parse(fs.readFileSync(path.join(FIXTURES, name), 'utf8')) as T;
 }

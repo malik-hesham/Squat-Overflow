@@ -6,7 +6,7 @@
 
 import { EXERCISES } from '../../../../../extension/lib/pose/exercises.js';
 import { Pose, type Side } from '../../../../../extension/lib/pose/geometry.js';
-import { diff, loadFixture } from './helpers';
+import { ADDED_AFTER_PYTHON, diff, loadFixture } from './helpers';
 
 interface MeasureFixture {
   poses: { landmarks: number[][]; world: number[][]; width: number; height: number }[];
@@ -22,7 +22,12 @@ const COMBOS: [Side, boolean][] = [
   ['right', true],
 ];
 
-it.each(Object.keys(EXERCISES))('%s.measure matches Python on every pose', (key) => {
+it('the fixture lacks only the exercises added after the Python server', () => {
+  const missing = Object.keys(EXERCISES).filter((k) => !(k in fx.results[0]));
+  expect(missing.sort()).toEqual([...ADDED_AFTER_PYTHON].sort());
+});
+
+it.each(Object.keys(EXERCISES).filter((k) => !ADDED_AFTER_PYTHON.includes(k)))('%s.measure matches Python on every pose', (key) => {
   const ex = EXERCISES[key];
   const mismatches: string[] = [];
   fx.poses.forEach((p, i) => {
