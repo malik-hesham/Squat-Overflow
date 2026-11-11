@@ -18,7 +18,7 @@ import { badgeLabel } from "../lib/badges.js";
 import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, parseBusy, agenda } from "../lib/calendar.js";
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
-import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS, Pose } from "../lib/pose/index.js";
+import { Session, RepCounter, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS, Pose } from "../lib/pose/index.js";
 import { trunkTwist } from "../lib/pose/exercises.js";
 import { DEMO_PARTS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
 import { paintDemo } from "../lib/demo-player.js";
@@ -44,20 +44,20 @@ const fri = new Date(2026, 10, 6, 11).getTime();
 const mon = new Date(2026, 10, 9, 11).getTime();
 const WORKDAYS = [1, 2, 3, 4, 5];
 
-// Mirrors the pose catalog (lib/pose/exercises.js): five or six exercises per pain area.
+// Mirrors the pose catalog (lib/pose/exercises.js): six exercises per pain area.
 const AREA_KEYS = {
-  "Neck tension": ["neck_tilt", "head_turn", "chin_to_chest", "shoulder_shrug", "chin_tuck"],
-  "Rounded shoulders": ["cross_swing", "wy_raise", "shoulder_roll", "thoracic_extension", "clasp_opener"],
-  "Upper back": ["seated_row", "t_raise", "desk_punch", "rhomboid_stretch", "desk_row"],
+  "Neck tension": ["neck_tilt", "head_turn", "chin_to_chest", "shoulder_shrug", "chin_tuck", "levator_stretch"],
+  "Rounded shoulders": ["cross_swing", "wy_raise", "shoulder_roll", "thoracic_extension", "clasp_opener", "shoulder_blade_squeeze"],
+  "Upper back": ["seated_row", "t_raise", "desk_punch", "rhomboid_stretch", "desk_row", "trunk_rotation"],
   "Shoulder & rotator cuff": ["scaption", "front_raise", "overhead_reach", "external_rotation", "cross_body_stretch", "seated_jacks"],
-  "Lower back": ["seated_side_bend", "knee_to_chest", "hip_hinge", "standing_side_bend", "back_extension", "trunk_rotation"],
-  "Wrist & hand": ["wrist_flex", "extensor_stretch", "flexor_stretch", "prayer_stretch", "nerve_glide"],
+  "Lower back": ["seated_side_bend", "knee_to_chest", "hip_hinge", "standing_side_bend", "back_extension", "seated_hip_hinge"],
+  "Wrist & hand": ["wrist_flex", "extensor_stretch", "flexor_stretch", "prayer_stretch", "nerve_glide", "palm_flip"],
   Knees: ["seated_knee_ext", "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl", "seated_march"],
-  Eyes: ["palming", "temple_massage", "look_far", "near_far_focus", "eye_track_vertical"],
+  Eyes: ["palming", "temple_massage", "look_far", "near_far_focus", "eye_track_vertical", "eye_track_horizontal"],
 };
 const SIDE_ON = new Set(["chin_tuck", "thoracic_extension", "clasp_opener", "seated_row", "desk_punch", "rhomboid_stretch", "desk_row",
   "front_raise", "knee_to_chest", "hip_hinge", "back_extension", "wrist_flex", "extensor_stretch", "flexor_stretch", "seated_knee_ext",
-  "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl", "near_far_focus", "eye_track_vertical", "trunk_rotation", "seated_march"]);
+  "heel_slide", "sit_to_stand", "mini_squat", "hamstring_curl", "near_far_focus", "eye_track_vertical", "trunk_rotation", "seated_march", "shoulder_blade_squeeze", "seated_hip_hinge"]);
 const STANDING = new Set(["clasp_opener", "desk_row", "hip_hinge", "standing_side_bend", "back_extension", "sit_to_stand", "mini_squat", "hamstring_curl"]);
 const CATALOG = Object.entries(AREA_KEYS).flatMap(([category, keys]) =>
   keys.map((key) => ({
@@ -214,9 +214,9 @@ check("featuredArea rotates weekly over every area except the opt-in Eyes", () =
   assert.deepEqual([...featured].sort(), AREAS.filter((a) => a !== "Eyes").sort());
 });
 
-check("every area has five or six catalog exercises, the same as the pose catalog's", () => {
+check("every area has six catalog exercises, the same as the pose catalog's", () => {
   assert.deepEqual(Object.keys(AREA_KEYS), AREAS);
-  for (const a of AREAS) assert.ok([5, 6].includes(CATALOG.filter((e) => e.category === a).length), a);
+  for (const a of AREAS) assert.equal(CATALOG.filter((e) => e.category === a).length, 6, a);
   const pick = ({ key, category, camera, stance }) => ({ key, category, camera, stance });
   assert.deepEqual(exerciseCatalog().map(pick), CATALOG.map(pick));
 });
@@ -633,8 +633,8 @@ check("swapMove cycles through every exercise in the area, skipping ones used el
     }
     return seen;
   };
-  assert.deepEqual(cycle([move("wrist_flex"), move("neck_tilt"), move("t_raise")], 0, 5), ["extensor_stretch", "flexor_stretch", "prayer_stretch", "nerve_glide", "wrist_flex"]);
-  assert.deepEqual(cycle([move("wrist_flex"), move("flexor_stretch"), move("t_raise")], 0, 4), ["extensor_stretch", "prayer_stretch", "nerve_glide", "wrist_flex"]);
+  assert.deepEqual(cycle([move("wrist_flex"), move("neck_tilt"), move("t_raise")], 0, 6), ["extensor_stretch", "flexor_stretch", "prayer_stretch", "nerve_glide", "palm_flip", "wrist_flex"]);
+  assert.deepEqual(cycle([move("wrist_flex"), move("flexor_stretch"), move("t_raise")], 0, 5), ["extensor_stretch", "prayer_stretch", "nerve_glide", "palm_flip", "wrist_flex"]);
 });
 
 const CAL_NOW = Date.UTC(2026, 10, 9, 10, 0);
@@ -1019,6 +1019,97 @@ check("pose: trunk twist is the shoulders' turn against the hips, side-on in 2D 
   assert.ok(trunkTwist(twistPose(180, 0, true), "left") < 1e-6);
 });
 
+/**
+ * Feeds a RepCounter `[value, seconds]` segments at 30 fps (linear between them) and returns the
+ * reps it finished. `assist` gives the second movement per frame (null: out of view).
+ * @param {import("../lib/pose/exercises.js").Exercise} ex
+ * @param {[number, number][]} segments
+ * @param {(v: number) => number | null} [assist]
+ */
+function feed(ex, segments, assist = () => null) {
+  const counter = new RepCounter(ex);
+  const reps = [];
+  let t = 0;
+  let [prev] = segments[0];
+  for (const [value, seconds] of segments) {
+    const n = Math.max(1, Math.round(seconds * 30));
+    for (let i = 1; i <= n; i++) {
+      const v = prev + ((value - prev) * i) / n;
+      const rep = counter.update(v, [], t, assist(v));
+      if (rep) reps.push(rep);
+      t += 1 / 30;
+    }
+    prev = value;
+  }
+  return reps;
+}
+
+check("pose: a held stretch counts once held long enough; let go early, it's partial with hold_longer", () => {
+  const bend = EXERCISES.seated_side_bend; // shoulder tilt, rest 7, target 14, hold 5 s
+  assert.equal(bend.hold, 5);
+  const [short] = feed(bend, [[2, 0.5], [20, 1], [20, 3], [2, 1], [2, 0.5]]);
+  assert.equal(short.partial, true);
+  assert.deepEqual(short.issues, ["hold_longer"]);
+  const [held] = feed(bend, [[2, 0.5], [20, 1], [20, 5.2], [2, 1], [2, 0.5]]);
+  assert.equal(held.partial, false);
+  assert.deepEqual(held.issues, []);
+  // Sagging a little stays in the hold; sagging most of the way back starts it again.
+  assert.equal(feed(bend, [[2, 0.5], [20, 1], [20, 2], [13, 0.3], [20, 0.3], [20, 2.5], [2, 1], [2, 0.5]])[0].partial, false);
+  assert.equal(feed(bend, [[2, 0.5], [20, 1], [20, 2], [9, 0.3], [20, 0.3], [20, 2.5], [2, 1], [2, 0.5]])[0].partial, true);
+  // A shallow attempt that never reaches the target is still "not deep enough".
+  assert.deepEqual(feed(bend, [[2, 0.5], [12, 1], [12, 6], [2, 1], [2, 0.5]])[0].issues, ["not_deep_enough"]);
+  // The session counts the hold down while it lasts, and only for held stretches.
+  const session = new Session("seated_side_bend");
+  const tilt = (deg) => {
+    const lms = Array.from({ length: 33 }, () => [0.5, 0.5, 0.9]);
+    const drop = 200 * Math.tan((deg * Math.PI) / 180); // shoulders 200 px apart
+    lms[JOINTS.left.shoulder] = [0.6, (400 + drop) / 1000, 0.95];
+    lms[JOINTS.right.shoulder] = [0.4, 0.4, 0.95];
+    return lms;
+  };
+  const holds = [];
+  for (let i = 0; i < 30 * 9; i++) {
+    const t = i / 30;
+    const deg = t < 1 ? 2 : t < 2 ? 2 + 18 * (t - 1) : t < 7.5 ? 20 : 2;
+    holds.push(session.process(tilt(deg), 1000, 1000, t).hold);
+  }
+  const counting = holds.filter((h) => h !== undefined);
+  assert.ok(counting.length > 4 * 30 && counting.length < 6 * 30, `${counting.length} frames of countdown`);
+  assert.ok(counting.every((h, i) => !i || h <= counting[i - 1]), "the countdown never goes up");
+  assert.ok(counting[0] <= 5 && counting.at(-1) < 0.2);
+  assert.equal(new Session("seated_march").process(tilt(20), 1000, 1000, 0).hold, undefined);
+});
+
+check("pose: the jacks' legs and the march's arm swing lower a rep's score, never stop it counting", () => {
+  for (const [key, still, moving] of /** @type {[string, number, number][]} */ ([["seated_jacks", 2, 18], ["seated_march", 8, 35]])) {
+    const ex = EXERCISES[key];
+    const lo = ex.rest + (ex.restIsHigh ? 5 : -5);
+    const hi = ex.target + (ex.restIsHigh ? -8 : 8);
+    const rep = /** @type {[number, number][]} */ ([[lo, 0.5], [hi, 1], [lo, 1], [lo, 0.5]]);
+    const [good] = feed(ex, rep, (v) => still + (moving - still) * ((v - lo) / (hi - lo)));
+    const [lazy] = feed(ex, rep, () => still);
+    const [hidden] = feed(ex, rep, () => null);
+    assert.deepEqual(good.issues, [], key);
+    assert.deepEqual(lazy.issues, [ex.assist.issue], key);
+    assert.equal(lazy.partial, false, `${key}: still counts`);
+    assert.equal(lazy.score, good.score - 20, key);
+    assert.deepEqual(hidden.issues, [], `${key}: out of view is never held against you`);
+  }
+});
+
+check("routine: a move's own rep target and hold carry into the break", () => {
+  const catalog = exerciseCatalog();
+  const one = (key) => {
+    const e = catalog.find((x) => x.key === key);
+    return buildRoutine([e], { areas: [e.category], lastKey: null, n: 0 })[0];
+  };
+  assert.deepEqual([one("seated_march").target, one("seated_jacks").target], [20, 12]);
+  assert.deepEqual([one("shoulder_blade_squeeze").target, one("shoulder_blade_squeeze").hold], [5, 3]);
+  assert.deepEqual([one("seated_side_bend").target, one("seated_side_bend").hold], [4, 5]);
+  assert.deepEqual([one("neck_tilt").target, one("neck_tilt").hold], [BREAK_REPS, 0]);
+  assert.ok(catalog.every((e) => "reps" in e && "hold" in e));
+});
+
 // ---- 3D exercise demo (lib/demo-model.js) ------------------------------------
 const DEMO_KEYS = Object.keys(EXERCISES);
 const FPS = 30;
@@ -1045,7 +1136,9 @@ check("3D demo: every exercise has one, an unknown move has none", () => {
   for (const key of DEMO_KEYS) {
     const m = demoMotion(key);
     assert.ok(m, `${key} has no demo`);
-    assert.ok(m.seconds >= 2 && m.seconds <= 8, `${key}: a loop of ${m.seconds} s`);
+    // Up to 4 s a rep, plus a held stretch's hold and a moment to settle into it.
+    const hold = EXERCISES[key].hold ? EXERCISES[key].hold + 1 : 0;
+    assert.ok(m.seconds >= 2 && m.seconds <= m.reps * (4 + hold), `${key}: a loop of ${m.seconds} s`);
     assert.ok(m.reps === 1 || m.reps === 2, `${key}: ${m.reps} reps a loop`);
     const pose = demoPose(key, 0);
     assert.equal(pose.length, 33);
@@ -1130,7 +1223,7 @@ check("3D demo: a move done one side at a time works both sides in each loop", (
     }
   }
   // The moves whose instructions say to switch sides.
-  for (const key of ["neck_tilt", "head_turn", "cross_body_stretch", "seated_side_bend", "knee_to_chest", "standing_side_bend", "trunk_rotation", "seated_knee_ext", "heel_slide", "hamstring_curl", "seated_march"]) {
+  for (const key of ["neck_tilt", "head_turn", "cross_body_stretch", "seated_side_bend", "knee_to_chest", "standing_side_bend", "trunk_rotation", "seated_knee_ext", "heel_slide", "hamstring_curl", "seated_march", "levator_stretch", "eye_track_horizontal"]) {
     assert.equal(demoMotion(key).reps, 2, `${key} should work both sides`);
   }
 });
@@ -1651,7 +1744,7 @@ check("i18n: all exercises, areas, levels, daily challenges and office rep tips 
     assert.notEqual(exerciseText("ar", key, "how_to", "EN"), "EN", key);
     assert.equal(exerciseText("en", key, "label", "EN"), "EN");
   }
-  assert.equal(CATALOG.length, 43);
+  assert.equal(CATALOG.length, 48);
   for (const a of AREAS) {
     assert.notEqual(areaName("ar", a), a);
     assert.equal(areaName("en", a), a);
@@ -2219,7 +2312,7 @@ Promise.all(pending).then(
     const ready = gateway().ready();
     assert.equal(ready.type, "ready");
     assert.deepEqual(ready.exercises, exerciseCatalog());
-    assert.equal(ready.exercises.length, 43);
+    assert.equal(ready.exercises.length, 48);
     assert.deepEqual(ready.connections, CONNECTIONS);
     assert.equal(ready.exercise, "neck_tilt");
   });

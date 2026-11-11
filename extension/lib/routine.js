@@ -1,6 +1,6 @@
 import { isoWeekNumber } from "./xp.js";
 
-// Pain areas, matching the pose catalog's categories (five or six exercises each).
+// Pain areas, matching the pose catalog's categories (six exercises each).
 export const AREAS = [
   "Neck tension",
   "Rounded shoulders",
@@ -48,7 +48,8 @@ const toMove = (e) => ({
   camera: e.camera,
   stance: e.stance ?? "seated",
   how_to: e.how_to,
-  target: BREAK_REPS,
+  target: e.reps ?? BREAK_REPS,
+  hold: e.hold ?? 0,
 });
 
 export function buildRoutine(catalog, { areas, lastKey, n }) {

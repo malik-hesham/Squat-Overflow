@@ -16,6 +16,8 @@ export type FrameResult = {
   rep_event: RepEvent | null;
   summary: { reps: number };
   landmarks: Landmark[] | null;
+  /** Seconds left to hold, only while a held stretch is at its target. */
+  hold?: number;
 };
 
 export type CoachStatus = 'starting' | 'open' | 'camera-denied' | 'offline';

@@ -15,13 +15,6 @@ const path = require('path') as { join(...parts: string[]): string };
 export const FIXTURES = path.join(__dirname, 'fixtures');
 export const FLOAT_TOLERANCE = 1e-6;
 
-/**
- * Exercises added after the Python server was removed (5ebe1162), so the fixtures have no Python
- * output for them. office.test.ts and the 3D demo test in catalog.parity.test.ts cover them instead.
- * The parity tests check that these are the only exercises missing from the fixtures.
- */
-export const ADDED_AFTER_PYTHON: readonly string[] = ['seated_jacks', 'trunk_rotation', 'seated_march'];
-
 export function loadFixture<T>(name: string): T {
   return JSON.parse(fs.readFileSync(path.join(FIXTURES, name), 'utf8')) as T;
 }
@@ -34,31 +27,31 @@ export function fixtureNames(prefix: string): string[] {
 }
 
 /**
- * Differences between `actual` and `expected` (Python's JSON): numbers within
+ * Differences between `actual` and `expected` (the recorded fixture): numbers within
  * `tol`, everything else exact, objects must have exactly the same keys.
  */
 export function diff(actual: unknown, expected: unknown, tol = FLOAT_TOLERANCE, where = '$', out: string[] = []): string[] {
   const show = (v: unknown): string => JSON.stringify(v) ?? String(v);
   if (typeof expected === 'number') {
     if (typeof actual !== 'number' || !(Math.abs(actual - expected) <= tol)) {
-      out.push(`${where}: got ${show(actual)}, Python ${show(expected)}`);
+      out.push(`${where}: got ${show(actual)}, fixture ${show(expected)}`);
     }
     return out;
   }
   if (expected === null || typeof expected !== 'object') {
-    if (actual !== expected) out.push(`${where}: got ${show(actual)}, Python ${show(expected)}`);
+    if (actual !== expected) out.push(`${where}: got ${show(actual)}, fixture ${show(expected)}`);
     return out;
   }
   if (Array.isArray(expected)) {
     if (!Array.isArray(actual) || actual.length !== expected.length) {
-      out.push(`${where}: got ${show(actual)}, Python ${show(expected)}`);
+      out.push(`${where}: got ${show(actual)}, fixture ${show(expected)}`);
       return out;
     }
     expected.forEach((e, i) => diff(actual[i], e, tol, `${where}[${i}]`, out));
     return out;
   }
   if (actual === null || typeof actual !== 'object' || Array.isArray(actual)) {
-    out.push(`${where}: got ${show(actual)}, Python ${show(expected)}`);
+    out.push(`${where}: got ${show(actual)}, fixture ${show(expected)}`);
     return out;
   }
   const a = actual as Record<string, unknown>;
@@ -66,7 +59,7 @@ export function diff(actual: unknown, expected: unknown, tol = FLOAT_TOLERANCE, 
   const keys = new Set([...Object.keys(a), ...Object.keys(e)]);
   for (const k of keys) {
     if (!(k in e)) out.push(`${where}.${k}: unexpected key (value ${show(a[k])})`);
-    else if (!(k in a)) out.push(`${where}.${k}: missing (Python ${show(e[k])})`);
+    else if (!(k in a)) out.push(`${where}.${k}: missing (fixture ${show(e[k])})`);
     else diff(a[k], e[k], tol, `${where}.${k}`, out);
   }
   return out;
@@ -110,7 +103,7 @@ export interface ReplayResult {
   mismatches: string[];
 }
 
-/** Fixture coordinates are integers in units of 1e-5 (see gen_pose_fixtures.py). */
+/** Fixture coordinates are integers in units of 1e-5 (see mobile/scripts/gen-pose-fixtures.mjs). */
 const SCALE = 100000;
 
 /**
@@ -126,7 +119,7 @@ function applyDelta(prev: readonly Point[], changes: readonly Point[]): Point[] 
   return next;
 }
 
-/** Replay one scenario through the TS Session and compare every frame with Python's output. */
+/** Replay one scenario through the TS Session and compare every frame with the recorded output. */
 export function replay(scenario: Scenario, maxMismatches = 20): ReplayResult {
   let session: Session | null = null;
   let landmarks: Point[] = [];

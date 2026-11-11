@@ -1,12 +1,12 @@
 /**
  * Every exercise's `measure()` on random and synthetic poses, both sides, 2D and
- * 3D, against Python (fixtures/measure.json). This reaches form-rule branches
+ * 3D, against the recorded values (fixtures/measure.json). This reaches form-rule branches
  * the rep scenarios don't.
  */
 
 import { EXERCISES } from '../../../../../extension/lib/pose/exercises.js';
 import { Pose, type Side } from '../../../../../extension/lib/pose/geometry.js';
-import { ADDED_AFTER_PYTHON, diff, loadFixture } from './helpers';
+import { diff, loadFixture } from './helpers';
 
 interface MeasureFixture {
   poses: { landmarks: number[][]; world: number[][]; width: number; height: number }[];
@@ -22,12 +22,7 @@ const COMBOS: [Side, boolean][] = [
   ['right', true],
 ];
 
-it('the fixture lacks only the exercises added after the Python server', () => {
-  const missing = Object.keys(EXERCISES).filter((k) => !(k in fx.results[0]));
-  expect(missing.sort()).toEqual([...ADDED_AFTER_PYTHON].sort());
-});
-
-it.each(Object.keys(EXERCISES).filter((k) => !ADDED_AFTER_PYTHON.includes(k)))('%s.measure matches Python on every pose', (key) => {
+it.each(Object.keys(EXERCISES))('%s.measure matches the recording on every pose', (key) => {
   const ex = EXERCISES[key];
   const mismatches: string[] = [];
   fx.poses.forEach((p, i) => {

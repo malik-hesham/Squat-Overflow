@@ -57,6 +57,7 @@ const state = {
   speech: Promise.resolve(), // voice cues waiting their turn
   repMarks: [], // total-rep counts where the rep clips play
   repMemes: 0, // rep clips played so far
+  holding: false, // a held stretch is counting down
 };
 
 const send = (msg) => chrome.runtime.sendMessage(msg);
@@ -314,6 +315,15 @@ function onFrame(msg) {
     state.repMemes++;
     meme("reps");
   }
+  // A held stretch counts down on the cue while it is at its target.
+  if (msg.hold != null) {
+    if (!state.holding) speak(t(state.lang, "sayHold"));
+    state.holding = true;
+    showCue(t(state.lang, "holdFor", { n: Math.ceil(msg.hold) }), true);
+  } else if (state.holding) {
+    state.holding = false;
+    if (!msg.rep_event) showCue("", true);
+  }
   if (msg.rep_event) {
     const { score, partial } = msg.rep_event;
     p.scores.push(score);
@@ -324,7 +334,8 @@ function onFrame(msg) {
     const issue = english === undefined ? undefined : issueText(state.lang, code, english);
     showCue(issue ?? (score >= 85 ? t(state.lang, "greatForm") : ""), !issue);
     if (!partial) state.client?.celebrate(!issue);
-    speak(partial ? t(state.lang, "goDeeper") : (issue ?? String(p.reps)));
+    // Let go of a hold too soon: say so, not "go deeper".
+    speak(partial && code !== "hold_longer" ? t(state.lang, "goDeeper") : (issue ?? String(p.reps)));
   }
   renderProgress();
   if (was < move.target && p.reps >= move.target) {

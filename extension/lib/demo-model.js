@@ -41,6 +41,8 @@ import { DEMO_LOOK } from "./demo-look.js";
  * @property {P3 | null} L_to @property {P3} L_pole @property {P3 | null} R_to @property {P3} R_pole
  * @property {number} L_thigh @property {number} L_shin @property {number} R_thigh @property {number} R_shin
  * @property {number} L_foot @property {number} R_foot foot pitch, 90 = flat and pointing forward
+ * @property {number} [L_roll] @property {number} [R_roll] palm turn, deg: 0 = palm down, 90 = thumb up,
+ *   180 = palm up. Unset: the thumb and pinky sit along the hand, as before palms could turn
  */
 
 const DEG = Math.PI / 180;
@@ -251,6 +253,16 @@ function skeleton(p) {
     j[17 + o] = add(wrist, hand, HAND * 0.8);
     j[19 + o] = add(wrist, hand, HAND);
     j[21 + o] = add(wrist, hand, HAND * 0.6);
+    const roll = p[`${side}_roll`];
+    if (roll != null) {
+      // Palm down the thumb points inwards; it turns over the top to point outwards, palm up.
+      const inward = unit(cross(hand, inTorso([0, s, 0])));
+      const over = cross(hand, inward);
+      const [c, sn] = [Math.cos(roll * DEG), -s * Math.sin(roll * DEG)];
+      const thumb = /** @type {P3} */ ([0, 1, 2].map((i) => inward[i] * c + over[i] * sn));
+      j[17 + o] = add(add(wrist, hand, HAND * 0.8), thumb, -0.03);
+      j[21 + o] = add(add(wrist, hand, HAND * 0.6), thumb, 0.035);
+    }
 
     const hip = /** @type {P3} */ ([HIP_HALF * s, 0, 0]);
     const knee = add(hip, legDir(p[`${side}_thigh`]), THIGH);
@@ -293,6 +305,10 @@ const reachBoth = (to, pole, hand = [170, 0]) => ({
   R_hand: hand,
 });
 const HANGING = arms([8, 20], [8, 20]);
+/** Arms folded across the chest. */
+const CROSSED = reachBoth([-0.1, -0.25, 0.12], [0.3, -1, 0.6], [90, 180]);
+/** Elbows bent at the sides, forearms pointing forward. */
+const ELBOWS_IN = arms([5, 0], [90, 90]);
 
 /** @type {Record<string, Move>} */
 const MOVES = {
@@ -306,6 +322,7 @@ const MOVES = {
   chin_to_chest: { target: { nod: 45 } },
   shoulder_shrug: { target: { shrug: 0.07 } },
   chin_tuck: { rest: { headFwd: 0.05 }, target: { headFwd: -0.01 } },
+  levator_stretch: { reps: 2, target: { yaw: 45, nod: 35 } },
   // Rounded shoulders
   cross_swing: { rest: arms([90, -10], [90, -10]), target: arms([90, 135], [90, 140]) },
   wy_raise: { rest: arms([50, -5], [160, 0]), target: arms([150, -5], [155, 0]) },
@@ -318,6 +335,7 @@ const MOVES = {
     rest: { ...arms([12, -90], [12, -120]), back: 0.02 },
     target: { ...arms([40, -90], [40, -110]), back: 0.04 },
   },
+  shoulder_blade_squeeze: { rest: ELBOWS_IN, target: { ...arms([22, -90], [90, 90]), back: 0.03 } },
   // Upper back
   seated_row: { rest: arms([85, 90], [85, 90]), target: arms([30, -80], [90, 90]) },
   t_raise: { rest: arms([12, 0], [12, 0]), target: arms([92, 0], [92, 0]) },
@@ -327,6 +345,7 @@ const MOVES = {
     rest: { lean: 45, ...leftArm([45, 90], [45, 90]), R_up: [80, 90], R_fore: [80, 90], R_hand: [80, 90] },
     target: { lean: 45, ...leftArm([10, -90], [80, 90]), R_up: [80, 90], R_fore: [80, 90], R_hand: [80, 90] },
   },
+  trunk_rotation: { reps: 2, rest: CROSSED, target: { twist: 40, ...CROSSED } },
   // Shoulder & rotator cuff
   scaption: { rest: arms([12, 30], [12, 30]), target: arms([92, 30], [92, 30]) },
   front_raise: { rest: HANGING, target: { ...HANGING, ...leftArm([92, 90], [92, 90]) } },
@@ -335,7 +354,8 @@ const MOVES = {
   cross_body_stretch: { reps: 2, target: { ...leftArm([90, 165], [90, 170]), R_up: [30, 90], R_fore: [95, 150], R_hand: [95, 150] } },
   seated_jacks: { target: {}, custom: seatedJacks },
   // Lower back
-  seated_side_bend: { reps: 2, target: { bend: 22 } },
+  // The arm on the far side reaches overhead as the body leans.
+  seated_side_bend: { reps: 2, target: { bend: 22, R_up: [170, 0], R_fore: [172, 0], R_hand: [172, 0] } },
   knee_to_chest: { reps: 2, target: { L_thigh: 135, L_shin: 10, L_foot: 105, ...arms([40, 90], [80, 100]) } },
   hip_hinge: {
     rest: reachBoth([0.17, -0.45, 0], [1, 0, -0.6], [0, 0]),
@@ -346,12 +366,7 @@ const MOVES = {
     rest: reachBoth([0.12, -0.42, -0.12], [1, 0.2, -1], [0, -90]),
     target: { lean: -20, ...reachBoth([0.12, -0.42, -0.12], [1, 0.2, -1], [0, -90]) },
   },
-  // Arms folded across the chest; they turn with it.
-  trunk_rotation: {
-    reps: 2,
-    rest: reachBoth([-0.1, -0.17, 0.13], [0.3, -1, 0.6], [90, 180]),
-    target: { twist: 40, ...reachBoth([-0.1, -0.17, 0.13], [0.3, -1, 0.6], [90, 180]) },
-  },
+  seated_hip_hinge: { rest: CROSSED, target: { lean: 42, ...CROSSED } },
   // Wrist & hand
   wrist_flex: { rest: leftArm([88, 90], [88, 90]), target: leftArm([88, 90], [88, 90], [30, 90]) },
   extensor_stretch: {
@@ -367,6 +382,7 @@ const MOVES = {
     target: reachBoth([0.015, -0.3, 0.2], [1, 0.6, 0], [180, 0]),
   },
   nerve_glide: { rest: arms([30, 0], [170, 0]), target: arms([85, 0], [80, 0], [70, 0]) },
+  palm_flip: { rest: { ...ELBOWS_IN, L_roll: 0, R_roll: 0 }, target: { ...ELBOWS_IN, L_roll: 170, R_roll: 170 } },
   // Knees
   seated_knee_ext: { reps: 2, via: { L_thigh: 105, L_foot: 100 }, target: { L_thigh: 105, L_shin: 80, L_foot: 155 } },
   // The shin swings back before the thigh dips, so the foot never sinks into the floor (which
@@ -393,6 +409,12 @@ const MOVES = {
     target: { L_to: [0.05, 0.19, 0.19], L_pole: [1, -1, 0], L_hand: [180, 90] },
   },
   eye_track_vertical: { rest: leftArm([45, 90], [45, 90]), target: leftArm([120, 90], [120, 90]) },
+  // Both thumbs up at arm's length in front; one goes out to the side and back, then the other.
+  eye_track_horizontal: {
+    reps: 2,
+    rest: reachBoth([0.03, -0.1, 0.43], [1, -1, -0.2], [150, 90]),
+    target: { ...reachBoth([0.03, -0.1, 0.43], [1, -1, -0.2], [150, 90]), L_to: [0.55, -0.1, 0.2] },
+  },
 };
 
 // ---- A push-up: a straight body pivoting on the toes, hands planted under the shoulders ----
@@ -452,12 +474,15 @@ function seatedJacks(w) {
 // ---- Timing ------------------------------------------------------------------------
 /** Minimum jerk, the way people move: starts and stops with no speed and no push. */
 const smooth = (x) => x * x * x * (x * (6 * x - 15) + 10);
-/** How far into the move (0 rest, 1 target) at `u` through one rep: hold, go, hold, come back, hold. */
-function envelope(u) {
+/**
+ * How far into the move (0 rest, 1 target) at `u` through one rep, in reps of REP_SECONDS: hold,
+ * go, hold (`h` longer for a stretch that is held), come back, hold.
+ */
+function envelope(u, h = 0) {
   if (u < 0.04) return 0;
   if (u < 0.44) return smooth((u - 0.04) / 0.4);
-  if (u < 0.56) return 1;
-  if (u < 0.96) return 1 - smooth((u - 0.56) / 0.4);
+  if (u < 0.56 + h) return 1;
+  if (u < 0.96 + h) return 1 - smooth((u - 0.56 - h) / 0.4);
   return 0;
 }
 
@@ -480,7 +505,7 @@ function curve(a, b, c, w) {
   return w < 0.5 ? a : c;
 }
 
-const MIRROR_KEYS = ["up", "fore", "hand", "to", "pole", "thigh", "shin", "foot"];
+const MIRROR_KEYS = ["up", "fore", "hand", "to", "pole", "thigh", "shin", "foot", "roll"];
 /** The same angles for the other side. @param {Params} p @returns {Params} */
 function mirror(p) {
   const out = { ...p, bend: -p.bend, twist: -p.twist, yaw: -p.yaw, tilt: -p.tilt };
@@ -501,6 +526,7 @@ function mirror(p) {
  * @property {Params[][]} sides keyframes from rest to target, per side
  * @property {("both" | "L" | "R")[]} plant per side
  * @property {((w: number) => P3[]) | undefined} custom
+ * @property {number} hold how much longer the target is held, in reps of REP_SECONDS
  */
 
 /**
@@ -541,15 +567,18 @@ function built(key) {
   const frames = sameDrive([rest, ...(move.via ? [{ ...rest, ...move.via }] : []), { ...rest, ...move.target }]);
   const reps = move.reps ?? 1;
   const plant = move.plant ?? "both";
+  // A held stretch stays at its target a little past the hold the coach asks for.
+  const hold = ex.hold ? (ex.hold + 0.6) / REP_SECONDS : 0;
   /** @type {Built} */
   const b = {
-    seconds: REP_SECONDS * reps,
+    seconds: REP_SECONDS * (1 + hold) * reps,
     reps,
     stance,
     camera: ex.camera,
     sides: reps === 2 ? [frames, frames.map(mirror)] : [frames],
     plant: reps === 2 ? [plant, plant === "L" ? "R" : plant === "R" ? "L" : "both"] : [plant],
     custom: move.custom,
+    hold,
   };
   BUILT.set(key, b);
   return b;
@@ -576,8 +605,8 @@ export function demoPose(key, t) {
   const b = built(key);
   if (!b) return null;
   const loop = ((t % b.seconds) + b.seconds) % b.seconds;
-  const rep = Math.min(b.reps - 1, Math.floor(loop / REP_SECONDS));
-  const w = envelope(loop / REP_SECONDS - rep);
+  const rep = Math.min(b.reps - 1, Math.floor(loop / (REP_SECONDS * (1 + b.hold))));
+  const w = envelope(loop / REP_SECONDS - rep * (1 + b.hold), b.hold);
   /** @type {P3[]} */
   let j;
   if (b.custom) {

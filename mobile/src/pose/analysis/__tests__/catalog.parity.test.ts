@@ -1,4 +1,4 @@
-/** Static data parity with the server: catalog, exercise definitions, issue texts, skeleton. */
+/** Static data against the recorded fixture: catalog, exercise definitions, issue texts, skeleton. */
 
 import {
   AREAS,
@@ -12,7 +12,7 @@ import {
   exerciseCatalog,
 } from '../../../../../extension/lib/pose/index.js';
 import { demoLandmarks, demoMotion } from '../../../../../extension/lib/demo-model.js';
-import { ADDED_AFTER_PYTHON, diff, loadFixture } from './helpers';
+import { diff, loadFixture } from './helpers';
 
 interface CatalogFixture {
   catalog: unknown[];
@@ -26,22 +26,15 @@ interface CatalogFixture {
 }
 
 const fx = loadFixture<CatalogFixture>('catalog.json');
-const fromPython = <T extends { key: string }>(list: readonly T[]): T[] => list.filter((e) => !ADDED_AFTER_PYTHON.includes(e.key));
 
-it('the fixtures lack only the exercises added after the Python server', () => {
-  const missing = Object.keys(CATALOG).filter((k) => !fx.catalog_keys.includes(k));
-  expect(missing.sort()).toEqual([...ADDED_AFTER_PYTHON].sort());
-});
-
-it("exerciseCatalog() equals app.py's exercise_catalog(), in order", () => {
-  const catalog = fromPython(exerciseCatalog());
-  expect(diff(catalog, fx.catalog, 0)).toEqual([]);
-  // Same key order inside each entry, as the server serialised it.
-  expect(catalog.map((e) => Object.keys(e))).toEqual(fx.catalog.map((e) => Object.keys(e as object)));
+it('exerciseCatalog() equals the recorded catalog, in order', () => {
+  expect(diff(exerciseCatalog(), fx.catalog, 0)).toEqual([]);
+  // Same key order inside each entry, as recorded.
+  expect(exerciseCatalog().map((e) => Object.keys(e))).toEqual(fx.catalog.map((e) => Object.keys(e as object)));
 });
 
 it('CATALOG, DEFAULT_EXERCISE, AREAS, ISSUE_TEXT, CONNECTIONS and JOINTS match', () => {
-  expect(Object.keys(CATALOG).filter((k) => !ADDED_AFTER_PYTHON.includes(k))).toEqual(fx.catalog_keys);
+  expect(Object.keys(CATALOG)).toEqual(fx.catalog_keys);
   expect(DEFAULT_EXERCISE).toBe(fx.default_exercise);
   expect([...AREAS]).toEqual(fx.areas);
   expect(ISSUE_TEXT).toEqual(fx.issue_text);
@@ -51,7 +44,7 @@ it('CATALOG, DEFAULT_EXERCISE, AREAS, ISSUE_TEXT, CONNECTIONS and JOINTS match',
 });
 
 it('every exercise definition matches, including the workout set', () => {
-  const ours = fromPython(Object.values(EXERCISES)).map((e) => ({
+  const ours = Object.values(EXERCISES).map((e) => ({
     key: e.key,
     label: e.label,
     metric: e.metric,
@@ -66,6 +59,9 @@ it('every exercise definition matches, including the workout set', () => {
     how_to: e.howTo,
     stance: e.stance,
     kind: e.constructor.name, // class names: Squat, PushUp, BicepCurl, ShoulderPress, Gentle
+    hold: e.hold,
+    reps: e.reps,
+    assist: e.assist && { range: e.assist.range, issue: e.assist.issue },
   }));
   expect(diff(ours, fx.exercises, 0)).toEqual([]);
 });

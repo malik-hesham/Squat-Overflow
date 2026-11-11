@@ -289,7 +289,7 @@ function applyFrame(msg) {
   els.hudReps.textContent = s.reps;
   els.hudAngle.textContent =
     msg.angle == null ? "–" : `${Math.round(msg.angle)}°`;
-  els.hudStage.textContent = STAGE_LABEL[msg.stage] ?? msg.stage;
+  els.hudStage.textContent = msg.hold != null ? `hold ${Math.ceil(msg.hold)}s` : (STAGE_LABEL[msg.stage] ?? msg.stage);
   els.hudStage.dataset.stage = msg.stage;
 
   els.sReps.textContent = s.reps;
@@ -1053,11 +1053,10 @@ function buildRoutine(n) {
   }
   keys = [...new Set(keys)];
   if (!keys.length) keys = state.exercises.slice(0, 3).map((e) => e.key);
-  return keys.map((key) => ({
-    key,
-    label: state.exercises.find((e) => e.key === key)?.label ?? key,
-    target: BREAK_REPS,
-  }));
+  return keys.map((key) => {
+    const e = state.exercises.find((x) => x.key === key);
+    return { key, label: e?.label ?? key, target: e?.reps ?? BREAK_REPS };
+  });
 }
 
 async function readLog() {

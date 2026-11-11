@@ -30,6 +30,9 @@ export const ISSUE_TEXT = /** @type {const} */ ({
   uneven_press: "Press both arms evenly",
   not_deep_enough: "Go through the full range of motion",
   too_fast: "Slow down and control the movement",
+  hold_longer: "Hold the stretch a little longer",
+  legs_still: "Slide your heels out with your arms",
+  arms_still: "Swing your arms as you march",
 });
 
 /** @typedef {keyof typeof ISSUE_TEXT} IssueCode */
@@ -41,6 +44,16 @@ export const ISSUE_TEXT = /** @type {const} */ ({
  * @property {number} value primary angle in degrees
  * @property {IssueCode[]} issues
  * @property {boolean} valid false = body isn't in the start position; don't count
+ * @property {number | null} [assist] the exercise's second movement this frame (null: out of view)
+ */
+
+/**
+ * A movement that goes with the counted one (the legs in a jack). It never stops a rep from
+ * counting, but a rep where it moved less than `range` degrees scores 20 lower and says `issue`.
+ * @typedef {object} Assist
+ * @property {(pose: Pose) => number | null} fn degrees, or null when the camera can't see it
+ * @property {number} range
+ * @property {IssueCode} issue
  */
 
 /**
@@ -58,6 +71,9 @@ export const ISSUE_TEXT = /** @type {const} */ ({
  * @property {string} [category] groups the picker in the UI. Default "Workout"
  * @property {string} [howTo] one-line instruction shown in the UI
  * @property {Stance} [stance] standing moves need the whole body in frame. Default "standing"
+ * @property {number} [hold] seconds the target must be held for the rep to count. Default 0
+ * @property {number | null} [reps] reps in a break; null = the break's default (routine.js BREAK_REPS)
+ * @property {Assist | null} [assist] a second movement, scored but never required
  */
 
 /** @typedef {(pose: Pose, side: Side) => number} AngleFn */
@@ -87,6 +103,9 @@ export class Exercise {
     this.category = init.category ?? "Workout";
     this.howTo = init.howTo ?? "";
     this.stance = init.stance ?? "standing";
+    this.hold = init.hold ?? 0;
+    this.reps = init.reps ?? null;
+    this.assist = init.assist ?? null;
   }
 
   /** @param {number} v */
@@ -97,6 +116,12 @@ export class Exercise {
   /** @param {number} v */
   atTarget(v) {
     return this.restIsHigh ? v <= this.target : v >= this.target;
+  }
+
+  /** Still holding: no more than 30% of the way back from the target towards rest. @param {number} v */
+  holding(v) {
+    const line = this.target + 0.3 * (this.rest - this.target);
+    return this.restIsHigh ? v <= line : v >= line;
   }
 
   /**
@@ -359,6 +384,76 @@ export function trunkTwist(pose, _s) {
   return Math.min(a, 180.0 - a);
 }
 
+/** Head turned and lowered together (nose towards an armpit): the smaller of the two. */
+export function headTurnDrop(pose, _s) {
+  return Math.min(headTurn(pose, _s), headDrop(pose, _s));
+}
+
+/**
+ * Elbow behind the shoulder, seen from the side: the upper arm's angle back from straight down
+ * (negative with the elbow in front). Forward is where the nose points past the ear.
+ */
+export function elbowBack(pose, s) {
+  const arm = sub(pose.pt(s, "elbow"), pose.pt(s, "shoulder"));
+  const face = sub(pose.pt(s, "nose"), pose.pt(s, "ear"));
+  const ahead = pose.is3d ? Math.hypot(face[0], face[2]) : Math.abs(face[0]);
+  const fx = ahead < 1e-9 ? 1.0 : face[0] / ahead;
+  const fz = pose.is3d && ahead >= 1e-9 ? face[2] / ahead : 0.0;
+  const back = -(arm[0] * fx + (pose.is3d ? arm[2] * fz : 0.0));
+  return degrees(Math.atan2(back, arm[1]));
+}
+
+// The pinky and thumb landmarks of MediaPipe's 33-point pose (not in JOINTS).
+const PINKY = { left: 17, right: 18 };
+const THUMB = { left: 21, right: 22 };
+
+/**
+ * How far a palm has turned up, 0 (palm down) to 180 (palm up), with the forearm pointing at a
+ * front camera: the pinky -> thumb line against the line towards the other shoulder, where the
+ * thumb points with the palm down. A mirrored picture reads the same.
+ */
+export function palmTurn(pose, s) {
+  const other = s === "left" ? "right" : "left";
+  const v = sub(pose.ptAt(THUMB[s]), pose.ptAt(PINKY[s])).slice(0, 2);
+  const inward = sub(pose.pt(other, "shoulder"), pose.pt(s, "shoulder")).slice(0, 2);
+  const denom = norm(v) * norm(inward);
+  if (denom < 1e-9) return 0.0;
+  return degrees(Math.acos(Math.min(1.0, Math.max(-1.0, (v[0] * inward[0] + v[1] * inward[1]) / denom))));
+}
+
+// Landmarks less visible than this are out of view (session.js MIN_VISIBILITY).
+const VISIBLE = 0.5;
+
+/**
+ * How far the feet are out past the hips, seen from the front: half the ankles' extra width over
+ * the hips', as an angle down from the hips. Null when the legs are out of view (under a desk).
+ * @param {Pose} pose
+ */
+export function legsOut(pose) {
+  /** @type {Side[]} */
+  const sides = ["left", "right"];
+  if (sides.some((s) => pose.vis(s, "hip") < VISIBLE || pose.vis(s, "ankle") < VISIBLE)) return null;
+  const [hipL, hipR, ankL, ankR] = [pose.pt("left", "hip"), pose.pt("right", "hip"), pose.pt("left", "ankle"), pose.pt("right", "ankle")];
+  const extra = (Math.abs(ankL[0] - ankR[0]) - Math.abs(hipL[0] - hipR[0])) / 2;
+  const drop = (ankL[1] + ankR[1] - hipL[1] - hipR[1]) / 2;
+  return degrees(Math.atan2(extra, Math.max(drop, 1e-9)));
+}
+
+/**
+ * The arm swing seen from the side: the upper arm's angle from straight down, on whichever arm in
+ * view swings further. Null when neither arm is in view.
+ * @param {Pose} pose
+ */
+export function armSwing(pose) {
+  let best = null;
+  for (const s of /** @type {Side[]} */ (["left", "right"])) {
+    if (pose.vis(s, "shoulder") < VISIBLE || pose.vis(s, "elbow") < VISIBLE) continue;
+    const a = angleFromVertical(pose.pt(s, "elbow"), pose.pt(s, "shoulder"));
+    best = best === null ? a : Math.max(best, a);
+  }
+  return best;
+}
+
 /** Average of left and right: both limbs move together. */
 export function bothSides(fn) {
   return (pose) => (fn(pose, "left") + fn(pose, "right")) / 2;
@@ -396,11 +491,14 @@ export class Gentle extends Exercise {
   }
 
   measure(pose, side) {
-    return measurement(Number(this.angleFn(pose, side)));
+    const m = measurement(Number(this.angleFn(pose, side)));
+    if (this.assist) m.assist = this.assist.fn(pose);
+    return m;
   }
 
-  repScore(rom, needed, duration, _issues) {
-    return officeRepScore(rom, needed, duration);
+  repScore(rom, needed, duration, issues) {
+    const score = officeRepScore(rom, needed, duration);
+    return this.assist && issues.includes(this.assist.issue) ? Math.max(0, score - 20) : score;
   }
 }
 
@@ -412,10 +510,10 @@ export class Gentle extends Exercise {
  * @param {AngleFn} fn
  * @param {number} rest
  * @param {number} target
- * @param {{ category: string, camera: Camera, joints: readonly Joint[], howTo: string, stance?: Stance }} opts
+ * @param {{ category: string, camera: Camera, joints: readonly Joint[], howTo: string, stance?: Stance, hold?: number, reps?: number, assist?: Assist }} opts
  * @returns {Gentle}
  */
-function gentle(key, label, metric, fn, rest, target, { category, camera, joints, howTo, stance = "seated" }) {
+function gentle(key, label, metric, fn, rest, target, { category, camera, joints, howTo, stance = "seated", hold, reps, assist }) {
   return new Gentle({
     key,
     label,
@@ -429,6 +527,9 @@ function gentle(key, label, metric, fn, rest, target, { category, camera, joints
     category,
     howTo,
     stance,
+    hold,
+    reps,
+    assist,
     angleFn: fn,
   });
 }
@@ -453,7 +554,7 @@ const HAND = ["elbow", "wrist", "index"];
 /** @type {readonly Joint[]} */
 const TORSO = ["shoulder", "hip"];
 
-// Five or six per area. Thresholds are wide on purpose: rest and target sit well
+// Six per area. Thresholds are wide on purpose: rest and target sit well
 // inside a comfortable range of motion, so a relaxed rep counts.
 export const OFFICE_EXERCISES = [
   // Neck tension: stiff neck and headaches from looking down or pushing the head towards the screen.
@@ -487,6 +588,12 @@ export const OFFICE_EXERCISES = [
     joints: ["ear", "shoulder"],
     howTo: "Sit tall, let your head glide forward, then pull your chin straight back into a double chin.",
   }),
+  gentle("levator_stretch", "Nose-to-armpit stretch", "Head turn & drop", headTurnDrop, 8, 18, {
+    category: NECK,
+    camera: "front",
+    joints: ["nose", "ear", "shoulder"],
+    howTo: "Turn your head towards one armpit and lower your nose towards it, back up, then the other side.",
+  }),
   // Rounded shoulders: open the chest and pull the shoulders back.
   gentle("cross_swing", "Arm open & cross", "Arm opening", bothSides(armAcross), 140, 75, {
     category: ROUNDED,
@@ -518,6 +625,14 @@ export const OFFICE_EXERCISES = [
     joints: ARMS,
     stance: "standing",
     howTo: "Clasp your hands behind your back, squeeze your shoulder blades, lift your hands away, then lower.",
+  }),
+  gentle("shoulder_blade_squeeze", "Shoulder blade squeeze", "Elbow back", elbowBack, 6, 15, {
+    category: ROUNDED,
+    camera: "side",
+    joints: ["ear", "shoulder", "elbow"],
+    hold: 3,
+    reps: 5,
+    howTo: "Sit tall, elbows bent at your sides, squeeze your shoulder blades together and hold, then relax.",
   }),
   // Upper back / rhomboids: a burning ache between the shoulder blades.
   gentle("seated_row", "Seated rows", "Elbow angle", elbowAngle, 150, 100, {
@@ -551,6 +666,12 @@ export const OFFICE_EXERCISES = [
     stance: "standing",
     howTo: "Lean on the desk with your far hand, pull the other elbow back to your ribs, then lower it.",
   }),
+  gentle("trunk_rotation", "Seated trunk rotation", "Trunk twist", trunkTwist, 10, 22, {
+    category: UPPER_BACK,
+    camera: "side",
+    joints: TORSO,
+    howTo: "Sit tall, arms crossed on your chest, turn your upper body to one side, back to centre, then the other side.",
+  }),
   // Shoulder / rotator cuff: pain or clicking when lifting or rotating the arm.
   gentle("scaption", "Scaption raise", "Arm height", bothSides(armElevation), 45, 75, {
     category: ROTATOR,
@@ -582,19 +703,23 @@ export const OFFICE_EXERCISES = [
     joints: ARMS,
     howTo: "Bring one arm across your chest, hug it in with the other hand, release, then switch arms.",
   }),
-  // Counts the arms; the legs go out with them but aren't measured.
+  // Counts the arms; legs that stay in (when the camera can see them) lower the score.
   gentle("seated_jacks", "Seated jacks", "Arm height", bothSides(armElevation), 50, 115, {
     category: ROTATOR,
     camera: "front",
     joints: ARMS,
+    reps: 12,
+    assist: { fn: legsOut, range: 6, issue: "legs_still" },
     howTo: "Hands on your thighs, reach your arms up and out and slide your heels out into an X, then come back.",
   }),
   // Lower back: stiffness at the base of the spine after long sitting.
-  gentle("seated_side_bend", "Seated side bend", "Shoulder tilt", shoulderTilt, 7, 14, {
+  gentle("seated_side_bend", "Side-bend stretch", "Shoulder tilt", shoulderTilt, 7, 14, {
     category: LOWER_BACK,
     camera: "front",
     joints: ["shoulder"],
-    howTo: "Sit tall, lean to one side, back to centre, then the other side.",
+    hold: 5,
+    reps: 4,
+    howTo: "Sit tall, reach one arm overhead and lean to the other side, hold, then switch sides.",
   }),
   gentle("knee_to_chest", "Seated knee hug", "Hip angle", eitherSide(hipAngle, min2), 80, 60, {
     category: LOWER_BACK,
@@ -623,11 +748,11 @@ export const OFFICE_EXERCISES = [
     stance: "standing",
     howTo: "Stand tall with your hands on your lower back, gently lean back, then return.",
   }),
-  gentle("trunk_rotation", "Seated trunk rotation", "Trunk twist", trunkTwist, 10, 22, {
+  gentle("seated_hip_hinge", "Seated hip hinge", "Torso lean", torsoLean, 15, 32, {
     category: LOWER_BACK,
     camera: "side",
     joints: TORSO,
-    howTo: "Sit tall, arms crossed on your chest, turn your upper body to one side, back to centre, then the other side.",
+    howTo: "Sit near the front of your chair, arms crossed, lean forward from your hips with a straight back, then sit tall.",
   }),
   // Wrist & hand: typing and mouse strain, tingling or numbness in the fingers.
   gentle("wrist_flex", "Wrist flex & extend", "Wrist angle", wristAngle, 160, 135, {
@@ -659,6 +784,12 @@ export const OFFICE_EXERCISES = [
     camera: "front",
     joints: ARMS,
     howTo: "Hands by your shoulders, palms up. Straighten both arms out to the sides, palms out, then bend back.",
+  }),
+  gentle("palm_flip", "Palm flips", "Palm turn", bothSides(palmTurn), 50, 130, {
+    category: WRIST_HAND,
+    camera: "front",
+    joints: HAND,
+    howTo: "Elbows bent at your sides, forearms forward, turn both palms up to the ceiling, then back down.",
   }),
   // Knees: stiff or aching knees from sitting with the legs bent for hours.
   gentle("seated_knee_ext", "Seated leg extension", "Knee angle", eitherSide(kneeAngle, max2), 110, 150, {
@@ -698,6 +829,8 @@ export const OFFICE_EXERCISES = [
     category: KNEES,
     camera: "side",
     joints: ["shoulder", "hip", "knee"],
+    reps: 20,
+    assist: { fn: armSwing, range: 12, issue: "arms_still" },
     howTo: "Sit near the front of your chair, lift one knee as high as is comfortable, lower it, then the other, swinging your arms.",
   }),
   // Eyes: the camera can't see where you look, so each move counts the hand
@@ -731,6 +864,12 @@ export const OFFICE_EXERCISES = [
     camera: "side",
     joints: ARMS,
     howTo: "Head still, follow your thumb with your eyes as you raise a straight arm up high, then lower it.",
+  }),
+  gentle("eye_track_horizontal", "Side-to-side tracking", "Arm opening", eitherSide(armAcross, max2), 75, 115, {
+    category: EYES,
+    camera: "front",
+    joints: ARMS,
+    howTo: "Head still, thumbs up at arm's length in front of you. Follow one thumb with your eyes out to the side and back, then the other.",
   }),
 ];
 

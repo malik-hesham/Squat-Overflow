@@ -50,6 +50,7 @@ type Move = {
   stance: string;
   how_to: string;
   target: number;
+  hold?: number;
 };
 type Progress = { reps: number; scores: number[]; base: number };
 type CatalogItem = Move & { category: string };
@@ -80,6 +81,7 @@ export default function BreakScreen() {
     positionTimer: 0 as unknown as ReturnType<typeof setTimeout>,
     repMarks: [] as number[],
     repMemes: 0,
+    holding: false, // a held stretch is counting down
   }).current;
   const sounds = React.useRef<Sounds | null>(null);
   const prefs = React.useRef({ voice: settings.voice, memes: settings.memes });
@@ -249,6 +251,15 @@ export default function BreakScreen() {
       st.repMemes++;
       sounds.current?.meme('reps');
     }
+    // A held stretch counts down on the cue while it is at its target.
+    if (msg.hold != null) {
+      if (!st.holding) speak(t(lang, 'sayHold'));
+      st.holding = true;
+      setCue({ text: t(lang, 'holdFor', { n: Math.ceil(msg.hold) }), good: true });
+    } else if (st.holding) {
+      st.holding = false;
+      if (!msg.rep_event) setCue(null);
+    }
     if (msg.rep_event) {
       const { score, partial } = msg.rep_event;
       p.scores.push(score);
@@ -259,7 +270,8 @@ export default function BreakScreen() {
       const text = issue ?? (score >= 85 ? t(lang, 'greatForm') : '');
       setCue(text ? { text, good: !issue } : null);
       if (!partial) void Haptics.impactAsync(issue ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium);
-      speak(partial ? t(lang, 'goDeeper') : (issue ?? String(p.reps)));
+      // Let go of a hold too soon: say so, not "go deeper".
+      speak(partial && code !== 'hold_longer' ? t(lang, 'goDeeper') : (issue ?? String(p.reps)));
     }
     if (was < m.target && p.reps >= m.target) {
       const next = nextOpenMove(st.moves, st.progress, st.i);

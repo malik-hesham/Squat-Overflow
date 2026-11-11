@@ -116,6 +116,17 @@ export class Pose {
   }
 
   /**
+   * Any landmark by its MediaPipe index (the thumb, the pinky...), 2D or 3D like `pt`.
+   * @param {number} index
+   * @returns {number[]}
+   */
+  ptAt(index) {
+    if (this.useWorld && this.world != null) return this.world[index].slice(0, 3).map(Number);
+    const lm = this.landmarks[index];
+    return [lm[0] * this.width, lm[1] * this.height];
+  }
+
+  /**
    * Always the image-space point in pixels.
    * @param {Side} side
    * @param {Joint} joint

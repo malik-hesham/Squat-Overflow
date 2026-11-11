@@ -1,21 +1,22 @@
 /**
  * Golden-fixture parity: replay every recorded scenario through the TS Session
- * and expect Python's frame results (floats within 1e-6, everything else exact).
+ * and expect the recorded frame results (floats within 1e-6, everything else exact).
  *
- * Fixtures come from mobile/scripts/gen_pose_fixtures.py (run with the server venv).
+ * Fixtures come from mobile/scripts/gen-pose-fixtures.mjs (node, from the repo root). For every
+ * exercise the Python pose server had, they are still exactly what that server produced.
  */
 
 import { CATALOG, EXERCISES } from '../../../../../extension/lib/pose/exercises.js';
-import { ADDED_AFTER_PYTHON, type SessionFixture, fixtureNames, loadFixture, replay } from './helpers';
+import { type SessionFixture, fixtureNames, loadFixture, replay } from './helpers';
 
 const files = fixtureNames('session_');
 const fixtures = files.map((f) => loadFixture<SessionFixture>(f));
 
 describe('session fixtures', () => {
-  it('cover every exercise in the catalog (and the workout set), except those added after the Python server', () => {
+  it('cover every exercise in the catalog (and the workout set)', () => {
     const covered = new Set(fixtures.map((f) => f.exercise));
-    const keys = [...new Set([...Object.keys(CATALOG), ...Object.keys(EXERCISES)])];
-    expect(keys.filter((k) => !covered.has(k)).sort()).toEqual([...ADDED_AFTER_PYTHON].sort());
+    for (const key of Object.keys(CATALOG)) expect(covered).toContain(key);
+    for (const key of Object.keys(EXERCISES)) expect(covered).toContain(key);
   });
 });
 

@@ -11,6 +11,12 @@
  * attributed to the rep only if it was seen in at least `minIssueFrames`
  * frames, which filters single-frame landmark glitches.
  *
+ * A stretch with a `hold` only reaches its target once it has stayed there
+ * (or within 30% of the way back) for `hold` seconds; back at rest sooner, the
+ * rep is partial with "hold_longer". An exercise's `assist` (a second movement,
+ * like the legs in a jack) is tracked over the rep: too little of it adds its
+ * issue, which lowers the score but never stops the rep from counting.
+ *
  * Output objects keep the server's snake_case keys, so a frame result here is
  * the same object the Python server sent over the WebSocket (minus the
  * transport fields `type`, `landmarks`, `mask`, `latency_ms`).
@@ -82,6 +88,7 @@ export const SIDE_SWITCH_MARGIN = 0.15;
  * @property {Feedback[]} feedback
  * @property {RepEvent | null} rep_event
  * @property {CalibrationStatus} [calibration] present only while calibrating, and on the frame calibration ends
+ * @property {number} [hold] seconds left to hold, present only while a held stretch is at its target
  * @property {Summary} summary
  * @property {ThresholdsInfo} thresholds
  */
@@ -93,6 +100,10 @@ export const SIDE_SWITCH_MARGIN = 0.15;
  * @property {number} extreme
  * @property {boolean} reachedTarget
  * @property {Map<IssueCode, number>} issueFrames per-issue frame counts, in first-seen order (like collections.Counter)
+ * @property {number | null} [holdFrom] when the current hold at the target began
+ * @property {boolean} [touched] reached the target zone, held long enough or not
+ * @property {number} [assistLo] lowest assist value seen this rep
+ * @property {number} [assistHi] highest assist value seen this rep
  */
 
 export class RepCounter {
@@ -136,13 +147,25 @@ export class RepCounter {
   }
 
   /**
+   * Seconds left to hold the target at `t`, or null when no hold is under way.
+   * @param {number} t
+   * @returns {number | null}
+   */
+  holdLeft(t) {
+    const cyc = this.cycle;
+    if (!this.ex.hold || !cyc || cyc.reachedTarget || cyc.holdFrom == null) return null;
+    return Math.max(0, this.ex.hold - (t - cyc.holdFrom));
+  }
+
+  /**
    * Feed one frame. Returns a Rep when a full or partial rep just finished.
    * @param {number} value
    * @param {readonly IssueCode[]} issues
    * @param {number} t
+   * @param {number | null} [assist] the exercise's second movement this frame, if it has one in view
    * @returns {Rep | null}
    */
-  update(value, issues, t) {
+  update(value, issues, t, assist = null) {
     const ex = this.ex;
     if (this.stage === "waiting") {
       if (ex.atRest(value)) {
@@ -163,10 +186,19 @@ export class RepCounter {
     const cyc = this.cycle;
     cyc.extreme = this.deeper(cyc.extreme, value);
     for (const issue of new Set(issues)) cyc.issueFrames.set(issue, (cyc.issueFrames.get(issue) ?? 0) + 1);
-    if (ex.atTarget(value)) {
-      cyc.reachedTarget = true;
-      this.stage = "work";
+    if (ex.assist && assist != null && Number.isFinite(assist)) {
+      cyc.assistLo = Math.min(cyc.assistLo ?? assist, assist);
+      cyc.assistHi = Math.max(cyc.assistHi ?? assist, assist);
     }
+    if (ex.atTarget(value)) {
+      this.stage = "work";
+      cyc.touched = true;
+      if (!ex.hold) cyc.reachedTarget = true;
+      else cyc.holdFrom ??= t;
+    } else if (cyc.holdFrom != null && !ex.holding(value)) {
+      cyc.holdFrom = null; // let go before the time was up: start the hold again
+    }
+    if (ex.hold && !cyc.reachedTarget && cyc.holdFrom != null && t - cyc.holdFrom >= ex.hold) cyc.reachedTarget = true;
     if (!ex.atRest(value)) return null;
     // Back in the rest zone: the cycle is over.
     this.stage = "rest";
@@ -183,7 +215,11 @@ export class RepCounter {
       .sort(compareCodePoints);
     const duration = t - cyc.startT;
     if (duration < ex.minRepSeconds) repIssues.push("too_fast");
-    if (!cyc.reachedTarget) repIssues.unshift("not_deep_enough");
+    if (cyc.reachedTarget && ex.assist && cyc.assistHi !== undefined && cyc.assistHi - cyc.assistLo < ex.assist.range) {
+      repIssues.push(ex.assist.issue);
+      repIssues.sort(compareCodePoints);
+    }
+    if (!cyc.reachedTarget) repIssues.unshift(ex.hold && cyc.touched ? "hold_longer" : "not_deep_enough");
     const rep = {
       index: cyc.reachedTarget ? this.reps.length + 1 : 0,
       duration_s: pyRound(duration, 2),
@@ -388,12 +424,14 @@ export class Session {
     if (this.calibrator !== null) {
       if (m.valid) this.calibrate(value, out);
     } else if (m.valid) {
-      const rep = this.counter.update(value, m.issues, t);
+      const rep = this.counter.update(value, m.issues, t, m.assist ?? null);
       if (rep !== null) {
         out.rep_event = { ...rep, issues: [...rep.issues], issue_text: rep.issues.map((c) => ISSUE_TEXT[c]) };
       }
     }
     out.stage = this.counter.stage;
+    const left = this.calibrator === null ? this.counter.holdLeft(t) : null;
+    if (left !== null) out.hold = pyRound(left, 1);
     return this.finish(out);
   }
 

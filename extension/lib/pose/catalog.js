@@ -10,6 +10,8 @@ import { CATALOG } from "./exercises.js";
  * @property {string} category
  * @property {string} how_to
  * @property {import("./exercises.js").Stance} stance
+ * @property {number | null} reps reps in a break; null = the break's default
+ * @property {number} hold seconds each rep holds its target (0 = no hold)
  */
 
 /** @returns {CatalogEntry[]} */
@@ -22,5 +24,7 @@ export function exerciseCatalog() {
     category: e.category,
     how_to: e.howTo,
     stance: e.stance,
+    reps: e.reps,
+    hold: e.hold,
   }));
 }
