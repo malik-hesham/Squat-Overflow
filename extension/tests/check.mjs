@@ -19,8 +19,9 @@ import { CALENDAR_SCOPE, buildAuthUrl, parseAuthResponse, busyNow, nextMeeting, 
 import { PERSONAL_DOMAINS, companyFromEmail, buildSignInUrl, parseSignInResponse, newNonce, sha256Hex, toSession } from "../lib/auth.js";
 import { MEMES, memeFile, takeTurn, repMarks, createMemePlayer } from "../lib/memes.js";
 import { Session, CATALOG as POSE_CATALOG, DEFAULT_EXERCISE, OFFICE_EXERCISES, EXERCISES, exerciseCatalog, JOINTS } from "../lib/pose/index.js";
-import { DEMO_COLORS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
+import { DEMO_COLORS, DEMO_PARTS, demoLandmarks, demoMotion, demoPose, demoScene, demoTurn, demoView, reach } from "../lib/demo-model.js";
 import { paintDemo } from "../lib/demo-player.js";
+import { DEMO_LOOK } from "../lib/demo-look.js";
 import { readFileSync, readdirSync } from "node:fs";
 
 /** @typedef {import("../lib/vendor/three.js").Mesh} Mesh  what the avatar scene traversals below look at */
@@ -1198,6 +1199,123 @@ check("3D demo: the joints the coach watches stand out, and a seated move has a 
     assert.equal(parts(key).has("chair"), seated, `${key}: ${seated ? "no chair to sit on" : "a chair it doesn't use"}`);
     assert.ok(parts(key).has("shadow") && parts(key).has("head"), key);
   }
+});
+
+// ---- The demo's look (lib/demo-look.js) ------------------------------------------
+/** Hue of a "#rrggbb" colour in degrees: shading towards black or white keeps it. @param {string} hex */
+const hueOf = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return h * 60;
+};
+/** @param {string} a @param {string} b */
+const sameHue = (a, b) => {
+  const d = Math.abs(hueOf(a) - hueOf(b));
+  return Math.min(d, 360 - d) < 4;
+};
+/** A look with one hue per colour, so a test can tell what each part wears through the shading. */
+const TEST_LOOK = {
+  colors: { skin: "#d08040", hair: "#c040c0", top: "#e04040", bottoms: "#4040e0", shoes: "#40c040", eyes: "#40c0c0" },
+  wear: { head: "skin", neck: "skin", torso: "top", shoulders: "top", hips: "bottoms", upperArm: "top", forearm: "skin", hand: "skin", thigh: "bottoms", shin: "skin", foot: "shoes" },
+  size: { head: 0.105, neck: 0.045, torso: 0.12, shoulders: 0.06, hips: 0.085, upperArm: 0.045, forearm: 0.038, hand: 0.028, thigh: 0.065, shin: 0.05, foot: 0.034 },
+};
+const LOOK_VIEW = { width: 320, height: 240, yaw: 30, pitch: 12 };
+
+check("3D demo look: each body part is painted in the colour it wears", () => {
+  for (const key of ["t_raise", "squat", "seated_knee_ext"]) {
+    const shapes = demoScene(key, 0.7, LOOK_VIEW, TEST_LOOK);
+    for (const [part, colour] of Object.entries(TEST_LOOK.wear)) {
+      const mine = shapes.filter((sh) => sh.part === part);
+      assert.ok(mine.length, `${key}: no ${part} drawn`);
+      for (const sh of mine) assert.ok(sameHue(sh.fill, TEST_LOOK.colors[colour]), `${key}: ${part} is ${sh.fill}, not ${colour}`);
+    }
+    for (const part of ["hair", "eyes"]) {
+      const mine = shapes.filter((sh) => sh.part === part);
+      assert.ok(mine.length, `${key}: no ${part} drawn`);
+      for (const sh of mine) assert.ok(sameHue(sh.fill, TEST_LOOK.colors[part]), `${key}: ${part} is ${sh.fill}`);
+    }
+  }
+});
+
+check("3D demo look: changing what a part wears changes that part only (long sleeves, trousers)", () => {
+  const dressed = { ...TEST_LOOK, wear: { ...TEST_LOOK.wear, forearm: "top", shin: "bottoms" } };
+  const before = demoScene("t_raise", 0.7, LOOK_VIEW, TEST_LOOK);
+  const after = demoScene("t_raise", 0.7, LOOK_VIEW, dressed);
+  assert.ok(["forearm", "shin"].every((part) => after.some((s) => s.part === part)), "no forearms or shins drawn");
+  for (const sh of after.filter((s) => s.part === "forearm")) assert.ok(sameHue(sh.fill, TEST_LOOK.colors.top), `long sleeves: forearm ${sh.fill}`);
+  for (const sh of after.filter((s) => s.part === "shin")) assert.ok(sameHue(sh.fill, TEST_LOOK.colors.bottoms), `trousers: shin ${sh.fill}`);
+  const others = (shapes) => shapes.filter((s) => !["forearm", "shin", "highlight", "outline"].includes(s.part));
+  assert.deepEqual(others(after), others(before));
+});
+
+check("3D demo look: a part's size sets how thick it is drawn, not where the joints are", () => {
+  const big = { ...TEST_LOOK, size: { ...TEST_LOOK.size, torso: TEST_LOOK.size.torso * 2 } };
+  /** @param {import("../lib/demo-look.js").DemoLook} look */
+  const torso = (look) => {
+    const sh = demoScene("squat", 1, LOOK_VIEW, look).find((s) => s.part === "torso");
+    assert.ok(sh?.kind === "capsule", "no torso drawn");
+    return sh;
+  };
+  const [a, b] = [torso(TEST_LOOK), torso(big)];
+  assert.ok(Math.abs(b.r / a.r - 2) < 1e-9, `torso ${a.r} -> ${b.r}`);
+  assert.deepEqual([b.x1, b.y1, b.x2, b.y2], [a.x1, a.y1, a.x2, a.y2]);
+});
+
+check("3D demo look: the hair is behind the head seen from the front, and covers it from behind", () => {
+  const order = (yaw) => {
+    const parts = demoScene("chin_tuck", 0, { ...LOOK_VIEW, yaw }, TEST_LOOK).map((sh) => sh.part);
+    return { hair: parts.indexOf("hair"), head: parts.indexOf("head"), eyes: parts.indexOf("eyes") };
+  };
+  const front = order(0);
+  assert.ok(front.hair < front.head && front.head < front.eyes, `from the front: ${JSON.stringify(front)}`);
+  const back = order(180);
+  assert.ok(back.hair > back.head, `from behind: ${JSON.stringify(back)}`);
+});
+
+check("3D demo look: only the joints the coach watches are marked; the rest is the person's skin and clothes", () => {
+  for (const key of DEMO_KEYS) {
+    const marks = demoScene(key, 0, LOOK_VIEW, TEST_LOOK).filter((sh) => sh.part === "joint");
+    assert.ok(marks.length, `${key}: no watched joint marked`);
+    for (const sh of marks) assert.equal(sh.fill, DEMO_COLORS.accent, `${key}: an unwatched joint is drawn`);
+  }
+});
+
+check("3D demo look: each body part has a darker edge just behind it, so a white top reads on a white page", () => {
+  /** @param {string} hex */
+  const luma = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return 0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
+  };
+  for (const key of ["squat", "t_raise"]) {
+    const shapes = demoScene(key, 0.7, LOOK_VIEW, TEST_LOOK);
+    const parts = shapes.filter((sh) => sh.kind === "capsule" && Object.hasOwn(TEST_LOOK.wear, sh.part));
+    assert.ok(parts.length >= 18, `${key}: ${parts.length} limbs`);
+    for (const sh of parts) {
+      if (sh.kind !== "capsule") continue;
+      const edge = shapes.find((e) => e.part === "outline" && e.kind === "capsule" && e.x1 === sh.x1 && e.y1 === sh.y1 && e.x2 === sh.x2 && e.y2 === sh.y2);
+      assert.ok(edge?.kind === "capsule", `${key}: ${sh.part} has no edge`);
+      assert.ok(edge.r > sh.r && edge.r < sh.r * 1.6, `${key}: ${sh.part} edge ${edge.r} around ${sh.r}`);
+      assert.ok(luma(edge.fill) < luma(sh.fill) * 0.8 && sameHue(edge.fill, sh.fill), `${key}: ${sh.part} edge ${edge.fill} on ${sh.fill}`);
+      assert.ok(shapes.indexOf(edge) < shapes.indexOf(sh) && edge.depth - sh.depth < 1e-3, `${key}: ${sh.part}'s edge isn't just behind it`);
+    }
+  }
+});
+
+check("3D demo look: the look file is complete: #rrggbb colours, every part dressed and sized, no unknown parts", () => {
+  const body = [...DEMO_PARTS].sort();
+  assert.deepEqual(Object.keys(DEMO_LOOK.wear).sort(), body, "wear should list exactly the figure's parts");
+  assert.deepEqual(Object.keys(DEMO_LOOK.size).sort(), body, "size should list exactly the figure's parts");
+  for (const name of ["hair", "eyes"]) assert.ok(Object.hasOwn(DEMO_LOOK.colors, name), `colors.${name} is missing`);
+  for (const [name, colour] of Object.entries(DEMO_LOOK.colors)) assert.match(colour, /^#[0-9a-f]{6}$/i, `colors.${name}`);
+  for (const [part, colour] of Object.entries(DEMO_LOOK.wear)) assert.ok(Object.hasOwn(DEMO_LOOK.colors, colour), `wear.${part}: no colour named "${colour}"`);
+  for (const [part, r] of Object.entries(DEMO_LOOK.size)) assert.ok(r > 0 && r <= 0.3, `size.${part}: ${r} m`);
+  // ...and those are the parts the scene draws.
+  const drawn = new Set();
+  for (const key of DEMO_KEYS) for (const sh of demoScene(key, 0, LOOK_VIEW)) drawn.add(sh.part);
+  assert.deepEqual([...drawn].filter((p) => !["highlight", "outline", "chair", "shadow", "joint", "hair", "eyes"].includes(p)).sort(), body);
 });
 
 check("3D demo: the canvas painter paints each shape once, in the scene's order", () => {

@@ -11,6 +11,10 @@ VS Code user? See [vscode-extension/README.md](vscode-extension/README.md).
 
 That's all a break needs. Pose detection, rep counting and form scoring run in the extension (MediaPipe's pose model, bundled in `extension/lib/vendor/mediapipe`, and the analysis in `extension/lib/pose`). Camera frames never leave your computer, and breaks work offline and signed out. Everything is saved on your computer.
 
+### Restyle the exercise demo
+
+The figure that shows each exercise is drawn on the device from `extension/lib/demo-model.js`. How the person looks is one small file, `extension/lib/demo-look.js`: the colours (skin, hair, top, bottoms, shoes), what each body part wears (long sleeves, trousers) and how thick each part is. Edit a value and reload; the extension, the desktop app and the phone all draw from it. `node extension/tests/check.mjs` checks the file.
+
 ### Sign-in, leaderboard and sync (optional)
 
 These come from the API server in `server/` (Node 24.9+, NestJS + Postgres, see [server/README.md](server/README.md)). `API_URL` in `extension/config.js` points at it, `http://127.0.0.1:8765` by default:

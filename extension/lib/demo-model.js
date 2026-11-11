@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
 // 3D exercise demos
 // ---------------------------------------------------------------------------
-// A jointed 3D mannequin shows each exercise in the break window and on the
+// A jointed 3D figure shows each exercise in the break window and on the
 // Practice page. It is made here, on the device, so a demo needs no network
-// and sends nothing anywhere.
+// and sends nothing anywhere. How the person looks (clothes, hair, skin,
+// thickness) is lib/demo-look.js.
 //
 // Each move is a rest pose and a target pose (joint angles), eased from one to
 // the other and back in a loop; a move done one side at a time does the other
@@ -15,6 +16,9 @@
 // returns (lib/demo-player.js on a canvas, mobile's DemoModel with SVG).
 import { EXERCISES } from "./pose/exercises.js";
 import { JOINTS } from "./pose/geometry.js";
+import { DEMO_LOOK } from "./demo-look.js";
+
+/** @typedef {import("./demo-look.js").DemoLook} DemoLook */
 
 /** A point in meters: x to the person's left, y up from the floor, z forward. @typedef {[number, number, number]} P3 */
 /** Raise from straight down (deg) and direction (deg: 0 out to the side, 90 forward, 180 across, -90 back). @typedef {[number, number]} Aim */
@@ -608,12 +612,9 @@ export function demoLandmarks(key, t, view) {
 }
 
 // ---- What to draw -----------------------------------------------------------------
-/** A soft wooden mannequin; the joints the coach measures in the accent colour. */
+/** The scene around the person (how the person looks is lib/demo-look.js): the joints the coach measures, the chair and the shadow. */
 export const DEMO_COLORS = {
-  body: "#d8b48c",
-  joint: "#b98b5f",
   accent: "#3ddc97",
-  face: "#6b4a2f",
   chair: "#7d8695",
   shadow: "rgba(0, 0, 0, 0.22)",
 };
@@ -645,28 +646,34 @@ export function demoView(key, t, { width, height, turn = 0, still = false }) {
  *   | { kind: "ellipse", x: number, y: number, rx: number, ry: number, fill: string, depth: number, part: string }} Shape
  */
 
-// Body parts as capsules between joints (radius in meters). -1 / -2: the middle of the hips / shoulders, -3: the head.
-/** @type {[number, number, number][]} */
+// Body parts as capsules between joints, by the name lib/demo-look.js dresses and sizes them by.
+// -1 / -2: the middle of the hips / shoulders, -3: the head.
+/** @type {[number, number, string][]} */
 const LIMBS = [
-  [-1, -2, 0.12],
-  [23, 24, 0.085],
-  [11, 12, 0.06],
-  [-2, -3, 0.045],
-  [11, 13, 0.045],
-  [13, 15, 0.038],
-  [15, 19, 0.028],
-  [12, 14, 0.045],
-  [14, 16, 0.038],
-  [16, 20, 0.028],
-  [23, 25, 0.065],
-  [25, 27, 0.05],
-  [29, 31, 0.034],
-  [24, 26, 0.065],
-  [26, 28, 0.05],
-  [30, 32, 0.034],
+  [-1, -2, "torso"],
+  [23, 24, "hips"],
+  [11, 12, "shoulders"],
+  [-2, -3, "neck"],
+  [11, 13, "upperArm"],
+  [13, 15, "forearm"],
+  [15, 19, "hand"],
+  [12, 14, "upperArm"],
+  [14, 16, "forearm"],
+  [16, 20, "hand"],
+  [23, 25, "thigh"],
+  [25, 27, "shin"],
+  [27, 29, "foot"],
+  [29, 31, "foot"],
+  [24, 26, "thigh"],
+  [26, 28, "shin"],
+  [28, 30, "foot"],
+  [30, 32, "foot"],
 ];
+/** The parts lib/demo-look.js has to dress and size: the limbs, and the head. */
+export const DEMO_PARTS = [...new Set([...LIMBS.map(([, , part]) => part), "head"])];
+// Marks on the joints the coach measures (radius in meters): a little wider than the limb there.
 /** @type {[number, number][]} */
-const BALLS = [
+const MARKS = [
   [11, 0.052],
   [12, 0.052],
   [13, 0.043],
@@ -686,7 +693,6 @@ const BALLS = [
   [31, 0.03],
   [32, 0.03],
 ];
-const HEAD_R = 0.105;
 
 /** @param {string} hex @param {number} k 0..1 darker, 1.. lighter towards white @returns {string} */
 function shade(hex, k) {
@@ -727,13 +733,15 @@ function chair(key) {
 }
 
 /**
- * Everything to paint for a move's demo at `t`, seen through `view`, far to near.
+ * Everything to paint for a move's demo at `t`, seen through `view`, far to near, the person dressed
+ * and sized by `look` (lib/demo-look.js).
  * @param {string} key
  * @param {number} t
  * @param {View} view
+ * @param {DemoLook} [look]
  * @returns {Shape[] | null}
  */
-export function demoScene(key, t, view) {
+export function demoScene(key, t, view, look = DEMO_LOOK) {
   const pose = demoPose(key, t);
   if (!pose) return null;
   const see = camera(key, view);
@@ -749,22 +757,27 @@ export function demoScene(key, t, view) {
   /** @type {Shape[]} */
   const shapes = [];
 
-  /** @param {P3} a @param {P3} b @param {number} r @param {string} color @param {string} part */
-  const capsule = (a, b, r, color, part) => {
+  // A darker edge just behind each part of the person: it reads on a light page as on a dark one,
+  // and a near limb stands out from what's behind it.
+  const EDGE = 0.012; // m
+  /** @param {P3} a @param {P3} b @param {number} r @param {string} color @param {string} part @param {boolean} [edge] */
+  const capsule = (a, b, r, color, part, edge = true) => {
     const [x1, y1, d1, s1] = see(a);
     const [x2, y2, d2, s2] = see(b);
     const depth = (d1 + d2) / 2;
     const rp = (r * (s1 + s2)) / 2;
+    if (edge) shapes.push({ kind: "capsule", x1, y1, x2, y2, r: rp + (EDGE * (s1 + s2)) / 2, fill: shade(color, 0.6), depth: depth + 1e-4, part: "outline" });
     shapes.push({ kind: "capsule", x1, y1, x2, y2, r: rp, fill: shade(color, light(depth)), depth, part });
     // A soft highlight on the side facing the light (top left).
     const o = rp * 0.32;
     shapes.push({ kind: "capsule", x1: x1 - o, y1: y1 - o, x2: x2 - o, y2: y2 - o, r: rp * 0.38, fill: shade(color, 1.28), depth: depth - 1e-4, part: "highlight" });
   };
-  /** @param {P3} p @param {number} r @param {string} color @param {string} part @param {boolean} [shine] */
-  const ball = (p, r, color, part, shine = true) => {
+  /** @param {P3} p @param {number} r @param {string} color @param {string} part @param {boolean} [shine] @param {boolean} [edge] */
+  const ball = (p, r, color, part, shine = true, edge = false) => {
     const [x, y, depth, s] = see(p);
-    // The face and the watched joints keep their exact colour.
-    const fill = part === "face" || color === DEMO_COLORS.accent ? color : shade(color, light(depth));
+    if (edge) shapes.push({ kind: "circle", x, y, r: (r + EDGE) * s, fill: shade(color, 0.6), depth: depth + 1e-4, part: "outline" });
+    // The eyes and the watched joints keep their exact colour.
+    const fill = part === "eyes" || part === "joint" ? color : shade(color, light(depth));
     shapes.push({ kind: "circle", x, y, r: r * s, fill, depth, part });
     if (shine) shapes.push({ kind: "circle", x: x - r * s * 0.3, y: y - r * s * 0.32, r: r * s * 0.42, fill: shade(color, 1.3), depth: depth - 1e-4, part: "highlight" });
   };
@@ -779,14 +792,22 @@ export function demoScene(key, t, view) {
   const tilt = Math.sin(((view.pitch ?? 0) * Math.PI) / 180);
   shapes.push({ kind: "ellipse", x: sx, y: sy, rx: spread * ss, ry: Math.max(2, spread * ss * tilt), fill: DEMO_COLORS.shadow, depth: 1e9, part: "shadow" });
 
-  for (const [a, b] of chair(key) ?? []) capsule(a, b, 0.022, DEMO_COLORS.chair, "chair");
-  for (const [a, b, r] of LIMBS) capsule(at(a), at(b), r, DEMO_COLORS.body, "body");
-  for (const [i, r] of BALLS) ball(pose[i], r, hot.has(i) ? DEMO_COLORS.accent : DEMO_COLORS.joint, "joint");
-  // The head, with a nose, eyes and ears so you can see where it faces.
-  ball(at(-3), HEAD_R, DEMO_COLORS.body, "head");
-  for (const i of [7, 8]) ball(pose[i], 0.026, hot.has(i) ? DEMO_COLORS.accent : DEMO_COLORS.joint, "joint", false);
-  ball(pose[0], 0.022, hot.has(0) ? DEMO_COLORS.accent : DEMO_COLORS.joint, "face", false);
-  for (const i of [2, 5]) ball(pose[i], 0.011, DEMO_COLORS.face, "face", false);
+  for (const [a, b] of chair(key) ?? []) capsule(a, b, 0.022, DEMO_COLORS.chair, "chair", false);
+  /** @param {string} part */
+  const worn = (part) => look.colors[look.wear[part]];
+  for (const [a, b, part] of LIMBS) capsule(at(a), at(b), look.size[part], worn(part), part);
+  for (const [i, r] of MARKS) if (hot.has(i)) ball(pose[i], r, DEMO_COLORS.accent, "joint");
+  // The head, with hair, a nose and eyes so you can see where it faces. The hair is a second head a
+  // little behind and above it: a hairline from the front, over the head from behind. The ears show
+  // only when the coach measures them (they'd sit on the hair from the side).
+  const head = at(-3);
+  const facing = unit(sub(pose[0], head));
+  const up = unit(sub(head, at(-2)));
+  ball(add(add(head, facing, -0.16 * look.size.head), up, 0.3 * look.size.head), look.size.head * 1.05, look.colors.hair, "hair", false, true);
+  ball(head, look.size.head, worn("head"), "head", true, true);
+  for (const i of [7, 8]) if (hot.has(i)) ball(pose[i], 0.026, DEMO_COLORS.accent, "joint", false);
+  ball(pose[0], 0.022, hot.has(0) ? DEMO_COLORS.accent : worn("head"), hot.has(0) ? "joint" : "head", false);
+  for (const i of [2, 5]) ball(pose[i], 0.011, look.colors.eyes, "eyes", false);
 
   // Fixes the order so equal depths always paint the same way.
   return shapes.map((sh, i) => ({ sh, i })).sort((a, b) => b.sh.depth - a.sh.depth || a.i - b.i).map(({ sh }) => sh);
