@@ -183,6 +183,18 @@
     invoke("open_external", { url: String(url) });
     return null;
   };
+  // A link to the web that a browser opens in a new tab (the credit under a demo video) opens in the
+  // user's browser, as window.open does: the app never loads a web page in its own windows.
+  addEventListener(
+    "click",
+    (ev) => {
+      const link = ev.target instanceof Element ? ev.target.closest("a[target=_blank][href]") : null;
+      if (!(link instanceof HTMLAnchorElement) || !isWeb(link.href)) return;
+      ev.preventDefault();
+      invoke("open_external", { url: link.href });
+    },
+    true,
+  );
 
   // The browser sizes the popup to its content; here the shell does, when the page says how tall it is.
   if (location.pathname === "/popup.html") {

@@ -62,6 +62,7 @@ const els = {
   demoView: /** @type {HTMLCanvasElement} */ ($("demoView")),
   demoVideo: /** @type {HTMLVideoElement} */ ($("demoVideo")),
   demoHint: $("demoHint"),
+  demoCredit: /** @type {HTMLAnchorElement} */ ($("demoCredit")),
   startBtn: /** @type {HTMLButtonElement} */ ($("startBtn")),
   resetBtn: /** @type {HTMLButtonElement} */ ($("resetBtn")),
   voice: /** @type {HTMLInputElement} */ ($("voice")),
@@ -790,8 +791,8 @@ function renderDemo(ex) {
   els.demoBtn.textContent = open ? "Hide demo" : "▶ Watch demo";
   els.demoBtn.setAttribute("aria-expanded", String(open));
   if (!open) return state.demoPlayer?.hide();
-  state.demoPlayer ??= globalThis.Demo3D.createPanel({ canvas: els.demoView, video: els.demoVideo, hint: els.demoHint });
-  state.demoPlayer.show(ex.key, { label: `3D demo: ${ex.label}`, clipLabel: `Demo video: ${ex.label}` });
+  state.demoPlayer ??= globalThis.Demo3D.createPanel({ canvas: els.demoView, video: els.demoVideo, hint: els.demoHint, credit: els.demoCredit });
+  state.demoPlayer.show(ex.key, { label: `3D demo: ${ex.label}`, clipLabel: `Demo video: ${ex.label}`, creditText: globalThis.Demo3D.credit(ex.key) });
 }
 
 async function start() {

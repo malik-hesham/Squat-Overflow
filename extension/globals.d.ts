@@ -13,5 +13,7 @@ declare global {
   var Demo3D: {
     has: (key: string) => boolean;
     createPanel: (els: Parameters<typeof import("./lib/demo-panel.js").createDemoPanel>[0]) => ReturnType<typeof import("./lib/demo-panel.js").createDemoPanel>;
+    /** The credit line for the move's demo video, "" for none. */
+    credit: (key: string) => string;
   };
 }

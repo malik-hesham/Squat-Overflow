@@ -17,7 +17,7 @@ The figure that shows each exercise is drawn on the device from `extension/lib/d
 
 ### Add an exercise demo video
 
-A move can show a short video of a person doing it instead of the figure. The API server serves it at `/demos/<move>.mp4`; the break window, the Practice page, the desktop app and the phone ask for it when the user opens the demo, and play it in place of the figure once it loads. Offline, with no video for the move, or in a build with no server, the figure stays.
+A move can show a short video of a person doing it instead of the figure. The API server serves it at `/demos/<move>.mp4`; the break window, the Practice page, the desktop app and the phone ask for it when the user opens the demo, and play it in place of the figure once it loads. Offline, with no video for the move, or in a build with no server, the figure stays. Only the moves listed in `DEMO_VIDEOS` (`extension/lib/demo-video.js`) ask for a video, and a video cut from someone else's footage shows its credit under it, linking to the original.
 
 `node extension/scripts/make-demo-video.mjs --list` is the shot list: for each move, whether the person sits or stands, which way they face the camera, one rep or one each side, and any hold, with a tick on the moves that already have a video.
 
@@ -27,9 +27,11 @@ Record one rep (or one rep each side) on a phone, held level, with the whole bod
 node extension/scripts/make-demo-video.mjs seated_march ~/Movies/march.mov --from 1.2 --to 5.4
 ```
 
-It writes `server/demos/seated_march.mp4`: 480×480, 24 fps, H.264, no sound, at most 8 s and 500 KB, and able to start playing before it has all loaded. Commit it and deploy the server ([docs/aws-free-plan.md](docs/aws-free-plan.md#updating)); the image serves every file in `server/demos/`. `--remove <move>` takes a video out. `node extension/tests/check.mjs` checks every file in that folder.
+It writes `server/demos/seated_march.mp4`: 480×480, 24 fps, H.264, no sound, at most 8 s and 500 KB, and able to start playing before it has all loaded. Then add the move to `DEMO_VIDEOS` in `extension/lib/demo-video.js`: `null` for footage of our own, or its credit (the original's title, author, link and license) for someone else's. Commit both and deploy the server ([docs/aws-free-plan.md](docs/aws-free-plan.md#updating)); the image serves every file in `server/demos/`. `--remove <move>` takes a video out (take its entry out too). `node extension/tests/check.mjs` checks every file in that folder, and that `DEMO_VIDEOS` and the folder list the same moves with complete credits.
 
 The server publishes these videos, so use footage you made, footage you have written permission to use, or a clip under an open license that allows it (below). Clips copied from another website can't go in without the owner's permission.
+
+The videos in `server/demos/` now are cut from YouTube videos their creators published under YouTube's Creative Commons Attribution license (CC BY 3.0); each one's credit is in `DEMO_VIDEOS`. Only videos YouTube lists under that license qualify, never a standard-license one: filter a YouTube search by Creative Commons, and check the license yt-dlp reports (`--match-filter "license ~= 'Creative Commons'"`) before using one. YouTube's terms don't allow downloading outside its app, even for Creative Commons videos, so that is a choice we made, as Wikimedia Commons does for the same videos.
 
 #### Find openly licensed clips
 

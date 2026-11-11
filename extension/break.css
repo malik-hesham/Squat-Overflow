@@ -491,6 +491,15 @@ footer {
 .demo-panel figcaption {
   text-align: center;
 }
+.demo-panel .demo-credit {
+  display: block;
+  text-align: center;
+  overflow-wrap: anywhere;
+  color: inherit;
+}
+.demo-panel .demo-credit[hidden] {
+  display: none;
+}
 @media (max-width: 720px) {
   .media {
     grid-template-columns: 1fr;

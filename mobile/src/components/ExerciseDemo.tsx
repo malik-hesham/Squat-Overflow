@@ -1,16 +1,17 @@
 // The exercise demo on the break screen, as in the extension's break window (extension/lib/demo-panel.js):
 // the drawn 3D figure at once (made on the phone, drag to turn it), then the move's demo video from
-// the API server in its place once it can play. With no server set, no video for the move or no
-// network, the figure stays. The video is asked for only while the demo is open.
+// the API server in its place once it can play, with the credit under it when the footage isn't ours
+// (tap it for the original). With no server set, no video for the move or no network, the figure
+// stays. The video is asked for only while the demo is open.
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as React from 'react';
-import { View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
 import { DemoModel } from '@/src/components/DemoModel';
 import { t } from '@/src/core/i18n';
-import { demoVideoUrl } from '@/src/core/shared';
+import { demoCredit, demoVideoUrl } from '@/src/core/shared';
 import { API_URL } from '../../../extension/config.js';
 
 type Move = { key: string; label: string };
@@ -35,16 +36,26 @@ function VideoDemo({ src, move, lang }: { src: string; move: Move; lang: string 
     if (status === 'error') setPlayed(false);
   }, [status]);
   if (!played && status !== 'readyToPlay') return <Figure move={move} lang={lang} />;
+  const by = demoCredit(move.key);
   return (
-    <VideoView
-      player={player}
-      nativeControls={false}
-      contentFit="contain"
-      className="bg-card border-border aspect-square w-full overflow-hidden rounded-xl border"
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={t(lang, 'demoClipLabel', { move: move.label })}
-    />
+    <View className="gap-1">
+      <VideoView
+        player={player}
+        nativeControls={false}
+        contentFit="contain"
+        className="bg-card border-border aspect-square w-full overflow-hidden rounded-xl border"
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={t(lang, 'demoClipLabel', { move: move.label })}
+      />
+      {by ? (
+        <Pressable accessibilityRole="link" hitSlop={8} onPress={() => Linking.openURL(by.url).catch(() => {})}>
+          <Text className="text-muted-foreground text-center text-xs">
+            {t(lang, 'demoClipCredit', { title: by.title, author: by.author, license: by.license })}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 

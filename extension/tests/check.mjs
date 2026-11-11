@@ -2555,8 +2555,8 @@ Promise.all(pending).then(
 // GET /demos/<key>.mp4) and made from a clip by scripts/make-demo-video.mjs. The pages and the phone
 // show the drawn figure until the video plays, and keep it when there is no video.
 {
-  const { demoVideoUrl } = await import("../lib/demo-video.js");
-  const { mp4Info, demoVideoProblems, makeDemoVideo, removeDemoVideo, shotList } = await import("../scripts/make-demo-video.mjs");
+  const { demoVideoUrl, demoCredit, DEMO_VIDEOS } = await import("../lib/demo-video.js");
+  const { mp4Info, demoVideoProblems, demoCreditProblems, makeDemoVideo, removeDemoVideo, shotList } = await import("../scripts/make-demo-video.mjs");
   const { execFileSync, spawnSync } = await import("node:child_process");
   const { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -2604,11 +2604,47 @@ Promise.all(pending).then(
     assert.throws(() => mp4Info(Buffer.from(silentAudioOnly, "latin1")), /no video track/);
   });
 
-  check("demo videos: a move's video is <API server>/demos/<key>.mp4, and there is none without a server", () => {
-    assert.equal(demoVideoUrl("https://api.example.com", "seated_march"), "https://api.example.com/demos/seated_march.mp4");
-    assert.equal(demoVideoUrl("http://127.0.0.1:8765", "neck_tilt"), "http://127.0.0.1:8765/demos/neck_tilt.mp4");
-    assert.equal(demoVideoUrl("", "seated_march"), null, "a local-only build asks no server");
-    assert.equal(demoVideoUrl("https://api.example.com", "../health"), "https://api.example.com/demos/..%2Fhealth.mp4");
+  check("demo videos: a move with a video (DEMO_VIDEOS) has it at <API server>/demos/<key>.mp4; no other move, and no build without a server, asks for one", () => {
+    const [withVideo] = Object.keys(DEMO_VIDEOS);
+    const without = exerciseCatalog().map((e) => e.key).find((key) => !Object.keys(DEMO_VIDEOS).includes(key));
+    assert.ok(withVideo && without, "some moves have a video and some don't");
+    assert.equal(demoVideoUrl("https://api.example.com", withVideo), `https://api.example.com/demos/${withVideo}.mp4`);
+    assert.equal(demoVideoUrl("http://127.0.0.1:8765", withVideo), `http://127.0.0.1:8765/demos/${withVideo}.mp4`);
+    assert.equal(demoVideoUrl("https://api.example.com", without), null, "no video: no request, so no 404 either");
+    assert.equal(demoVideoUrl("", withVideo), null, "a local-only build asks no server");
+    assert.equal(demoVideoUrl("https://api.example.com", "../health"), null);
+    assert.equal(demoVideoUrl("https://api.example.com", "toString"), null, "only the listed moves, not what every object has");
+  });
+
+  check("demo videos: a video from someone else's footage has its credit (title, author, link, license); ours has none", () => {
+    for (const [key, credit] of Object.entries(DEMO_VIDEOS)) assert.equal(demoCredit(key), credit, key);
+    assert.equal(demoCredit("toString"), null);
+    assert.equal(demoCredit(exerciseCatalog().map((e) => e.key).find((key) => !Object.keys(DEMO_VIDEOS).includes(key))), null);
+  });
+
+  check("demo videos: every video in server/demos has its entry in DEMO_VIDEOS and every entry its video, each credit complete and under a license we can use", () => {
+    assert.deepEqual(demoCreditProblems(fileURLToPath(new URL("../..", import.meta.url))), [], "this checkout");
+    const root = mkdtempSync(join(tmpdir(), "so-demo-videos-"));
+    try {
+      mkdirSync(join(root, "server/demos"), { recursive: true });
+      for (const key of ["neck_tilt", "chin_tuck", "seated_march", "head_turn"]) writeFileSync(join(root, `server/demos/${key}.mp4`), fakeMp4());
+      const good = { title: "Chin tucks", author: "Ana", url: "https://www.youtube.com/watch?v=abc123", license: "CC BY 3.0", licenseUrl: "https://creativecommons.org/licenses/by/3.0/" };
+      const videos = {
+        neck_tilt: null,
+        chin_tuck: good,
+        head_turn: { ...good, title: " ", url: "http://example.com/x", license: "CC BY-NC 4.0" },
+        shoulder_shrug: good,
+      };
+      assert.deepEqual(demoCreditProblems(root, videos), [
+        "head_turn: its credit needs a title",
+        "head_turn: its credit's link must be https",
+        "head_turn: CC BY-NC 4.0: non-commercial only",
+        "shoulder_shrug: DEMO_VIDEOS lists it, but server/demos has no shoulder_shrug.mp4",
+        "seated_march.mp4 has no entry in DEMO_VIDEOS (extension/lib/demo-video.js): add its credit, or null for our own footage",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   check("demo videos: demoVideoProblems finds a server/demos file the apps can't play well, or that no move owns", () => {
@@ -2732,6 +2768,13 @@ Promise.all(pending).then(
       }
     });
   }
+
+  check("i18n: a demo video's credit reads in every language", () => {
+    for (const lang of LANGS.filter((l) => l !== "auto")) assert.ok(translationKeys(lang).includes("demoClipCredit"), `${lang}: missing demoClipCredit`);
+    const credit = { title: "Mini Squats", author: "Motion", license: "CC BY 3.0" };
+    assert.equal(t("en", "demoClipCredit", credit), "Clip from “Mini Squats” by Motion, CC BY 3.0");
+    for (const part of Object.values(credit)) assert.ok(t("ar", "demoClipCredit", credit).includes(part), part);
+  });
 
   check("i18n: a demo video has its own label in every language (it is not a 3D figure)", () => {
     for (const lang of LANGS.filter((l) => l !== "auto")) assert.ok(translationKeys(lang).includes("demoClipLabel"), `${lang}: missing demoClipLabel`);

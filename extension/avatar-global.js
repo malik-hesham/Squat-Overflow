@@ -7,10 +7,20 @@ import { CONNECTIONS, exerciseCatalog } from "./lib/pose/index.js";
 import { CLOSE_MODEL_FAILED, openPoseSocket } from "./lib/pose/local-socket.js";
 import { demoMotion } from "./lib/demo-model.js";
 import { createDemoPanel } from "./lib/demo-panel.js";
+import { demoCredit } from "./lib/demo-video.js";
+import { t } from "./lib/i18n.js";
 import { API_URL } from "./config.js";
 
 globalThis.Avatar = Avatar;
-globalThis.Demo3D = { has: (key) => demoMotion(key) != null, createPanel: (els) => createDemoPanel(els, API_URL) };
+globalThis.Demo3D = {
+  has: (key) => demoMotion(key) != null,
+  createPanel: (els) => createDemoPanel(els, API_URL),
+  // The Practice page is in English, like its other labels.
+  credit: (key) => {
+    const by = demoCredit(key);
+    return by ? t("en", "demoClipCredit", by) : "";
+  },
+};
 globalThis.PoseLocal = {
   exerciseCatalog,
   CONNECTIONS,

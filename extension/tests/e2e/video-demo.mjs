@@ -1,12 +1,14 @@
 // End-to-end: a move with a demo video on the API server plays it in place of the drawn figure, on
-// the break window and on the Practice page; a move with none keeps the figure.
+// the break window and on the Practice page, with the credit under it when the footage isn't ours;
+// a move with none asks for nothing and keeps the figure.
 //
 //   PLAYWRIGHT=/path/to/playwright/index.mjs [CHROME=/path/to/chrome] node extension/tests/e2e/video-demo.mjs
 //
 // Needs Playwright (as break-offline.mjs does), a Chrome that plays H.264 (Chrome for Testing does)
 // and ffmpeg. A small stand-in for the API server serves server/demos-style videos (the real route
 // is pinned by server/test/server/demos.spec.ts), and a scratch copy of the extension points its
-// API_URL at it. Only the Neck tension moves get a video.
+// API_URL at it and lists its own DEMO_VIDEOS: only the Neck tension moves have a video, each
+// credited but chin_tuck's, which stands for footage of our own.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { cpSync, createReadStream, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -54,11 +56,19 @@ const apiUrl = `http://127.0.0.1:${api.address().port}`;
 cpSync(source, extension, { recursive: true, filter: (p) => !["node_modules", "tests", ".DS_Store"].includes(basename(p)) });
 const config = join(extension, "config.js");
 writeFileSync(config, readFileSync(config, "utf8").replace(/^export const API_URL = ".*";$/m, `export const API_URL = ${JSON.stringify(apiUrl)};`));
+const CREDIT = { title: "Test pattern", author: "ffmpeg", url: "https://example.com/clip", license: "CC BY 3.0", licenseUrl: "https://creativecommons.org/licenses/by/3.0/" };
+const CREDIT_TEXT = "Clip from “Test pattern” by ffmpeg, CC BY 3.0";
+const list = Object.fromEntries(NECK.map((key) => [key, key === "chin_tuck" ? null : CREDIT]));
+const demoVideo = join(extension, "lib/demo-video.js");
+const listed = readFileSync(demoVideo, "utf8").replace(/^export const DEMO_VIDEOS = Object\.freeze\(\{[\s\S]*?^\}\);$/m, `export const DEMO_VIDEOS = Object.freeze(${JSON.stringify(list)});`);
+assert.ok(listed.includes('"chin_tuck":null'), "the scratch copy lists the test videos");
+writeFileSync(demoVideo, listed);
 
-/** What the demo panel shows: the video (and whether it is playing), the canvas, the drag hint. */
+/** What the demo panel shows: the video (and whether it is playing), the canvas, the drag hint, the credit. */
 const panel = (page, hint) =>
   page.evaluate((hintId) => {
     const video = /** @type {HTMLVideoElement} */ (document.getElementById("demoVideo"));
+    const credit = /** @type {HTMLAnchorElement} */ (document.getElementById("demoCredit"));
     const shown = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
     return {
       video: shown(video) ? new URL(video.currentSrc).pathname : null,
@@ -66,8 +76,10 @@ const panel = (page, hint) =>
       label: video?.getAttribute("aria-label") ?? null,
       canvas: shown(document.getElementById("demoView")),
       hint: hintId ? shown(document.getElementById(hintId)) : null,
+      credit: shown(credit) ? { text: credit.textContent, href: credit.href, target: credit.target, rel: credit.rel } : null,
     };
   }, hint);
+const credited = { text: CREDIT_TEXT, href: CREDIT.url, target: "_blank", rel: "noopener noreferrer" };
 const playing = (page, path) =>
   page.waitForFunction(
     (p) => {
@@ -118,17 +130,20 @@ try {
   assert.match(first.label, /^Demo video: /);
   assert.equal(first.canvas, false, "the drawn figure is hidden once the video plays");
   assert.equal(first.hint, false, "no 'drag to turn' under a video");
+  assert.deepEqual(first.credit, opened === "/demos/chin_tuck.mp4" ? null : credited, "the credit under someone else's footage");
   await page.locator("#swap").click(); // another move: the open demo follows it
   await page.waitForFunction((src) => new URL(/** @type {HTMLVideoElement} */ (document.getElementById("demoVideo")).src).pathname !== src, opened);
   const next = await page.evaluate(() => new URL(/** @type {HTMLVideoElement} */ (document.getElementById("demoVideo")).src).pathname);
   await playing(page, next);
   await button.click();
   assert.equal(await page.locator("#demoPanel").isVisible(), false);
+  assert.equal(await page.locator("#demoCredit").isVisible(), false, "no credit with the demo closed");
   assert.equal(await page.evaluate(() => /** @type {HTMLVideoElement} */ (document.getElementById("demoVideo")).paused), true, "hiding the demo stops the video");
   console.log(`ok break: a move's demo video plays in place of the figure (${opened}, then ${next} after a swap)`);
   await page.close();
 
-  // The Practice page: a Neck move plays its video; Hip hinge has none, so the figure stays.
+  // The Practice page: a Neck move plays its video with its credit; chin_tuck's is ours, so no
+  // credit; Hip hinge has none, so it asks for nothing and the figure stays.
   const trainer = await context.newPage();
   trainer.on("pageerror", (err) => errors.push(err.message));
   await trainer.goto(`chrome-extension://${id}/trainer.html`);
@@ -136,19 +151,25 @@ try {
   await trainer.locator("#demoBtn").click();
   await trainer.locator("#demoPanel").waitFor({ state: "visible", timeout: 5000 });
   await playing(trainer, "/demos/neck_tilt.mp4");
-  assert.equal((await panel(trainer, null)).canvas, false);
+  const tilt = await panel(trainer, null);
+  assert.equal(tilt.canvas, false);
+  assert.deepEqual(tilt.credit, credited);
+  await trainer.locator("#exercise").selectOption("chin_tuck");
+  await playing(trainer, "/demos/chin_tuck.mp4");
+  assert.equal((await panel(trainer, null)).credit, null, "our own footage needs no credit");
   await trainer.locator("#exercise").selectOption("hip_hinge");
-  await trainer.waitForTimeout(1500); // the request for hip_hinge's video goes out and comes back 404
+  await trainer.waitForTimeout(1500);
   const figure = await panel(trainer, null);
   assert.equal(figure.video, null, "no video for hip_hinge");
   assert.equal(figure.canvas, true, "so the figure shows");
+  assert.equal(figure.credit, null);
   assert.deepEqual(errors, []);
-  console.log("ok practice: neck_tilt plays its video; hip_hinge has none and keeps the figure");
+  console.log("ok practice: neck_tilt plays its video with its credit, chin_tuck (ours) with none; hip_hinge has none and keeps the figure");
 
   const outside = requests.filter((u) => !/^(chrome-extension|data|blob):/.test(u));
   assert.ok(outside.every((u) => u.startsWith(`${apiUrl}/demos/`)), `requests outside the extension: ${outside.join(", ")}`);
-  assert.ok(asked.includes("/demos/hip_hinge.mp4"), "the page asked for hip_hinge's video (and got a 404)");
-  console.log(`ok the only requests outside the extension were for demo videos (${new Set(asked).size} different)`);
+  assert.ok(!asked.includes("/demos/hip_hinge.mp4"), "a move with no video asks for none");
+  console.log(`ok the only requests outside the extension were for demo videos (${new Set(asked).size} different), none for a move without one`);
 } catch (err) {
   failed = true;
   console.log(`FAIL ${err.stack ?? err.message}`);

@@ -13,6 +13,7 @@ import { Avatar } from "./avatar.js";
 import { createMemePlayer, repMarks } from "./lib/memes.js";
 import { demoMotion } from "./lib/demo-model.js";
 import { createDemoPanel } from "./lib/demo-panel.js";
+import { demoCredit } from "./lib/demo-video.js";
 import { API_URL } from "./config.js";
 
 const POSITION_TIMEOUT_MS = 15_000;
@@ -24,7 +25,7 @@ const $ = (id) => document.getElementById(id);
  * Every id below as an HTMLElement, with the ones whose element-specific
  * properties this page uses typed as what break.html makes them.
  * @typedef {Record<string, HTMLElement> & {
- *   voice: HTMLInputElement, memes: HTMLInputElement, demoView: HTMLCanvasElement, demoVideo: HTMLVideoElement,
+ *   voice: HTMLInputElement, memes: HTMLInputElement, demoView: HTMLCanvasElement, demoVideo: HTMLVideoElement, demoCredit: HTMLAnchorElement,
  *   done: HTMLButtonElement, snooze: HTMLButtonElement, skip: HTMLButtonElement, warnSnooze: HTMLButtonElement,
  * }} Els
  */
@@ -32,7 +33,7 @@ const els = /** @type {Els} */ (Object.fromEntries(
   [
     "step", "xpTicker", "title", "bar", "warning", "warningTitle", "warnStart", "warnSnooze", "warnPause",
     "routine", "video", "canvas", "position", "fallback", "fallbackTitle", "fallbackText", "reps", "target",
-    "lastScore", "cue", "howto", "hint", "demo", "demoPanel", "demoView", "demoVideo", "demoHint", "swap", "summary", "confetti", "total", "lines", "levelUp",
+    "lastScore", "cue", "howto", "hint", "demo", "demoPanel", "demoView", "demoVideo", "demoHint", "demoCredit", "swap", "summary", "confetti", "total", "lines", "levelUp",
     "levelName", "levelXp", "levelBar", "back", "actions", "done", "snooze", "skip", "voice", "memes", "lookBtn", "lookName",
     "lookGrid", "lookThumb", "fitness", "area", "moves", "starting", "startingText",
   ].map((id) => [id, $(id)]),
@@ -473,10 +474,12 @@ function showDemo(move) {
   els.demo.textContent = t(state.lang, open ? "hideDemo" : "watchDemo");
   els.demo.setAttribute("aria-expanded", String(open));
   if (!open) return state.demo?.hide();
-  state.demo ??= createDemoPanel({ canvas: els.demoView, video: els.demoVideo, hint: els.demoHint }, API_URL);
+  state.demo ??= createDemoPanel({ canvas: els.demoView, video: els.demoVideo, hint: els.demoHint, credit: els.demoCredit }, API_URL);
+  const by = demoCredit(move.key);
   state.demo.show(move.key, {
     label: t(state.lang, "demoLabel", { move: move.label }),
     clipLabel: t(state.lang, "demoClipLabel", { move: move.label }),
+    creditText: by ? t(state.lang, "demoClipCredit", by) : "",
   });
 }
 

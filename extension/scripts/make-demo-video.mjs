@@ -19,6 +19,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { exerciseCatalog } from "../lib/pose/index.js";
+import { DEMO_VIDEOS } from "../lib/demo-video.js";
+import { licenseVerdict } from "./scrape-demo-videos.mjs";
 
 /** A demo video is square, this many pixels a side: sharp in the break window's panel, still small. */
 export const SIZE = 480;
@@ -119,6 +121,36 @@ export function demoVideoProblems(root) {
     if (!key) problems.push(`${name}: a demo is <move>.mp4`);
     else problems.push(...videoProblems(key, readFileSync(join(dir, name))));
   }
+  return problems;
+}
+
+/**
+ * Where server/demos/ and DEMO_VIDEOS (extension/lib/demo-video.js) disagree, as lines to print:
+ * every video needs its entry (the apps ask only for listed moves, and show the credit under it),
+ * every entry its video, and a credit says whose footage it is (title, author, an https link to the
+ * original and to the license) under a license that lets us cut it and serve it.
+ * @param {string} root
+ * @param {Record<string, import("../lib/demo-video.js").DemoCredit | null>} [videos]
+ */
+export function demoCreditProblems(root, videos = DEMO_VIDEOS) {
+  const dir = join(root, "server/demos");
+  const files = existsSync(dir) ? readdirSync(dir).map((f) => /^([a-z0-9_]+)\.mp4$/.exec(f)?.[1]).filter(Boolean) : [];
+  const https = (url) => /^https:\/\/\S+$/.test(url ?? "");
+  const problems = [];
+  for (const [key, credit] of Object.entries(videos)) {
+    if (credit) {
+      if (!credit.title?.trim()) problems.push(`${key}: its credit needs a title`);
+      if (!credit.author?.trim()) problems.push(`${key}: its credit needs the author`);
+      if (!https(credit.url)) problems.push(`${key}: its credit's link must be https`);
+      const verdict = licenseVerdict(credit.license);
+      if (!verdict.ok) problems.push(`${key}: ${verdict.reason}`);
+      if (!https(credit.licenseUrl)) problems.push(`${key}: its credit needs an https link to the license`);
+    }
+    if (!files.includes(key)) problems.push(`${key}: DEMO_VIDEOS lists it, but server/demos has no ${key}.mp4`);
+  }
+  for (const key of files)
+    if (!Object.prototype.hasOwnProperty.call(videos, key))
+      problems.push(`${key}.mp4 has no entry in DEMO_VIDEOS (extension/lib/demo-video.js): add its credit, or null for our own footage`);
   return problems;
 }
 
@@ -252,6 +284,8 @@ function main(argv) {
   } else throw new Error(USAGE);
   const problems = demoVideoProblems(root);
   if (problems.length) throw new Error(problems.join("\n"));
+  // Not an error yet: the entry comes next. Until it is there, the apps don't ask for the video.
+  for (const line of demoCreditProblems(root)) console.warn(`to do: ${line}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
