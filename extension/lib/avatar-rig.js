@@ -87,7 +87,6 @@ export const rot = (v, ang) => {
   return { x: v.x * c - v.y * s, y: v.x * s + v.y * c };
 };
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-export const TAU = Math.PI * 2;
 // Stable pseudo-random in [0, 1) per integer.
 export const hash = (i) => {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;

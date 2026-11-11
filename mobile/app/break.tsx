@@ -61,7 +61,7 @@ export default function BreakScreen() {
   const navigation = useNavigation();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const manual = kind !== 'reminder';
-  const { settings, schedule, profile, lang } = useAppData();
+  const { settings, schedule, lang } = useAppData();
   const opened = React.useRef({ schedule, settings }).current; // the state this break opened with
 
   // Routine state lives in a ref (it changes on every analysed frame) and a
