@@ -242,24 +242,9 @@ export function hipAngle(pose, s) {
   return angle(pose.pt(s, "shoulder"), pose.pt(s, "hip"), pose.pt(s, "knee"));
 }
 
-/** Torso vs whole leg (hip->ankle): ~180 standing, smaller as the leg swings. */
-export function legLineAngle(pose, s) {
-  return angle(pose.pt(s, "shoulder"), pose.pt(s, "hip"), pose.pt(s, "ankle"));
-}
-
 /** Forearm vs hand: 180 = straight wrist, smaller when bent up or down. */
 export function wristAngle(pose, s) {
   return angle(pose.pt(s, "elbow"), pose.pt(s, "wrist"), pose.pt(s, "index"));
-}
-
-/** Heel->toe line vs horizontal: ~0 flat foot, grows when the heel rises. */
-export function heelLift(pose, s) {
-  return angleFromHorizontal(pose.pt(s, "heel"), pose.pt(s, "toe"));
-}
-
-/** Hip->ankle vs straight down: 0 = leg under the hip, grows as it lifts out sideways. */
-export function legOut(pose, s) {
-  return 180.0 - angleFromVertical(pose.pt(s, "hip"), pose.pt(s, "ankle"));
 }
 
 /** Hip->shoulder vs vertical, seen from the side (forward or back). */
