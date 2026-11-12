@@ -27,7 +27,17 @@ const YOUTUBE_CC_BY = { license: "CC BY 3.0", licenseUrl: "https://creativecommo
  * @type {Readonly<Record<string, DemoCredit | null>>}
  */
 export const DEMO_VIDEOS = Object.freeze({
+  neck_tilt: { title: "AW MOBILITE Inclinaison tête", author: "Athomic Wellness", url: "https://www.youtube.com/watch?v=xUGeEFrGaeg", ...YOUTUBE_CC_BY },
+  head_turn: { title: "AW MOBILITE Rotation tête", author: "Athomic Wellness", url: "https://www.youtube.com/watch?v=IGFyeU3hXSo", ...YOUTUBE_CC_BY },
   cross_swing: { title: "Arm Hug Dynamic Stretch", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=IkGj5OPDWsc", ...YOUTUBE_CC_BY },
+  seated_row: { title: "Seated Band Rows", author: "Get Fit Done", url: "https://www.youtube.com/watch?v=1qJJgDcVgWo", ...YOUTUBE_CC_BY },
+  t_raise: { title: "How to do a Dumbbell Lateral Raise", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=_nWpctnfY1A", ...YOUTUBE_CC_BY },
+  front_raise: {
+    title: "How to do a Dumbbell Front Raise with Overhand Grip",
+    author: "Get Strong with Emily",
+    url: "https://www.youtube.com/watch?v=LsMLd6Pwwvw",
+    ...YOUTUBE_CC_BY,
+  },
   overhead_reach: {
     title: "Home Activity Program Level 1.3 Sitting (Arm Raises and Breathing)",
     author: "Vancouver Coastal Health",
@@ -35,6 +45,12 @@ export const DEMO_VIDEOS = Object.freeze({
     ...YOUTUBE_CC_BY,
   },
   hip_hinge: { title: "How to do a Hip Hinge", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=m01v541-cpQ", ...YOUTUBE_CC_BY },
+  standing_side_bend: {
+    title: "How to do a Standing Side Reach Dynamic Stretch",
+    author: "Get Strong with Emily",
+    url: "https://www.youtube.com/watch?v=XNVmD7PduXw",
+    ...YOUTUBE_CC_BY,
+  },
   seated_knee_ext: { title: "Seated Knee Flexion", author: "Motion", url: "https://www.youtube.com/watch?v=G0EdB5vwmJY", ...YOUTUBE_CC_BY },
   sit_to_stand: { title: "Chair Sit to Stand", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=8oIjQ4AKmhM", ...YOUTUBE_CC_BY },
   mini_squat: { title: "Mini Squats", author: "Motion", url: "https://www.youtube.com/watch?v=wqCvuhfRXRU", ...YOUTUBE_CC_BY },

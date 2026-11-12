@@ -9,6 +9,8 @@ import { Linking } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import { API_URL } from '../../../../extension/config.js';
+import { DEMO_VIDEOS } from '../../../../extension/lib/demo-video.js';
+import { exerciseCatalog } from '../../../../extension/lib/pose/index.js';
 import { DemoModel } from '../DemoModel';
 import { ExerciseDemo } from '../ExerciseDemo';
 
@@ -68,6 +70,8 @@ const links = (tree: ReactTestRenderer) =>
   tree.root.findAll((n: ReactTestInstance) => n.props.accessibilityRole === 'link' && typeof n.props.onPress === 'function');
 const SQUAT = { key: 'mini_squat', label: 'Mini squat' };
 const CREDIT = 'Clip from “Mini Squats” by Motion, CC BY 3.0';
+/** A move with no demo video yet: the first in the catalog that DEMO_VIDEOS doesn't list (more get one over time). */
+const NO_VIDEO = exerciseCatalog().find((e: { key: string }) => !Object.prototype.hasOwnProperty.call(DEMO_VIDEOS, e.key))!;
 
 describe('ExerciseDemo', () => {
   let tree: ReactTestRenderer | undefined;
@@ -126,10 +130,10 @@ describe('ExerciseDemo', () => {
 
   it('keeps the figure and asks for nothing when the move has no video', () => {
     act(() => {
-      tree = create(<ExerciseDemo move={{ key: 'neck_tilt', label: 'Neck side tilt' }} lang="en" />);
+      tree = create(<ExerciseDemo move={{ key: NO_VIDEO.key, label: NO_VIDEO.label }} lang="en" />);
     });
     expect(mockPlayers).toHaveLength(0);
-    expect(tree!.root.findByType(DemoModel).props.moveKey).toBe('neck_tilt');
+    expect(tree!.root.findByType(DemoModel).props.moveKey).toBe(NO_VIDEO.key);
     expect(text(tree!)).not.toContain('Clip from');
   });
 
