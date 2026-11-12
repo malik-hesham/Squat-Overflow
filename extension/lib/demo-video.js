@@ -29,9 +29,28 @@ const YOUTUBE_CC_BY = { license: "CC BY 3.0", licenseUrl: "https://creativecommo
 export const DEMO_VIDEOS = Object.freeze({
   neck_tilt: { title: "AW MOBILITE Inclinaison tête", author: "Athomic Wellness", url: "https://www.youtube.com/watch?v=xUGeEFrGaeg", ...YOUTUBE_CC_BY },
   head_turn: { title: "AW MOBILITE Rotation tête", author: "Athomic Wellness", url: "https://www.youtube.com/watch?v=IGFyeU3hXSo", ...YOUTUBE_CC_BY },
+  chin_to_chest: { title: "AW MOBILITE Flexion tête", author: "Athomic Wellness", url: "https://www.youtube.com/watch?v=JS4LlXK0Lr8", ...YOUTUBE_CC_BY },
+  levator_stretch: {
+    title: "Levator Scapulae Stretch - Relieve Neck & Shoulder Tension!",
+    author: "Ott Physical Therapy",
+    url: "https://www.youtube.com/watch?v=RQZ2kEiKm3c",
+    ...YOUTUBE_CC_BY,
+  },
   cross_swing: { title: "Arm Hug Dynamic Stretch", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=IkGj5OPDWsc", ...YOUTUBE_CC_BY },
   seated_row: { title: "Seated Band Rows", author: "Get Fit Done", url: "https://www.youtube.com/watch?v=1qJJgDcVgWo", ...YOUTUBE_CC_BY },
   t_raise: { title: "How to do a Dumbbell Lateral Raise", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=_nWpctnfY1A", ...YOUTUBE_CC_BY },
+  desk_row: {
+    title: "Dumbbell Single Arm Bent Over Row on Chair",
+    author: "Get Strong with Emily",
+    url: "https://www.youtube.com/watch?v=Pf2HlcJC7x0",
+    ...YOUTUBE_CC_BY,
+  },
+  scaption: {
+    title: "Shoulder Scaption - Strengthen Your Rotator Cuff & Shoulder Stability!",
+    author: "Ott Physical Therapy",
+    url: "https://www.youtube.com/watch?v=Mo2bx_aV8Hg",
+    ...YOUTUBE_CC_BY,
+  },
   front_raise: {
     title: "How to do a Dumbbell Front Raise with Overhand Grip",
     author: "Get Strong with Emily",
@@ -51,10 +70,42 @@ export const DEMO_VIDEOS = Object.freeze({
     url: "https://www.youtube.com/watch?v=XNVmD7PduXw",
     ...YOUTUBE_CC_BY,
   },
+  // Ott names these by how the wrist bends, we name them by the muscle stretched: their "Wrist Flexion
+  // Stretch" (hand bent down) stretches the extensors, their "Wrist Extension Stretch" the flexors.
+  extensor_stretch: {
+    title: "Wrist Flexion Stretch - Relieve Wrist Pain Fast!",
+    author: "Ott Physical Therapy",
+    url: "https://www.youtube.com/watch?v=Md2C9ZjQyB4",
+    ...YOUTUBE_CC_BY,
+  },
+  flexor_stretch: {
+    title: "Wrist Extension Stretch - Stretch Tight Forearms & Wrists",
+    author: "Ott Physical Therapy",
+    url: "https://www.youtube.com/watch?v=ilPSaPNpIFQ",
+    ...YOUTUBE_CC_BY,
+  },
+  prayer_stretch: {
+    title: "Prayer Stretch - Stretch Wrists & Forearms Easily!",
+    author: "Ott Physical Therapy",
+    url: "https://www.youtube.com/watch?v=9ARrkXkikzg",
+    ...YOUTUBE_CC_BY,
+  },
   seated_knee_ext: { title: "Seated Knee Flexion", author: "Motion", url: "https://www.youtube.com/watch?v=G0EdB5vwmJY", ...YOUTUBE_CC_BY },
   sit_to_stand: { title: "Chair Sit to Stand", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=8oIjQ4AKmhM", ...YOUTUBE_CC_BY },
   mini_squat: { title: "Mini Squats", author: "Motion", url: "https://www.youtube.com/watch?v=wqCvuhfRXRU", ...YOUTUBE_CC_BY },
   hamstring_curl: { title: "Hamstring Curl Standing", author: "Motion", url: "https://www.youtube.com/watch?v=WzJHR8B-JIk", ...YOUTUBE_CC_BY },
+  palming: {
+    title: "Exercises for EYE STRAIN | 10 Minute Daily Routines",
+    author: "Brain Education TV",
+    url: "https://www.youtube.com/watch?v=_M7tlXb4yWs",
+    ...YOUTUBE_CC_BY,
+  },
+  temple_massage: {
+    title: "Exercises for EYE STRAIN | 10 Minute Daily Routines",
+    author: "Brain Education TV",
+    url: "https://www.youtube.com/watch?v=_M7tlXb4yWs",
+    ...YOUTUBE_CC_BY,
+  },
 });
 
 /** @param {string} key */
