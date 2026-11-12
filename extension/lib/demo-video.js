@@ -40,12 +40,19 @@ export const DEMO_VIDEOS = Object.freeze({
   cross_swing: { title: "Arm Hug Dynamic Stretch", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=IkGj5OPDWsc", ...YOUTUBE_CC_BY },
   wy_raise: { title: "Wall Angels", author: "Larry Callaway", url: "https://www.youtube.com/watch?v=p-TmHf-cMtU", ...YOUTUBE_CC_BY },
   shoulder_roll: { title: "How to do Shoulder Rolls", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=z-SWWhwL2w0", ...YOUTUBE_CC_BY },
+  thoracic_extension: { title: "Seated thoracic stretch 1", author: "H2 Health", url: "https://www.youtube.com/watch?v=IRTF0Y1JIIM", ...YOUTUBE_CC_BY },
   seated_row: { title: "Seated Band Rows", author: "Get Fit Done", url: "https://www.youtube.com/watch?v=1qJJgDcVgWo", ...YOUTUBE_CC_BY },
   t_raise: { title: "How to do a Dumbbell Lateral Raise", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=_nWpctnfY1A", ...YOUTUBE_CC_BY },
   desk_row: {
     title: "Dumbbell Single Arm Bent Over Row on Chair",
     author: "Get Strong with Emily",
     url: "https://www.youtube.com/watch?v=Pf2HlcJC7x0",
+    ...YOUTUBE_CC_BY,
+  },
+  trunk_rotation: {
+    title: "Seated Trunk Rotation with Prisoner Hands",
+    author: "Lance Goyke",
+    url: "https://www.youtube.com/watch?v=ZmjD_KBGmno",
     ...YOUTUBE_CC_BY,
   },
   scaption: {
@@ -73,10 +80,22 @@ export const DEMO_VIDEOS = Object.freeze({
     ...YOUTUBE_CC_BY,
   },
   cross_body_stretch: { title: "Cross-Body Arm Stretch", author: "Fitness Volt", url: "https://www.youtube.com/watch?v=nsH0OZSNj3w", ...YOUTUBE_CC_BY },
+  seated_jacks: {
+    title: "CARDIO sur chaise : 4 exercices simples pour booster votre coeur !",
+    author: "Martine fait sa GYM douce adpatée 60 ans",
+    url: "https://www.youtube.com/watch?v=5ZqjecCRUiI",
+    ...YOUTUBE_CC_BY,
+  },
   seated_side_bend: {
     title: "Seated Spine Stretch - Flexion (Forward) + Lateral (Side)",
     author: "Get Fit Done",
     url: "https://www.youtube.com/watch?v=RodUxuVz5iU",
+    ...YOUTUBE_CC_BY,
+  },
+  knee_to_chest: {
+    title: "Do These Seated Stretches at Your Desk - Follow Along for the Office",
+    author: "Dr. Kimbra Runyan",
+    url: "https://www.youtube.com/watch?v=R-IzXqdvNzI",
     ...YOUTUBE_CC_BY,
   },
   hip_hinge: { title: "How to do a Hip Hinge", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=m01v541-cpQ", ...YOUTUBE_CC_BY },
@@ -123,6 +142,12 @@ export const DEMO_VIDEOS = Object.freeze({
   sit_to_stand: { title: "Chair Sit to Stand", author: "Get Strong with Emily", url: "https://www.youtube.com/watch?v=8oIjQ4AKmhM", ...YOUTUBE_CC_BY },
   mini_squat: { title: "Mini Squats", author: "Motion", url: "https://www.youtube.com/watch?v=wqCvuhfRXRU", ...YOUTUBE_CC_BY },
   hamstring_curl: { title: "Hamstring Curl Standing", author: "Motion", url: "https://www.youtube.com/watch?v=WzJHR8B-JIk", ...YOUTUBE_CC_BY },
+  seated_march: {
+    title: "CARDIO sur chaise : 4 exercices simples pour booster votre coeur !",
+    author: "Martine fait sa GYM douce adpatée 60 ans",
+    url: "https://www.youtube.com/watch?v=5ZqjecCRUiI",
+    ...YOUTUBE_CC_BY,
+  },
   palming: {
     title: "Exercises for EYE STRAIN | 10 Minute Daily Routines",
     author: "Brain Education TV",
